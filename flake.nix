@@ -1,10 +1,6 @@
 # eznixpkgs/flake.nix
 {
-  description = "Shared NixOS modules and packages";
-  
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  };
+  description = "NixOS modules and packages";
   
   outputs = { self, nixpkgs }: {
     nixosModules = {
