@@ -29,16 +29,6 @@ Add the flake as an input in your `flake.nix`, and make sure `eznixpkgs` follows
 
 Then enable whichever modules you need in your `configuration.nix`:
 
-```nix
-{
-  services.ezrouter.enable = true;
-  services.ezrouter.wan.device ="eth0";
-  services.ezrouter.lan.devices = ["eth1" "eth2"];
-  services.eznetns.instances.myns.enable = true;
-  services.prettysocks.enable = true;
-}
-```
-
 ## 📦 Modules
 
 | Module | Description |
