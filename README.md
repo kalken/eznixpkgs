@@ -1,6 +1,6 @@
 # eznixpkgs
 
-NixOS modules and packages. This module should work with both stable and unstable.
+NixOS modules and packages. It should work use with both stable and unstable (only unstable tested).
 
 ## 🚀 Usage
 
