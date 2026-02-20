@@ -13,7 +13,7 @@ A NixOS module for managing isolated network namespaces with port forwarding, pe
 - automatically setup wireguard files
 
 ## Wireguard
-eznetns can automatically setup wireguard files it finds in /etc/eznetns/<name>/wireguard/. Put them there either manually or declarativly. Remember wireguard files are born in the default namespace and moved into the correct netns. Thus the names should be unique. A good naming standard is **wg0-nameofnetns.conf**. Any file not ending with extension .conf will be ignored.
+eznetns can automatically setup wireguard files it finds in /etc/eznetns/<name>/wireguard/. Put them there either manually or declaratively. Remember wireguard files are born in the default namespace and moved into the correct netns. Thus the names should be unique. A good naming standard is **wg0-nameofnetns.conf**. Any file not ending with extension .conf will be ignored.
 
 ## Quick Start
 
