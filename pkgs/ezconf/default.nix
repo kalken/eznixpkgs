@@ -30,7 +30,7 @@ stdenv.mkDerivation {
   meta = with lib; {
     description = "My Neovim configuration";
     homepage = "https://github.com/kalken/ezconf";
-    license = licenses.mit;
+    license = licenses.gpl3;
     maintainers = [ ];
   };
 }
