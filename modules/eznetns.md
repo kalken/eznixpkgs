@@ -10,31 +10,52 @@ A NixOS module for managing isolated network namespaces with port forwarding, pe
 - Custom /etc files per namespace (nsswitch.conf, resolv.conf, etc.)
 - Run existing systemd services inside network namespaces
 - Hash-based config change detection for automatic reloads
+- automatically setup wireguard files
+
+## Wireguard
+eznetns can automatically setup wireguard files it finds in /etc/eznetns/<name>/wireguard/. Put them there either manually or declarativly. Remember wireguard files are born in the default namespace and moved into the correct netns. Thus the names should be unique. A good naming standard is wg0-<nameofnetns>.conf. Any file not ending with extension .conf will be ignored.
 
 ## Quick Start
 
 ```nix
 {
-  imports = [ ./modules/eznetns.nix ];
-
   services.eznetns = {
     enable = true;
 
     instances.torrent = {
       enable = true;
-
+      
+      
+      # Forward port 8080 on host to 127.0.0.1:9091 in netns.
       portForwards = [
         {
           listenStreams = [ "0.0.0.0:8080" ];
           target = "127.0.0.1:9091";
         }
       ];
-
+      
+      # open port 9091 for incomming traffic
       firewall.extraInputRules = ''
         tcp dport 9091 accept
       '';
     };
+    
+    # WireGuard config file in /etc/eznetns/torrent/wireguard/wg0-torrent.conf
+    configFiles."wireguard/wg0-torrent.conf" = {
+      content = ''
+        [Interface]
+        Address = 10.0.0.2/24
+        PrivateKey = YOUR_PRIVATE_KEY
+        DNS = 1.1.1.1
 
+        [Peer]
+        PublicKey = SERVER_PUBLIC_KEY
+        Endpoint = vpn.example.com:51820
+        AllowedIPs = 0.0.0.0/0
+      '';
+    };
+    
+    # make a specifik systemd-service start inside the netns (enable the service in nixos as usual first)
     netnsService."qbittorrent.service" = "torrent";
   };
 }
