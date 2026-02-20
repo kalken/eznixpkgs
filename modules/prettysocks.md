@@ -5,7 +5,7 @@ A simple NixOS module for running PrettySocks as a systemd service, either in th
 ## ✨ Features
 
 - Default-namespace service with configurable user/group
-- Per-namespace instances bound to `eznetns-<n>.service`
+- Per-namespace instances bound to `eznetns-<name>.service`
 - Automatic system user and group provisioning
 - Namespace-scoped DNS and NSS via bind-mounted `resolv.conf` / `nsswitch.conf`
 - Listens on `127.0.0.1:1080` (SOCKS5)
@@ -41,20 +41,20 @@ Or with a named network namespace instance:
 | `services.prettysocks.group` | str | `"proxy"` | Group under which to run the default-namespace service |
 | `services.prettysocks.instances` | attrs | `{}` | Per-network-namespace PrettySocks instances |
 
-### Instance Settings (`services.prettysocks.instances.<n>`)
+### Instance Settings (`services.prettysocks.instances.<name>`)
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `instances.<n>.enable` | bool | `false` | Enable this PrettySocks instance in its network namespace |
-| `instances.<n>.user` | str | `"prettysocks"` | User under which to run this instance (a dedicated `prettysocks-<n>` system user is created) |
-| `instances.<n>.group` | str | `"nogroup"` | Group under which to run this instance |
+| `instances.<name>.enable` | bool | `false` | Enable this PrettySocks instance in its network namespace |
+| `instances.<name>.user` | str | `"prettysocks"` | User under which to run this instance (a dedicated `prettysocks-<name>` system user is created) |
+| `instances.<name>.group` | str | `"nogroup"` | Group under which to run this instance |
 
 ## 📝 Notes
 
 - Enabling `services.prettysocks.enable` creates a `prettysocks.service` unit and provisions the configured user and group automatically.
-- Each entry in `instances` creates a `prettysocks-<n>.service` unit with a dedicated `prettysocks-<n>` system user.
-- Instance services run inside `/run/netns/<n>` and are bound to `eznetns-<n>.service`; if the namespace goes down, the instance stops with it. The namespace can be of any kind.
-- Namespace-local DNS resolution is provided by bind-mounting `/etc/eznetns/<n>/resolv.conf` and `/etc/eznetns/<n>/nsswitch.conf` into the service, with nscd disabled via `/var/empty:/var/run/nscd`.
+- Each entry in `instances` creates a `prettysocks-<name>.service` unit with a dedicated `prettysocks-<name>` system user.
+- Instance services run inside `/run/netns/<name>` and are bound to `eznetns-<name>.service`; if the namespace goes down, the instance stops with it. The namespace can be of any kind.
+- Namespace-local DNS resolution is provided by bind-mounting `/etc/eznetns/<name>/resolv.conf` and `/etc/eznetns/<name>/nsswitch.conf` into the service, with nscd disabled via `/var/empty:/var/run/nscd`.
 - PrettySocks listens on `127.0.0.1:1080` (standard SOCKS5 port).
 - Both the default service and instances can be active simultaneously.
 
