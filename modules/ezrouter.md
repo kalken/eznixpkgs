@@ -43,8 +43,8 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `services.ezrouter.enable` | bool | `false` | Enable the ezrouter module |
 | `services.ezrouter.debug` | bool | `false` | Enable debug logging for `systemd-networkd` |
 | `services.ezrouter.isolateVlans` | bool | `true` | Block traffic between VLANs (inter-VLAN isolation) |
-| `services.ezrouter.vlanFirewallPorts.allowedTCPPorts` | list of port | `[]` | TCP ports to open on all VLAN interfaces |
-| `services.ezrouter.vlanFirewallPorts.allowedUDPPorts` | list of port | `[53 67]` | UDP ports to open on all VLAN interfaces |
+| `services.ezrouter.vlanFirewallPorts.allowedTCPPorts` | list of port | `[]` | TCP ports to open from all VLAN interfaces to router |
+| `services.ezrouter.vlanFirewallPorts.allowedUDPPorts` | list of port | `[53 67]` | UDP ports to open from all VLAN interfaces to router |
 | `services.ezrouter.trustedInterfaces` | list of str | `[bridge.name]` | Interfaces with no firewall restrictions |
 | `services.ezrouter.internalInterfaces` | list of str | *auto* | Internal interfaces for NAT (auto: bridge + all VLANs) |
 
