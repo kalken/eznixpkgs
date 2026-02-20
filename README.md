@@ -33,6 +33,6 @@ Then enable whichever modules you need in your `configuration.nix`:
 
 | Module | Description |
 |--------|-------------|
-| [ezrouter](https://github.com/kalken/eznixpkgs/blob/develop/modules/ezrouter.md) | Router setup with VLANs, DHCP, DNS, and firewall |
-| [eznetns](https://github.com/kalken/eznixpkgs/blob/develop/modules/eznetns.md) | Named Linux network namespace management |
-| [prettysocks](https://github.com/kalken/eznixpkgs/blob/develop/modules/prettysocks.md) | SOCKS5 proxy on `127.0.0.1:1080`, with optional per-namespace instances |
+| [ezrouter](/modules/ezrouter.md) | Router setup with VLANs, DHCP, DNS, and firewall |
+| [eznetns](/modules/eznetns.md) | Named Linux network namespace management |
+| [prettysocks](/modules/prettysocks.md) | SOCKS5 proxy on `127.0.0.1:1080`, with optional per-namespace instances |
