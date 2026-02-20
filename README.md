@@ -36,3 +36,19 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [ezrouter](/modules/ezrouter.md) | Router setup with VLANs, DHCP, DNS, and firewall |
 | [eznetns](/modules/eznetns.md) | Named Linux network namespace management |
 | [prettysocks](/modules/prettysocks.md) | SOCKS5 proxy on `127.0.0.1:1080`, with optional per-namespace instances |
+
+## Packages
+```
+
+{ pkgs, ... }:
+{
+  environment.systemPackages = with pkgs; [
+    ezconf
+    ezman
+    eznetns
+    ezsensors
+    prettysocks
+    wg-tools
+  ];
+}
+```
