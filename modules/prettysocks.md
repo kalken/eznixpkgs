@@ -8,6 +8,7 @@ A simple NixOS module for running PrettySocks as a systemd service, either in th
 - Per-namespace instances bound to `eznetns-<n>.service`
 - Automatic system user and group provisioning
 - Namespace-scoped DNS and NSS via bind-mounted `resolv.conf` / `nsswitch.conf`
+- Listens on `127.0.0.1:1080` (SOCKS5)
 
 ## 🚀 Quick Start
 
@@ -54,6 +55,7 @@ Or with a named network namespace instance:
 - Each entry in `instances` creates a `prettysocks-<n>.service` unit with a dedicated `prettysocks-<n>` system user.
 - Instance services run inside `/run/netns/<n>` and are bound to `eznetns-<n>.service`; if the namespace goes down, the instance stops with it. The namespace can be of any kind.
 - Namespace-local DNS resolution is provided by bind-mounting `/etc/eznetns/<n>/resolv.conf` and `/etc/eznetns/<n>/nsswitch.conf` into the service, with nscd disabled via `/var/empty:/var/run/nscd`.
+- PrettySocks listens on `127.0.0.1:1080` (standard SOCKS5 port).
 - Both the default service and instances can be active simultaneously.
 
 *Minimal SOCKS proxy module for NixOS network namespaces — just works.* 🚀
