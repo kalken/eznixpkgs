@@ -14,8 +14,6 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 
 ```nix
 {
-  imports = [ ./modules/ezrouter.nix ];
-
   services.ezrouter = {
     enable = true;
     wan.device = "eth0";  # WAN interface
