@@ -8,7 +8,6 @@ Add the flake as an input in your `flake.nix`, and make sure `eznixpkgs` follows
 
 ```nix
 {
-{
   description = "NixOS configuration with flattened inputs";
 
   inputs = {
