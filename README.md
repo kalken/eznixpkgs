@@ -46,13 +46,16 @@ Configuration tool wrapped in nvim to make it easier to edit nix files.
 recursive version of nixos-option.
 
 ### [eznetns](https://github.com/kalken/eznetns)
-eznetns is a command line helper to configure separated network environments (namespaces), and control which processes that make use of them. 
+eznetns is a command line helper to configure separated network environments (namespaces), and control which processes that make use of them.
+
+### ezsensors
+Simple script to get temperature on sensors from /sys.
 
 ### [prettysocks](https://github.com/twisteroidambassador/prettysocks)
 A proxy server that makes your eyeballs happy.
 
 ### [wg-tools](https://github.com/mullvad/wg-tools)
-generates WireGuard®1 configuration files for all Mullvad relays.
+generates WireGuard® configuration files for Mullvad.
 
 ```
 
