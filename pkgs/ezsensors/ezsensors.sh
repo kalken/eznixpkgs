@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# cputemp/cputemp.sh
 
 cputemp() {
     local found=0
