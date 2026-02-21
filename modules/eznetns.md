@@ -26,17 +26,17 @@ eznetns can automatically setup wireguard files it finds in **/etc/eznetns/nameo
       enable = true;
       
       
-      # Forward port 8080 on host to 127.0.0.1:9091 in netns.
+      # Forward port 8081 on host to 127.0.0.1:8080 in netns.
       portForwards = [
         {
-          listenStreams = [ "0.0.0.0:8080" ];
-          target = "127.0.0.1:9091";
+          listenStreams = [ "0.0.0.0:8081" ];
+          target = "127.0.0.1:8080";
         }
       ];
       
-      # open port 9091 for incomming traffic
+      # open port 49152 from internet to netns
       firewall.extraInputRules = ''
-        tcp dport 9091 accept
+        tcp dport 49152 accept
       '';
     };
     
