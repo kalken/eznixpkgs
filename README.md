@@ -38,7 +38,25 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [prettysocks](/modules/prettysocks.md) | SOCKS5 proxy on `127.0.0.1:1080`, with optional per-namespace instances |
 
 ## 📦 Packages
+
+### [ezconf](https://github.com/kalken/ezconf)
+Configuration tool wrapped in nvim to make it easier to edit nix files.
+
+### ezman
+recursive version of nixos-option.
+
+### [eznetns](https://github.com/kalken/eznetns)
+eznetns is a command line helper to configure separated network environments (namespaces), and control which processes that make use of them. 
+
+### [prettysocks](https://github.com/twisteroidambassador/prettysocks)
+A proxy server that makes your eyeballs happy.
+
+### [wg-tools](https://github.com/mullvad/wg-tools)
+generates WireGuard®1 configuration files for all Mullvad relays.
+
 ```
+
+
 
 { pkgs, ... }:
 {
