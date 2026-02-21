@@ -8,18 +8,19 @@ Add the flake as an input in your `flake.nix`, and make sure `eznixpkgs` follows
 
 ```nix
 {
+{
+  description = "NixOS configuration with flattened inputs";
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    eznixpkgs = {
-      url = "github:kalken/eznixpkgs";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    eznixpkgs.url = "github:kalken/eznixpkgs";
+    eznixpkgs.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { nixpkgs, eznixpkgs, ... }: {
-    nixosConfigurations.mymachine = nixpkgs.lib.nixosSystem {
+  outputs = inputs: {
+    nixosConfigurations.mymachine = inputs.nixpkgs.lib.nixosSystem {
       modules = [
-        eznixpkgs.nixosModules.default
+        inputs.eznixpkgs.nixosModules.default
         ./configuration.nix
       ];
     };
