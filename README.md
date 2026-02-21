@@ -56,8 +56,8 @@ Then enable whichever modules you need in your `configuration.nix`:
 | Package | Description |
 |---|---|
 | [ezconf](https://github.com/kalken/ezconf) | A configuration tool wrapped in nvim to make it easier to edit nix files. |
-| **ezman** | Recursive version of `nixos-option`. |
+| [ezman](/pkgs/ezman/ezman.sh) | Recursive version of `nixos-option`. |
 | [eznetns](https://github.com/kalken/eznetns) | A command line helper to configure separated network environments (namespaces), and control which processes make use of them. |
-| **ezsensors** | Simple script to get temperature readings from `/sys`. |
+| [ezsensors](/pkgs/ezsensors/ezsensors.sh) | Simple script to get temperature readings from `/sys`. |
 | [prettysocks](https://github.com/twisteroidambassador/prettysocks) | A proxy server that makes your eyeballs happy. |
 | [wg-tools](https://github.com/mullvad/wg-tools) | Generates WireGuard® configuration files for Mullvad. |
