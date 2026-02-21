@@ -39,28 +39,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 
 ## 📦 Packages
 
-### [ezconf](https://github.com/kalken/ezconf)
-Configuration tool wrapped in nvim to make it easier to edit nix files.
-
-### ezman
-recursive version of nixos-option.
-
-### [eznetns](https://github.com/kalken/eznetns)
-eznetns is a command line helper to configure separated network environments (namespaces), and control which processes that make use of them.
-
-### ezsensors
-Simple script to get temperature on sensors from /sys.
-
-### [prettysocks](https://github.com/twisteroidambassador/prettysocks)
-A proxy server that makes your eyeballs happy.
-
-### [wg-tools](https://github.com/mullvad/wg-tools)
-generates WireGuard® configuration files for Mullvad.
-
 ```
-
-
-
 { pkgs, ... }:
 {
   environment.systemPackages = with pkgs; [
@@ -73,3 +52,22 @@ generates WireGuard® configuration files for Mullvad.
   ];
 }
 ```
+
+### ezconf
+[ezconf](https://github.com/kalken/ezconf) is a configuration tool wrapped in nvim to make it easier to edit nix files.
+
+### ezman
+Recursive version of nixos-option.
+
+### eznetns 
+[eznetns](https://github.com/kalken/eznetns) is a command line helper to configure separated network environments (namespaces), and control which processes that make use of them.
+
+### ezsensors
+Simple script to get temperature on sensors from /sys.
+
+### prettysocks 
+[prettysocks](https://github.com/twisteroidambassador/prettysocks) is a proxy server that makes your eyeballs happy.
+
+### wg-tools
+[wg-tools](https://github.com/mullvad/wg-tools) generates WireGuard® configuration files for Mullvad.
+
