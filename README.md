@@ -37,13 +37,17 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [eznetns](/modules/eznetns.md) | Named Linux network namespace management |
 | [prettysocks](/modules/prettysocks.md) | SOCKS5 proxy on `127.0.0.1:1080`, with optional per-namespace instances |
 
+## 🛠 Programs
+
+| Program | Description |
+|---|---|
+| [ezconf](/modules/ezconf.md) | A configuration tool wrapped in nvim to make it easier to edit nix files. |
 
 ## 📦 Packages
 ```nix
 { pkgs, ... }:
 {
   environment.systemPackages = with pkgs; [
-    ezconf
     ezman
     eznetns
     ezsensors
@@ -55,7 +59,10 @@ Then enable whichever modules you need in your `configuration.nix`:
 
 | Package | Description |
 |---|---|
+<<<<<<< HEAD
 | [ezconf](/modules/ezconf.md) | A configuration tool wrapped in nvim to make it easier to edit nix files. |
+=======
+>>>>>>> develop
 | [ezman](/pkgs/ezman/ezman.sh) | Recursive version of `nixos-option`. |
 | [eznetns](https://github.com/kalken/eznetns) | A command line helper to configure separated network environments (namespaces), and control which processes make use of them. |
 | [ezsensors](/pkgs/ezsensors/ezsensors.sh) | Simple script to get temperature readings from `/sys`. |
