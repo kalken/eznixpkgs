@@ -55,7 +55,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 
 | Package | Description |
 |---|---|
-| [ezconf](https://github.com/kalken/ezconf) | A configuration tool wrapped in nvim to make it easier to edit nix files. |
+| [ezconf](/modules/ezconf.md) | A configuration tool wrapped in nvim to make it easier to edit nix files. |
 | [ezman](/pkgs/ezman/ezman.sh) | Recursive version of `nixos-option`. |
 | [eznetns](https://github.com/kalken/eznetns) | A command line helper to configure separated network environments (namespaces), and control which processes make use of them. |
 | [ezsensors](/pkgs/ezsensors/ezsensors.sh) | Simple script to get temperature readings from `/sys`. |
