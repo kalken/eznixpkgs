@@ -1,36 +1,43 @@
-# ezconf.nix
-{ stdenv, lib, makeWrapper, neovim, nixd, alejandra, fetchFromGitHub }:
+{ pkgs, lib, theme ? null, configLua }:
 
-stdenv.mkDerivation {
-  pname = "ezconf";
-  version = "1.0.0";
+let
+  initLua = pkgs.writeText "config.lua" ''
+    ${lib.optionalString (theme != null) ''
+      ${lib.optionalString (theme.setup != "") theme.setup}
+      vim.g.ezconf_theme = "${theme.colorscheme}"
+    ''}
 
-  src = fetchFromGitHub {
-    owner = "kalken";
-    repo = "ezconf";
-    rev = "d7e2ffeaa85533b6a824a7c8746cd976453e8ea0";
-    sha256 = "sha256-E3NXBrj4RY95t46Z7EO/q71f6YsDBeNkywziBojbId8=";
-  };
+    -- User config
+    ${builtins.readFile configLua}
 
-  nativeBuildInputs = [ makeWrapper ];
-  buildInputs = [ nixd alejandra ];
-
-  installPhase = ''
-    mkdir -p $out/share/nvim
-    cp -r * $out/share/nvim/
-    
-    mkdir -p $out/bin
-    makeWrapper ${neovim}/bin/nvim $out/bin/ezconf \
-      --add-flags "-u $out/share/nvim/init.lua" \
-      --prefix PATH : ${lib.makeBinPath [ nixd alejandra ]} \
-      --set NVIM_APPNAME ezconf \
-      --add-flags "--cmd 'set runtimepath^=$out/share/nvim'"
+    -- Injected by Nix (after user config to ensure they are not overridden)
+    vim.opt.mouse = ""
   '';
 
-  meta = with lib; {
-    description = "My Neovim configuration";
-    homepage = "https://github.com/kalken/ezconf";
-    license = licenses.gpl3;
-    maintainers = [ ];
+  neovimPackage = pkgs.neovim.override {
+    configure = {
+      customRC = "luafile ${initLua}";
+      packages.ezconf = {
+        start = lib.optionals (theme != null) [ theme.plugin ] ++ [
+          pkgs.vimPlugins.nvim-cmp
+          pkgs.vimPlugins.luasnip
+          pkgs.vimPlugins.cmp-nvim-lsp
+          pkgs.vimPlugins.cmp-buffer
+          pkgs.vimPlugins.cmp-path
+          pkgs.vimPlugins.cmp_luasnip
+        ];
+      };
+    };
   };
+
+in pkgs.symlinkJoin {
+  name = "ezconf";
+  paths = [
+    neovimPackage
+    pkgs.nixd
+    pkgs.alejandra
+  ];
+  postBuild = ''
+    ln -s $out/bin/nvim $out/bin/ezconf
+  '';
 }
