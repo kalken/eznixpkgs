@@ -1,8 +1,4 @@
 { config, lib, pkgs, ... }:
-<<<<<<< HEAD
-
-=======
->>>>>>> develop
 let
   cfg = config.programs.ezconf;
 in {
