@@ -1,4 +1,4 @@
-pcall(vim.cmd.colorscheme, vim.g.ezconf_theme or "industry")
+pcall(vim.cmd.colorscheme, vim.g.ezconf_theme or "default")
 
 local normal_hl = vim.api.nvim_get_hl(0, { name = 'Normal', link = false })
 local bg = normal_hl.bg and string.format("#%06x", normal_hl.bg) or "NONE"
