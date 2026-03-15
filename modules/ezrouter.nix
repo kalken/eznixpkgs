@@ -183,7 +183,7 @@ in {
 
       # CHANGED: was types.bool / default false, now supports "static", "dhcp", "yes", "no"
       keepConfiguration = mkOption {
-        type = types.enum [ "no" "static" "dhcp" "yes" ];
+        type = types.enum [ "no" "static" "dynamic-on-stop" "dynamic" "yes" ];
         default = "no";
         description = ''
           Keep network configuration on the WAN interface when the link goes
