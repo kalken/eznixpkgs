@@ -181,10 +181,17 @@ in {
         description = "DHCPv6 prefix delegation hint (e.g., 56 for ::/56, 64 for ::/64)";
       };
 
+      # CHANGED: was types.bool / default false, now supports "static", "dhcp", "yes", "no"
       keepConfiguration = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Keep network configuration on the WAN interface even when the link goes down";
+        type = types.enum [ "no" "static" "dhcp" "yes" ];
+        default = "no";
+        description = ''
+          Keep network configuration on the WAN interface when the link goes
+          down or networkd restarts. Use "static" to retain addresses/routes
+          across reboots while waiting for DHCPv6 lease renewal — useful when
+          the ISP does not honor DHCPv6 Release and holds leases for ~24h.
+          See KeepConfiguration in systemd.network(5).
+        '';
       };
     };
 
@@ -336,7 +343,8 @@ in {
             DHCPPrefixDelegation = "yes";
             IPv6PrivacyExtensions = cfg.wan.ipv6PrivacyExtensions;
             IPv6AcceptRA = "yes";
-            KeepConfiguration = mkIf cfg.wan.keepConfiguration "yes";
+          } // optionalAttrs (cfg.wan.keepConfiguration != "no") {
+            KeepConfiguration = cfg.wan.keepConfiguration;
           };
           
           dhcpV6Config = {
