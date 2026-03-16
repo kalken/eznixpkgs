@@ -53,7 +53,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `wan.device` | str | *required* | WAN interface name (e.g., `"eth0"`) |
 | `wan.ipv6PrivacyExtensions` | str | `"no"` | Enable IPv6 privacy extensions (`"no"`, `"yes"`, `"kernel"`) |
 | `wan.prefixHint` | int | `56` | DHCPv6 prefix delegation hint (e.g., `56` for `/56`, `64` for `/64`) |
-| `wan.keepConfiguration` | enum | `"no"` | Keep WAN config when link goes down. Values: `"no"`, `"static"`, `"dynamic-on-stop"`, `"dynamic"`, `"yes"`. Use `"static"` to retain addresses/routes across reboots while waiting for DHCPv6 lease renewal. |
+| `wan.keepConfiguration` | enum | `"no"` | Keep WAN config when link goes down. Values: `"no"`, `"static"`, `"dynamic-on-stop"`, `"dynamic"`, `"yes"`. Use `"static"` or  `"dynamic-on-stop"` to retain addresses/routes across reboots while waiting for DHCPv6 lease renewal. |
 
 ### Bridge Settings (`services.ezrouter.bridge`)
 
