@@ -1,6 +1,6 @@
 # ezrouter
 
-A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firewall using `systemd-networkd` + `nftables`. The internal firewall of nixos is used so you can open ports etc as you would normally do. 
+A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firewall using `systemd-networkd` + `nftables`.
 
 ## ✨ Features
 
@@ -9,6 +9,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 - DNS via `systemd-resolved`
 - Optional inter-VLAN isolation with `nftables`
 - NAT for internal interfaces
+- Native Firewall rules are used.
 - **Smart defaults**: VLAN `address` and `subnetId` auto-derived from VLAN ID (only `id` is required)
 
 ## 🚀 Quick Start
