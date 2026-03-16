@@ -19,23 +19,9 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
     enable = true;
     wan.device = "eth0";
 
-    bridge = {
-      address = "192.168.1.1";
-      devices = [ "eth1" "eth2" ];
-    };
+    bridge.devices = [ "eth1" ];
 
-    # Minimal VLAN config — ONLY `id` is required!
-    vlan.guests = {
-      id = 10;  # → auto: address=192.168.10.1, subnetId=10
-    };
-
-    # Override defaults when needed
-    vlan.iot = {
-      id = 30;
-      address = "172.16.30.1";  # custom subnet
-      netmask = "23";
-      enableDHCPv4 = false;     # disable DHCPv4 for this VLAN
-    };
+    vlan.guests.id = 10;
   };
 }
 ```
