@@ -8,7 +8,7 @@ Add the flake as an input in your `flake.nix`, and make sure `eznixpkgs` follows
 
 ```nix
 {
-  description = "NixOS configuration with flattened inputs";
+  description = "NixOS configuration";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
