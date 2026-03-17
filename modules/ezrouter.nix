@@ -183,9 +183,6 @@ in {
       description = "List of internal interfaces for NAT and masquerading";
     };
 
-    # ────────────────────────────────────────────────────────────────
-    # Improved VLAN submodule — most fields now have smart defaults
-    # ────────────────────────────────────────────────────────────────
     vlan = mkOption {
       type = types.attrsOf (types.submodule ({ name, config, ... }: {
         options = {
@@ -246,13 +243,6 @@ in {
           };
         };
 
-        # You can add assertions here if desired
-        # assertions = [
-        #   {
-        #     assertion = config.id >= 1 && config.id <= 4094;
-        #     message = "VLAN ID for ${name} must be between 1 and 4094";
-        #   }
-        # ];
       }));
 
       default = {};
@@ -349,9 +339,6 @@ in {
       ''
     );
 
-    # ───────────────────────────────────────────────
-    #  Netdevs: bridge + VLANs
-    # ───────────────────────────────────────────────
     systemd.network.netdevs = mkMerge [
       {
         "10-${cfg.bridge.name}" = {
@@ -364,9 +351,6 @@ in {
       vlanNetdevs
     ];
 
-    # ───────────────────────────────────────────────
-    #  Networks: WAN + bridge members + bridge + VLANs
-    # ───────────────────────────────────────────────
     systemd.network.networks = mkMerge [
       {
         # Bridge members (physical ports → bridge)
