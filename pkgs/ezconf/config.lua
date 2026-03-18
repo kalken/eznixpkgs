@@ -12,6 +12,8 @@ local cmp = require('cmp')
 local luasnip = require('luasnip')
 
 vim.opt.guicursor = ''
+vim.opt.showcmd = false 
+vim.opt.ruler = false 
 
 -- ─── Heading Sidebar ─────────────────────────────────────────────────────────
 
