@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ezprotonge - Downloads and installs the latest Proton-GE release to Steam's compatibilitytools.d.
+"""ezprotonge-steam - Downloads and installs the latest Proton-GE release to Steam's compatibilitytools.d.
 Always appears in Steam as GE-Proton-Latest.
 """
 
@@ -10,40 +10,42 @@ import re
 import shutil
 import sys
 import tarfile
-import tempfile
 import urllib.request
 import urllib.error
 
 GITHUB_API = "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest"
 DISPLAY_NAME = "GE-Proton-Latest"
+CACHE_DIR = "/tmp/ezprotonge-steam"
+
 
 # -- Logging ------------------------------------------------------------------
 
+def info(msg):
+    print(f"\033[32m[INFO]\033[0m  {msg}")
 
-def info(msg): print(f"\033[32m[INFO]\033[0m  {msg}")
-def warn(msg): print(f"\033[33m[WARN]\033[0m  {msg}")
+
+def warn(msg):
+    print(f"\033[33m[WARN]\033[0m  {msg}")
 
 
 def error(msg):
     print(f"\033[31m[ERROR]\033[0m {msg}", file=sys.stderr)
     sys.exit(1)
 
-# -- GitHub release -----------------------------------------------------------
 
+# -- GitHub release -----------------------------------------------------------
 
 def fetch_latest_release():
     info("Fetching latest Proton-GE release info from GitHub...")
-    req = urllib.request.Request(
-        GITHUB_API, headers={
-            "User-Agent": "ezprotonge"})
+    req = urllib.request.Request(GITHUB_API, headers={"User-Agent": "ezprotonge-steam"})
     try:
         with urllib.request.urlopen(req) as resp:
             return json.load(resp)
     except urllib.error.URLError as e:
         error(f"Failed to reach GitHub API: {e}")
 
-# -- Version check ------------------------------------------------------------
 
+# -- Version check ------------------------------------------------------------
 
 def is_up_to_date(install_dir, tag):
     vdf = os.path.join(install_dir, DISPLAY_NAME, "compatibilitytool.vdf")
@@ -53,11 +55,11 @@ def is_up_to_date(install_dir, tag):
     except FileNotFoundError:
         return False
 
+
 # -- Download with progress ---------------------------------------------------
 
-
 def download(url, dest, silent=False):
-    req = urllib.request.Request(url, headers={"User-Agent": "ezprotonge"})
+    req = urllib.request.Request(url, headers={"User-Agent": "ezprotonge-steam"})
     try:
         with urllib.request.urlopen(req) as resp:
             total = int(resp.headers.get("Content-Length", 0))
@@ -84,8 +86,8 @@ def download(url, dest, silent=False):
         f.write(data)
     return bytes(data)
 
-# -- Checksum -----------------------------------------------------------------
 
+# -- Checksum -----------------------------------------------------------------
 
 def verify_checksum(data, sha_content):
     info("Verifying checksum...")
@@ -96,30 +98,30 @@ def verify_checksum(data, sha_content):
     actual = hashlib.sha512(data).hexdigest()
     if expected != actual:
         error(
-            f"Checksum mismatch! Download may be corrupted.\n  Expected: {expected}\n  Actual:   {actual}")
+            f"Checksum mismatch! Download may be corrupted.\n"
+            f"  Expected: {expected}\n"
+            f"  Actual:   {actual}"
+        )
     info("Checksum OK.")
 
-# -- Extract with directory rename --------------------------------------------
 
+# -- Extract with directory rename --------------------------------------------
 
 def extract(tar_path, install_dir):
     info("Extracting...")
     with tarfile.open(tar_path, "r:gz") as tf:
         for member in tf.getmembers():
-            # Rewrite top-level directory to DISPLAY_NAME
             parts = member.name.split("/", 1)
-            member.name = DISPLAY_NAME + \
-                ("/" + parts[1] if len(parts) > 1 else "")
+            member.name = DISPLAY_NAME + ("/" + parts[1] if len(parts) > 1 else "")
             tf.extract(member, install_dir, filter="tar")
 
-# -- Patch compatibilitytool.vdf ----------------------------------------------
 
+# -- Patch compatibilitytool.vdf ----------------------------------------------
 
 def patch_vdf(install_dir):
     vdf_path = os.path.join(install_dir, DISPLAY_NAME, "compatibilitytool.vdf")
     if not os.path.exists(vdf_path):
-        error(
-            f"compatibilitytool.vdf not found at {vdf_path} — cannot patch display name.")
+        error(f"compatibilitytool.vdf not found at {vdf_path} — cannot patch display name.")
 
     with open(vdf_path) as f:
         contents = f.read()
@@ -133,17 +135,15 @@ def patch_vdf(install_dir):
     with open(vdf_path, "w") as f:
         f.write(patched)
 
+
 # -- Main ---------------------------------------------------------------------
 
-
 def main():
-    home = os.environ.get("HOME") or error(
-        "HOME environment variable not set.")
+    home = os.environ.get("HOME") or error("HOME environment variable not set.")
     install_dir = os.path.join(home, ".steam", "root", "compatibilitytools.d")
 
     release = fetch_latest_release()
-    tag = release.get("tag_name") or error(
-        "Could not determine latest release tag.")
+    tag = release.get("tag_name") or error("Could not determine latest release tag.")
     info(f"Latest release: {tag}")
 
     if is_up_to_date(install_dir, tag):
@@ -151,46 +151,62 @@ def main():
         return
 
     assets = release.get("assets", [])
-    tar_asset = next((a for a in assets if a["name"].endswith(
-        ".tar.gz") and not a["name"].endswith(".sha512sum")), None)
+    tar_asset = next(
+        (a for a in assets if a["name"].endswith(".tar.gz") and not a["name"].endswith(".sha512sum")),
+        None
+    )
     sha_asset = next(
         (a for a in assets if a["name"].endswith(".sha512sum")),
-        None)
+        None
+    )
 
     if not tar_asset:
         error("Could not find .tar.gz asset in release.")
     if not sha_asset:
         error("Could not find .sha512sum asset in release.")
 
-    with tempfile.TemporaryDirectory() as tmp:
-        tar_path = os.path.join(tmp, tar_asset["name"])
-        sha_path = os.path.join(tmp, sha_asset["name"])
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    tar_path = os.path.join(CACHE_DIR, tar_asset["name"])
+    tar_part = tar_path + ".part"
+    sha_path = os.path.join(CACHE_DIR, sha_asset["name"])
+
+    # Use cached tarball if it exists and is complete (same version = same filename)
+    if os.path.exists(tar_path):
+        info(f"Using cached tarball: {tar_path}")
+        with open(tar_path, "rb") as f:
+            tar_data = f.read()
+    else:
+        # Remove any stale tarballs or partial downloads from previous versions
+        for old_file in os.listdir(CACHE_DIR):
+            if old_file.endswith(".tar.gz") or old_file.endswith(".tar.gz.part"):
+                os.remove(os.path.join(CACHE_DIR, old_file))
+                info(f"Removed stale cache: {old_file}")
 
         info(f"Downloading {tag}...")
-        tar_data = download(tar_asset["browser_download_url"], tar_path)
+        tar_data = download(tar_asset["browser_download_url"], tar_part)
+        os.rename(tar_part, tar_path)
 
-        info("Downloading checksum file...")
-        download(sha_asset["browser_download_url"], sha_path, silent=True)
-        with open(sha_path) as f:
-            sha_content = f.read()
+    info("Downloading checksum file...")
+    download(sha_asset["browser_download_url"], sha_path, silent=True)
+    with open(sha_path) as f:
+        sha_content = f.read()
 
-        verify_checksum(tar_data, sha_content)
+    verify_checksum(tar_data, sha_content)
 
-        os.makedirs(install_dir, exist_ok=True)
+    os.makedirs(install_dir, exist_ok=True)
 
-        dest = os.path.join(install_dir, DISPLAY_NAME)
-        if os.path.isdir(dest):
-            info(f"Removing old {DISPLAY_NAME} install...")
-            shutil.rmtree(dest)
+    dest = os.path.join(install_dir, DISPLAY_NAME)
+    if os.path.isdir(dest):
+        info(f"Removing old {DISPLAY_NAME} install...")
+        shutil.rmtree(dest)
 
-        extract(tar_path, install_dir)
+    extract(tar_path, install_dir)
 
     info("Patching compatibilitytool.vdf...")
     patch_vdf(install_dir)
 
     info(f"Done! Installed as '{DISPLAY_NAME} ({tag})' -> {dest}")
-    info(
-        f"Restart Steam and select '{DISPLAY_NAME}' in a game's compatibility settings.")
+    info(f"Restart Steam and select '{DISPLAY_NAME}' in a game's compatibility settings.")
 
 
 if __name__ == "__main__":
