@@ -8,6 +8,7 @@
       wg-tools    = final.callPackage ./wg-tools  { };
       ezsensors = final.callPackage ./ezsensors  { };
       ezman = final.callPackage ./ezman  { };
+      ezprotonge-steam = final.callPackage ./ezprotonge-steam  { };
     })
   ];
 }
