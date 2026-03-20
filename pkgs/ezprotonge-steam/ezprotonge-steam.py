@@ -140,7 +140,10 @@ def patch_vdf(install_dir):
 
 def main():
     home = os.environ.get("HOME") or error("HOME environment variable not set.")
-    install_dir = os.path.join(home, ".steam", "root", "compatibilitytools.d")
+    steam_dir = os.path.join(home, ".steam")
+    if not os.path.isdir(steam_dir):
+        error(f"Steam directory not found at {steam_dir} — is Steam installed for this user?")
+    install_dir = os.path.join(steam_dir, "root", "compatibilitytools.d")
 
     release = fetch_latest_release()
     tag = release.get("tag_name") or error("Could not determine latest release tag.")
