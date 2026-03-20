@@ -73,6 +73,6 @@ services.ezprotonge-steam = {
 - The version is detected from the internal tool key in `compatibilitytool.vdf` — no extra files are written.
 - The tarball cache at `/tmp/ezprotonge-steam` is cleared on reboot automatically.
 - Run `journalctl -xeu ezprotonge-steam.service` to see output from the last service run.
-- `pkgs.ezprotonge-steam` must be available in your package set, e.g. via an overlay.
+- To also run it manually from the command line, add `pkgs.ezprotonge-steam` to your `environment.systemPackages`, `users.users.<name>.packages`, or `home.packages`.
 
 *Set it and forget it Proton-GE updates for NixOS.* 🎮
