@@ -19,7 +19,7 @@ python.pkgs.buildPythonApplication {
 
   installPhase = ''
     mkdir -p $out/bin
-    cp ezprotonge.py $out/bin/ezprotonge-steam
+    cp ezprotonge-steam.py $out/bin/ezprotonge-steam
     chmod +x $out/bin/ezprotonge-steam
     patchShebangs $out/bin/ezprotonge-steam
   '';
