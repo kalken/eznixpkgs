@@ -8,13 +8,13 @@ A custom Neovim distribution for NixOS, preconfigured for Nix development with L
 * Autocompletion with `nvim-cmp`, `luasnip`, and snippet sources
 * Auto-formatting on save via `alejandra`
 * Heading sidebar and button panel for `.nix` files
-* Mouse disabled by default — keyboard-first experience
+* Configurable `vim.opt` settings via `vimOpts`
 * Nix-injected theming — any `vimPlugins` package works
 * Ignores `~/.config/nvim` — fully self-contained
 
 ## 🚀 Quick Start
 
-```nix
+```
 {
   programs.ezconf.enable = true;
 }
@@ -22,7 +22,7 @@ A custom Neovim distribution for NixOS, preconfigured for Nix development with L
 
 Then launch with:
 
-```bash
+```
 ezconf
 ```
 
@@ -30,7 +30,7 @@ ezconf
 
 Pass any plugin from `pkgs.vimPlugins` directly:
 
-```nix
+```
 {
   programs.ezconf = {
     enable = true;
@@ -44,7 +44,7 @@ Pass any plugin from `pkgs.vimPlugins` directly:
 
 For themes that require a setup call:
 
-```nix
+```
 {
   programs.ezconf = {
     enable = true;
@@ -59,7 +59,7 @@ For themes that require a setup call:
 
 You can also use a plugin from a custom source:
 
-```nix
+```
 {
   programs.ezconf = {
     enable = true;
@@ -79,6 +79,21 @@ You can also use a plugin from a custom source:
 }
 ```
 
+## 🖱️ Enabling Mouse Support
+
+By default the mouse is disabled so terminal text selection works normally. To enable clicking to position the cursor:
+
+```
+{
+  programs.ezconf = {
+    enable = true;
+    vimOpts = {
+      mouse = "n";  # normal mode only, or "a" for all modes
+    };
+  };
+}
+```
+
 ## ⚙️ All Options
 
 | Option | Type | Default | Description |
@@ -88,6 +103,18 @@ You can also use a plugin from a custom source:
 | `programs.ezconf.theme.plugin` | package | — | Any `vimPlugins` package |
 | `programs.ezconf.theme.colorscheme` | str | — | The colorscheme name passed to `vim.cmd.colorscheme()` |
 | `programs.ezconf.theme.setup` | str | `""` | Optional Lua setup call, e.g. `require("catppuccin").setup()` |
+| `programs.ezconf.vimOpts` | attrs | see below | `vim.opt` settings injected at the end of the config |
+
+### `vimOpts` defaults
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `guicursor` | `""` | Disables cursor shape changes |
+| `mouse` | `""` | Mouse disabled — terminal selection works normally |
+| `showcmd` | `false` | Hides command display in statusline |
+| `ruler` | `false` | Hides cursor position in statusline |
+
+Values can be booleans, integers, floats, or strings. They are injected after the user config so they always take effect last.
 
 ## 📦 Bundled Packages
 
@@ -112,7 +139,7 @@ ezconf adds two special comment conventions for `.nix` files that power the side
 
 Use `##! Heading` (any number of `#`) to define navigable headings in your file:
 
-```nix
+```
 ##! Top Level Section
 
 ###! Sub Section
@@ -126,7 +153,7 @@ The number of `#` controls the indent level in the sidebar. Press `<Tab>` to ope
 
 Use `#!button Name: command` to define runnable shell commands:
 
-```nix
+```
 #!button Build: nixos-rebuild build --flake /etc/nixos
 #!button Switch: sudo nixos-rebuild switch --flake /etc/nixos
 #!button Check: nix flake check /etc/nixos
@@ -153,7 +180,7 @@ These are added by ezconf on top of stock Neovim.
 * The `ezconf` command is a wrapper around `nvim` — all standard Neovim flags and arguments work.
 * LSP is configured to read your system flake from `/etc/nixos` using the current hostname automatically.
 * `~/.config/nvim` and other user config files are ignored entirely — ezconf is fully self-contained.
-* The mouse is disabled so that terminal text selection works normally.
+* `vimOpts` are injected after the user config, so they override anything set in `config.lua`.
 * The heading sidebar (`HeadingSidebarToggle`) parses `##! Heading` style comments in `.nix` files.
 * The button panel (`ButtonPanelToggle`) parses `#!button Name: command` directives and runs them in a split.
 * Press `<Tab>` in normal mode to cycle between the main buffer, sidebar, and button panel.

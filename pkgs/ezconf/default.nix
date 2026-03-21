@@ -1,19 +1,15 @@
-{ pkgs, lib, theme ? null, configLua }:
-
+{ pkgs, lib, theme ? null, configLua, vimOpts ? "" }:
 let
   initLua = pkgs.writeText "config.lua" ''
     ${lib.optionalString (theme != null) ''
       ${lib.optionalString (theme.setup != "") theme.setup}
       vim.g.ezconf_theme = "${theme.colorscheme}"
     ''}
-
     -- User config
     ${builtins.readFile configLua}
-
     -- Injected by Nix (after user config to ensure they are not overridden)
-    vim.opt.mouse = ""
+    ${vimOpts}
   '';
-
   neovimPackage = pkgs.neovim.override {
     configure = {
       customRC = "luafile ${initLua}";
@@ -29,7 +25,6 @@ let
       };
     };
   };
-
 in pkgs.symlinkJoin {
   name = "ezconf";
   paths = [

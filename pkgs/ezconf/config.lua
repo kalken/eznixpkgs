@@ -12,8 +12,9 @@ local cmp = require('cmp')
 local luasnip = require('luasnip')
 
 vim.opt.guicursor = ''
-vim.opt.showcmd = false 
-vim.opt.ruler = false 
+vim.opt.showcmd = false
+vim.opt.ruler = false
+vim.opt.updatetime = 200
 
 -- ─── Heading Sidebar ─────────────────────────────────────────────────────────
 
@@ -424,5 +425,19 @@ vim.api.nvim_create_autocmd('BufWritePre', {
   pattern = '*.nix',
   callback = function()
     vim.lsp.buf.format({ async = false })
+  end,
+})
+
+-- ─── Re-request LSP completions after pause in typing ────────────────────────
+
+vim.api.nvim_create_autocmd('CursorHoldI', {
+  pattern = '*.nix',
+  callback = function()
+    local line = vim.api.nvim_get_current_line()
+    local col = vim.api.nvim_win_get_cursor(0)[2]
+    local before_cursor = line:sub(1, col)
+    if before_cursor:match('[%.%w]$') then
+      cmp.complete({ reason = cmp.ContextReason.Manual })
+    end
   end,
 })
