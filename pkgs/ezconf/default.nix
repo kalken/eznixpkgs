@@ -1,10 +1,11 @@
-{ pkgs, lib, theme ? null, configLua, vimOpts ? "" }:
+{ pkgs, lib, theme ? null, configLua, vimOpts ? "", nerdFonts ? false }:
 let
   initLua = pkgs.writeText "config.lua" ''
     ${lib.optionalString (theme != null) ''
       ${lib.optionalString (theme.setup != "") theme.setup}
       vim.g.ezconf_theme = "${theme.colorscheme}"
     ''}
+    ${lib.optionalString nerdFonts "vim.g.ezconf_nerdfonts = true"}
     -- User config
     ${builtins.readFile configLua}
     -- Injected by Nix (after user config to ensure they are not overridden)
@@ -27,11 +28,7 @@ let
   };
 in pkgs.symlinkJoin {
   name = "ezconf";
-  paths = [
-    neovimPackage
-    pkgs.nixd
-    pkgs.alejandra
-  ];
+  paths = [ neovimPackage pkgs.nixd pkgs.alejandra ];
   postBuild = ''
     ln -s $out/bin/nvim $out/bin/ezconf
   '';

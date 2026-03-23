@@ -15,6 +15,9 @@ vim.opt.guicursor = ''
 vim.opt.showcmd = false
 vim.opt.ruler = false
 vim.opt.updatetime = 200
+vim.opt.tabstop = 2
+vim.opt.shiftwidth = 2
+vim.opt.expandtab = true
 
 -- ─── Heading Sidebar ─────────────────────────────────────────────────────────
 
@@ -343,6 +346,28 @@ cmp.setup({
     local context = require('cmp.config.context')
     return not context.in_syntax_group('Comment')
   end,
+  completion = {
+    autocomplete = false,
+  },
+  formatting = {
+    format = function(_, vim_item)
+      local icons = {
+        Text = "󰉿", Method = "󰆧", Function = "󰊕",
+        Constructor = "", Field = "󰜢", Variable = "󰀫",
+        Class = "󰠱", Interface = "", Module = "",
+        Property = "󰜢", Unit = "󰑭", Value = "󰎠",
+        Enum = "", Keyword = "󰌋", Snippet = "",
+        Color = "󰏘", File = "󰈙", Reference = "󰈇",
+        Folder = "󰉋", EnumMember = "", Constant = "󰏿",
+        Struct = "󰙅", Event = "", Operator = "󰆕",
+        TypeParameter = "",
+      }
+      if vim.g.ezconf_nerdfonts then
+        vim_item.kind = icons[vim_item.kind] or vim_item.kind
+      end
+      return vim_item
+    end,
+  },
   snippet = {
     expand = function(args)
       luasnip.lsp_expand(args.body)
@@ -368,7 +393,18 @@ cmp.setup({
       elseif luasnip.expand_or_jumpable() then
         luasnip.expand_or_jump()
       else
-        fallback()
+        local col = vim.api.nvim_win_get_cursor(0)[2]
+        local before_cursor = vim.api.nvim_get_current_line():sub(1, col)
+        if before_cursor:match('^%s*$') then
+          vim.api.nvim_feedkeys('  ', 'n', false)
+        else
+          cmp.complete()
+          vim.schedule(function()
+            if not cmp.visible() then
+              cmp.complete({ config = { sources = { { name = 'nvim_lsp' } } } })
+            end
+          end)
+        end
       end
     end, { 'i', 's' }),
     ['<S-Tab>'] = cmp.mapping(function(fallback)
@@ -431,19 +467,5 @@ vim.api.nvim_create_autocmd('BufWritePre', {
   pattern = '*.nix',
   callback = function()
     vim.lsp.buf.format({ async = false })
-  end,
-})
-
--- ─── Re-request LSP completions after pause in typing ────────────────────────
-
-vim.api.nvim_create_autocmd('CursorHoldI', {
-  pattern = '*.nix',
-  callback = function()
-    local line = vim.api.nvim_get_current_line()
-    local col = vim.api.nvim_win_get_cursor(0)[2]
-    local before_cursor = line:sub(1, col)
-    if before_cursor:match('[%.%w]$') then
-      cmp.complete({ reason = cmp.ContextReason.Manual })
-    end
   end,
 })
