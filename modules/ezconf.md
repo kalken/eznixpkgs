@@ -5,11 +5,12 @@ A custom Neovim distribution for NixOS, preconfigured for Nix development with L
 ## ✨ Features
 
 * Preconfigured LSP via `nixd` with host-aware flake integration
-* Autocompletion with `nvim-cmp`, `luasnip`, and snippet sources
+* Autocompletion with `nvim-cmp`, `luasnip`, and snippet sources — triggered manually with `<Tab>`
 * Auto-formatting on save via `alejandra`
 * Heading sidebar and button panel for `.nix` files
 * Configurable `vim.opt` settings via `vimOpts`
 * Nix-injected theming — any `vimPlugins` package works
+* Optional Nerd Fonts icons in the completion popup
 * Ignores `~/.config/nvim` — fully self-contained
 
 ## 🚀 Quick Start
@@ -94,6 +95,29 @@ By default the mouse is disabled so terminal text selection works normally. To e
 }
 ```
 
+## 🔣 Nerd Fonts Icons
+
+By default the completion popup shows text labels for each item kind (e.g. `Function`, `Variable`). If you have a Nerd Font installed and set as your terminal font, you can replace these with icons:
+
+```
+{
+  programs.ezconf = {
+    enable     = true;
+    nerdFonts  = true;
+  };
+}
+```
+
+To install Iosevka Nerd Font on NixOS:
+
+```
+environment.systemPackages = with pkgs; [
+  nerd-fonts.iosevka
+];
+```
+
+Then set `Iosevka Nerd Font Mono` as your terminal font and rebuild.
+
 ## ⚙️ All Options
 
 | Option | Type | Default | Description |
@@ -103,6 +127,7 @@ By default the mouse is disabled so terminal text selection works normally. To e
 | `programs.ezconf.theme.plugin` | package | — | Any `vimPlugins` package |
 | `programs.ezconf.theme.colorscheme` | str | — | The colorscheme name passed to `vim.cmd.colorscheme()` |
 | `programs.ezconf.theme.setup` | str | `""` | Optional Lua setup call, e.g. `require("catppuccin").setup()` |
+| `programs.ezconf.nerdFonts` | bool | `false` | Show Nerd Fonts icons in the completion popup instead of text labels |
 | `programs.ezconf.vimOpts` | attrs | see below | `vim.opt` settings injected at the end of the config |
 
 ### `vimOpts` defaults
@@ -113,6 +138,9 @@ By default the mouse is disabled so terminal text selection works normally. To e
 | `mouse` | `""` | Mouse disabled — terminal selection works normally |
 | `showcmd` | `false` | Hides command display in statusline |
 | `ruler` | `false` | Hides cursor position in statusline |
+| `tabstop` | `2` | Tab width |
+| `shiftwidth` | `2` | Indent width |
+| `expandtab` | `true` | Insert spaces instead of tab characters |
 
 Values can be booleans, integers, floats, or strings. They are injected after the user config so they always take effect last.
 
@@ -168,6 +196,7 @@ These are added by ezconf on top of stock Neovim.
 | Key | Mode | Action |
 | --- | --- | --- |
 | `<Tab>` | Normal | Cycle between main buffer, heading sidebar, and button panel |
+| `<Tab>` | Insert | Trigger autocompletion, or insert 2 spaces at start of line |
 | `<Enter>` | Normal (sidebar) | Jump to heading and close sidebar |
 | `<Enter>` | Normal (button panel) | Run selected button command |
 | `<Left>` / `<Right>` | Normal (button panel) | Select previous / next button |
@@ -181,6 +210,7 @@ These are added by ezconf on top of stock Neovim.
 * LSP is configured to read your system flake from `/etc/nixos` using the current hostname automatically.
 * `~/.config/nvim` and other user config files are ignored entirely — ezconf is fully self-contained.
 * `vimOpts` are injected after the user config, so they override anything set in `config.lua`.
+* Autocompletion is manual-only — the popup never appears unless you press `<Tab>`.
 * The heading sidebar (`HeadingSidebarToggle`) parses `##! Heading` style comments in `.nix` files.
 * The button panel (`ButtonPanelToggle`) parses `#!button Name: command` directives and runs them in a split.
 * Press `<Tab>` in normal mode to cycle between the main buffer, sidebar, and button panel.
