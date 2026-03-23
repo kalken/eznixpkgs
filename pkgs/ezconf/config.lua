@@ -362,7 +362,8 @@ cmp.setup({
         Struct = "󰙅", Event = "", Operator = "󰆕",
         TypeParameter = "",
       }
-      if vim.g.ezconf_nerdfonts then
+      vim_item.abbr = vim_item.abbr:gsub("~", "")
+      if vim.g.ezconf_nerdfonts and vim_item.kind then
         vim_item.kind = icons[vim_item.kind] or vim_item.kind
       end
       return vim_item
