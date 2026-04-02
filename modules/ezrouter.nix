@@ -9,7 +9,7 @@ with lib; let
 
   # Function to generate netdev configuration for a VLAN
   mkVlanNetdev = name: vlan: {
-    "20-${name}" = {
+    "40-${name}" = {
       netdevConfig = {
         Name = name;
         Kind = "vlan";
@@ -22,7 +22,7 @@ with lib; let
 
   # Function to generate network configuration for a VLAN
   mkVlanNetwork = name: vlan: {
-    "40-${name}" = {
+    "60-${name}" = {
       matchConfig = {
         Name = name;
       };
@@ -349,20 +349,22 @@ in {
 
     systemd.network.netdevs = mkMerge [
       {
-        "10-${cfg.bridge.name}" = {
+        # 30- bridge netdev
+        "30-${cfg.bridge.name}" = {
           netdevConfig = {
             Name = cfg.bridge.name;
             Kind = "bridge";
           };
         };
       }
+      # 40- VLAN netdevs
       vlanNetdevs
     ];
 
     systemd.network.networks = mkMerge [
       {
-        # Bridge members (physical ports → bridge)
-        "20-${cfg.bridge.name}" = {
+        # 10- physical members → bridge (enslaving)
+        "10-${cfg.bridge.name}" = {
           matchConfig = {
             Name = cfg.bridge.devices;
           };
@@ -374,7 +376,7 @@ in {
           };
         };
 
-        # WAN uplink
+        # 20- WAN uplink
         "20-wan" = {
           matchConfig = {
             Name = cfg.wan.device;
@@ -398,8 +400,8 @@ in {
           };
         };
 
-        # Bridge itself (LAN)
-        "30-${cfg.bridge.name}" = {
+        # 50- bridge network (after VLAN netdevs at 40-)
+        "50-${cfg.bridge.name}" = {
           matchConfig = {
             Name = cfg.bridge.name;
           };
@@ -427,6 +429,7 @@ in {
           };
         };
       }
+      # 60- VLAN networks
       vlanNetworks
     ];
 
