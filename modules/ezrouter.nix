@@ -9,7 +9,7 @@ with lib; let
 
   # Function to generate netdev configuration for a VLAN
   mkVlanNetdev = name: vlan: {
-    "40-${name}" = {
+    "20-${name}" = {
       netdevConfig = {
         Name = name;
         Kind = "vlan";
@@ -22,7 +22,7 @@ with lib; let
 
   # Function to generate network configuration for a VLAN
   mkVlanNetwork = name: vlan: {
-    "50-${name}" = {
+    "40-${name}" = {
       matchConfig = {
         Name = name;
       };
@@ -172,6 +172,14 @@ in {
           across reboots while waiting for DHCPv6 lease renewal — useful when
           the ISP does not honor DHCPv6 Release and holds leases for ~24h.
           See KeepConfiguration in systemd.network(5).
+        '';
+      };
+      useMACAsIdentity = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Use the interface MAC address as client identifier for DHCPv4 and
+          DUID for DHCPv6. Useful for ISPs that bind leases to MAC address.
         '';
       };
     };
@@ -379,9 +387,14 @@ in {
           } // optionalAttrs (cfg.wan.keepConfiguration != "no") {
             KeepConfiguration = cfg.wan.keepConfiguration;
           };
+          dhcpV4Config = mkIf cfg.wan.useMACAsIdentity {
+            ClientIdentifier = "mac";
+          };
           dhcpV6Config = {
             PrefixDelegationHint = "::/${toString cfg.wan.prefixHint}";
             UseAddress = true;
+          } // optionalAttrs cfg.wan.useMACAsIdentity {
+            DUIDType = "link-layer";
           };
         };
 
