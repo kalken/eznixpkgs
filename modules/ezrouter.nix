@@ -164,14 +164,24 @@ in {
         description = "DHCPv6 prefix delegation hint (e.g., 56 for ::/56, 64 for ::/64)";
       };
       keepConfiguration = mkOption {
-        type = types.enum [ "no" "static" "dynamic-on-stop" "dynamic" "yes" ];
-        default = "no";
+        type = types.nullOr (types.enum [ "static" "dynamic-on-stop" "dynamic" "yes" ]);
+        default = null;
         description = ''
           Keep network configuration on the WAN interface when the link goes
           down or networkd restarts. Use "static" to retain addresses/routes
           across reboots while waiting for DHCPv6 lease renewal — useful when
           the ISP does not honor DHCPv6 Release and holds leases for ~24h.
           See KeepConfiguration in systemd.network(5).
+        '';
+      };
+      sendRelease = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Send a DHCPv6 Release message when the interface goes down or
+          networkd stops. Set to false to keep your IPv6 address and prefix
+          across reboots — useful for ISPs that hold leases for many hours
+          after a Release anyway.
         '';
       };
       useMACAsIdentity = mkOption {
@@ -386,7 +396,7 @@ in {
             DHCPPrefixDelegation = "yes";
             IPv6PrivacyExtensions = cfg.wan.ipv6PrivacyExtensions;
             IPv6AcceptRA = "yes";
-          } // optionalAttrs (cfg.wan.keepConfiguration != "no") {
+          } // optionalAttrs (cfg.wan.keepConfiguration != null) {
             KeepConfiguration = cfg.wan.keepConfiguration;
           };
           dhcpV4Config = mkIf cfg.wan.useMACAsIdentity {
@@ -395,6 +405,8 @@ in {
           dhcpV6Config = {
             PrefixDelegationHint = "::/${toString cfg.wan.prefixHint}";
             UseAddress = true;
+          } // optionalAttrs (!cfg.wan.sendRelease) {
+            SendRelease = false;
           } // optionalAttrs cfg.wan.useMACAsIdentity {
             DUIDType = "link-layer";
           };
