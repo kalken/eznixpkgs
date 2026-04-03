@@ -53,7 +53,9 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `wan.device` | str | *required* | WAN interface name (e.g., `"eth0"`) |
 | `wan.ipv6PrivacyExtensions` | str | `"no"` | Enable IPv6 privacy extensions (`"no"`, `"yes"`, `"kernel"`) |
 | `wan.prefixHint` | int | `56` | DHCPv6 prefix delegation hint (e.g., `56` for `/56`, `64` for `/64`) |
-| `wan.keepConfiguration` | enum | `"no"` | Keep WAN config when link goes down. Values: `"no"`, `"static"`, `"dynamic-on-stop"`, `"dynamic"`, `"yes"`. Use `"static"` or  `"dynamic-on-stop"` to retain addresses/routes across reboots while waiting for DHCPv6 lease renewal. |
+| `wan.keepConfiguration` | enum or null | `null` | Keep WAN config when link goes down. Values: `"static"`, `"dynamic-on-stop"`, `"dynamic"`, `"yes"`. Use `"static"` or `"dynamic-on-stop"` to retain addresses/routes across reboots while waiting for DHCPv6 lease renewal. |
+| `wan.sendRelease` | bool | `true` | Send a DHCPv6 Release when the interface goes down. Set to `false` to keep your IPv6 address and prefix across reboots — useful for ISPs that hold leases for many hours after a Release anyway. |
+| `wan.useMACAsIdentity` | bool | `false` | Use the interface MAC address as DHCPv4 client identifier and DHCPv6 DUID. Useful for ISPs that bind leases to MAC address. |
 
 ### Bridge Settings (`services.ezrouter.bridge`)
 
@@ -144,7 +146,8 @@ nft list ruleset  # inspect firewall/NAT rules
 ## 🔄 Migration Notes (from older versions)
 
 - **VLAN definitions are now minimal**: You **only** need to specify `id`. `address` and `subnetId` are optional and auto-derived.
-- **`wan.keepConfiguration` is now an enum**: If you previously used `true`, replace with `"yes"` or `"static"` depending on desired behavior.
+- **`wan.keepConfiguration` default is now `null`**: If you previously relied on a default value, set it explicitly.
+- **`wan.keepConfiguration` is now an enum or null**: If you previously used `true`, replace with `"yes"` or `"static"` depending on desired behavior.
 - **Firewall ports apply to VLANs only**: `vlanFirewallPorts` now affects VLAN interfaces explicitly, not the bridge.
 
 ---
