@@ -9,6 +9,7 @@
       ezsensors = final.callPackage ./ezsensors  { };
       ezman = final.callPackage ./ezman  { };
       ezprotonge-steam = final.callPackage ./ezprotonge-steam  { };
+      ezsh = final.callPackage ./ezsh  { };
     })
   ];
 }
