@@ -43,6 +43,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 | Program | Description |
 | --- | --- |
 | [ezconf](https://github.com/kalken/eznixpkgs/blob/master/modules/ezconf.md) | A configuration tool wrapped in nvim to make it easier to edit nix files. |
+| [ezsh](https://github.com/kalken/eznixpkgs/blob/master/modules/ezsh.md) | Sensible zsh configuration for all users. |
 
 ## 📦 Packages
 
