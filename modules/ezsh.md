@@ -11,22 +11,20 @@ A simple NixOS module that applies a sensible zsh configuration system-wide for 
 * Extra config hook for your own additions
 
 ## 🚀 Quick Start
-
-​```nix
+```nix
 {
   programs.ezsh.enable = true;
 }
-​```
+```
 
 Then set zsh as the shell for a user:
-
-​```nix
+```nix
 {
   users.users.alice = {
     shell = pkgs.zsh;
   };
 }
-​```
+```
 
 ## ⚙️ All Options
 
@@ -41,6 +39,6 @@ Then set zsh as the shell for a user:
 * The ezsh config is sourced via `/etc/zshrc.local`, which NixOS sources at the end of `/etc/zshrc` for all interactive shells.
 * Completions from installed packages are picked up automatically since the NixOS fpath is set up before the ezsh config is sourced.
 * Users can still have their own `~/.zshrc` — it is sourced after `/etc/zshrc.local` as usual.
-* Extra zsh completions such as `nix-zsh-completions` can be installed per-user via `users.users.<n>.packages` and will be picked up automatically.
+* Autocompletions work out of the box — any package that ships zsh completions will be picked up automatically.
 
 *Sensible zsh for everyone — just works.* 🚀
