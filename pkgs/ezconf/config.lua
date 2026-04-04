@@ -199,46 +199,32 @@ local button_panel = (function()
       callback = function()
         local btn = collect_buttons()[current_index]
         if not btn then print("No button selected") return end
-        local output_buf = api.nvim_create_buf(false, true)
-        api.nvim_buf_set_option(output_buf, "buftype", "nofile")
-        api.nvim_buf_set_option(output_buf, "bufhidden", "wipe")
-        api.nvim_buf_set_option(output_buf, "modifiable", true)
-        api.nvim_buf_set_lines(output_buf, 0, -1, false, { "$ " .. btn.cmd })
         vim.cmd("split")
-        local output_win = api.nvim_get_current_win()
-        api.nvim_win_set_buf(output_win, output_buf)
-        local line_count = 1
-        local done = false
-        api.nvim_buf_set_keymap(output_buf, "n", "<CR>", "", {
-          noremap = true, silent = true,
+        vim.cmd("term " .. btn.cmd)
+        local term_buf = api.nvim_get_current_buf()
+        local term_win = api.nvim_get_current_win()
+        api.nvim_win_set_option(term_win, "statusline", " ")
+        vim.cmd("startinsert")
+        api.nvim_create_autocmd("TermClose", {
+          buffer = term_buf,
+          once = true,
           callback = function()
-            if done then
-              if api.nvim_win_is_valid(output_win) then api.nvim_win_close(output_win, true) end
-              if button_win and api.nvim_win_is_valid(button_win) then api.nvim_set_current_win(button_win) end
-            end
+            vim.schedule(function()
+              api.nvim_feedkeys(api.nvim_replace_termcodes('<C-\\><C-n>', true, false, true), 'n', false)
+              api.nvim_buf_set_keymap(term_buf, "n", "<CR>", "", {
+                noremap = true, silent = true,
+                callback = function()
+                  if api.nvim_win_is_valid(term_win) then
+                    api.nvim_win_close(term_win, true)
+                  end
+                  if button_win and api.nvim_win_is_valid(button_win) then
+                    api.nvim_set_current_win(button_win)
+                  end
+                end,
+              })
+            end)
           end,
         })
-        local function append(data)
-          if not data then return end
-          vim.schedule(function()
-            local lines = vim.split(data, "\n", { plain = true })
-            if lines[#lines] == "" then table.remove(lines) end
-            if #lines > 0 then
-              api.nvim_buf_set_lines(output_buf, line_count, line_count, false, lines)
-              line_count = line_count + #lines
-              if api.nvim_win_is_valid(output_win) then
-                api.nvim_win_set_cursor(output_win, { line_count, 0 })
-              end
-            end
-          end)
-        end
-        vim.system({ 'sh', '-c', btn.cmd }, { stdout = function(_, d) append(d) end, stderr = function(_, d) append(d) end },
-          function()
-            vim.schedule(function()
-              done = true
-              api.nvim_buf_set_option(output_buf, "modifiable", false)
-            end)
-          end)
       end,
     })
     api.nvim_buf_set_keymap(button_buf, "n", "<Left>", "", {
