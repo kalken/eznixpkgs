@@ -8,7 +8,7 @@ A custom Neovim distribution for NixOS, preconfigured for Nix development with L
 * Autocompletion with `nvim-cmp`, `luasnip`, and snippet sources — triggered manually with `<Tab>`
 * Auto-formatting on save via `alejandra`
 * Heading sidebar and button panel for `.nix` files
-* Configurable `vim.opt` settings via `vimOpts`
+* Arbitrary Lua config injection via `extraConfig`
 * Nix-injected theming — any `vimPlugins` package works
 * Optional Nerd Fonts icons in the completion popup
 * Ignores `~/.config/nvim` — fully self-contained
@@ -88,9 +88,35 @@ By default the mouse is disabled so terminal text selection works normally. To e
 {
   programs.ezconf = {
     enable = true;
-    vimOpts = {
-      mouse = "n";  # normal mode only, or "a" for all modes
-    };
+    extraConfig = ''
+      vim.opt.mouse = "n"  -- normal mode only, or "a" for all modes
+    '';
+  };
+}
+```
+
+## 🧩 Extra Config
+
+`extraConfig` accepts any Lua and is appended after the built-in config, so it can override defaults or add anything Neovim supports:
+
+```
+{
+  programs.ezconf = {
+    enable = true;
+    extraConfig = ''
+      -- vim.opt settings
+      vim.opt.relativenumber = true
+      vim.opt.scrolloff = 8
+
+      -- keymaps
+      vim.keymap.set("n", "<leader>w", "<cmd>w<CR>")
+
+      -- autocmds
+      vim.api.nvim_create_autocmd("BufWritePost", {
+        pattern = "*.nix",
+        command = "echo 'saved!'"
+      })
+    '';
   };
 }
 ```
@@ -128,7 +154,7 @@ Then set `Iosevka Nerd Font Mono` as your terminal font and rebuild.
 | `programs.ezconf.theme.colorscheme` | str | — | The colorscheme name passed to `vim.cmd.colorscheme()` |
 | `programs.ezconf.theme.setup` | str | `""` | Optional Lua setup call, e.g. `require("catppuccin").setup()` |
 | `programs.ezconf.nerdFonts` | bool | `false` | Show Nerd Fonts icons in the completion popup instead of text labels |
-| `programs.ezconf.vimOpts` | attrs | {} | `vim.opt` settings injected at the end of the config |
+| `programs.ezconf.extraConfig` | lines | `""` | Arbitrary Lua injected after the user config — use for `vim.opt` settings, keymaps, autocmds, or anything else |
 
 ## 📦 Bundled Packages
 
@@ -195,7 +221,7 @@ These are added by ezconf on top of stock Neovim.
 * The `ezconf` command is a wrapper around `nvim` — all standard Neovim flags and arguments work.
 * LSP is configured to read your system flake from `/etc/nixos` using the current hostname automatically.
 * `~/.config/nvim` and other user config files are ignored entirely — ezconf is fully self-contained.
-* `vimOpts` are injected after the user config, so they override anything set in `config.lua`.
+* `extraConfig` is injected after the user config, so it overrides anything set in `config.lua`.
 * Autocompletion is manual-only — the popup never appears unless you press `<Tab>`.
 * The heading sidebar (`HeadingSidebarToggle`) parses `##! Heading` style comments in `.nix` files.
 * The button panel (`ButtonPanelToggle`) parses `#!button Name: command` directives and runs them in a split.

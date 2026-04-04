@@ -1,4 +1,4 @@
-{ pkgs, lib, theme ? null, configLua, vimOpts ? "", nerdFonts ? false }:
+{ pkgs, lib, theme ? null, configLua, extraConfig ? "", nerdFonts ? false }:
 let
   initLua = pkgs.writeText "config.lua" ''
     ${lib.optionalString (theme != null) ''
@@ -8,8 +8,8 @@ let
     ${lib.optionalString nerdFonts "vim.g.ezconf_nerdfonts = true"}
     -- User config
     ${builtins.readFile configLua}
-    -- Injected by Nix (after user config to ensure they are not overridden)
-    ${vimOpts}
+    -- Extra config injected by Nix (after user config to ensure they are not overridden)
+    ${extraConfig}
   '';
   neovimPackage = pkgs.neovim.override {
     configure = {

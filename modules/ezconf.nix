@@ -34,11 +34,15 @@ in {
       default     = false;
       description = "Enable Nerd Fonts icons in the completion popup.";
     };
-    vimOpts = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.oneOf [ lib.types.bool lib.types.int lib.types.float lib.types.str ]);
-      default = {};
+    extraConfig = lib.mkOption {
+      type        = lib.types.lines;
+      default     = "";
+      example     = ''
+        vim.opt.guicursor = "a:ver25"
+      '';
       description = ''
-        vim.opt settings injected after the user config, so they override defaults set in config.lua.
+        Arbitrary Lua injected after the user config, so it overrides defaults set in config.lua.
+        Use this for vim.opt settings, keymaps, autocmds, or any other Lua you want to append.
       '';
     };
   };
@@ -47,16 +51,7 @@ in {
       (pkgs.ezconf.override {
         theme     = cfg.theme;
         nerdFonts = cfg.nerdFonts;
-        vimOpts   = lib.concatStringsSep "\n" (
-          lib.mapAttrsToList
-            (name: value:
-              "vim.opt.${name} = ${
-                if builtins.isBool value then (if value then "true" else "false")
-                else if builtins.isString value then ''"${value}"''
-                else toString value
-              }")
-            cfg.vimOpts
-        );
+        extraConfig = cfg.extraConfig;
       })
     ];
   };
