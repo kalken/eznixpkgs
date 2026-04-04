@@ -128,21 +128,7 @@ Then set `Iosevka Nerd Font Mono` as your terminal font and rebuild.
 | `programs.ezconf.theme.colorscheme` | str | — | The colorscheme name passed to `vim.cmd.colorscheme()` |
 | `programs.ezconf.theme.setup` | str | `""` | Optional Lua setup call, e.g. `require("catppuccin").setup()` |
 | `programs.ezconf.nerdFonts` | bool | `false` | Show Nerd Fonts icons in the completion popup instead of text labels |
-| `programs.ezconf.vimOpts` | attrs | see below | `vim.opt` settings injected at the end of the config |
-
-### `vimOpts` defaults
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `guicursor` | `""` | Disables cursor shape changes |
-| `mouse` | `""` | Mouse disabled — terminal selection works normally |
-| `showcmd` | `false` | Hides command display in statusline |
-| `ruler` | `false` | Hides cursor position in statusline |
-| `tabstop` | `2` | Tab width |
-| `shiftwidth` | `2` | Indent width |
-| `expandtab` | `true` | Insert spaces instead of tab characters |
-
-Values can be booleans, integers, floats, or strings. They are injected after the user config so they always take effect last.
+| `programs.ezconf.vimOpts` | attrs | {} | `vim.opt` settings injected at the end of the config |
 
 ## 📦 Bundled Packages
 
