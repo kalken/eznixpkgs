@@ -36,7 +36,7 @@ in {
     };
     vimOpts = lib.mkOption {
       type = lib.types.attrsOf (lib.types.oneOf [ lib.types.bool lib.types.int lib.types.float lib.types.str ]);
-      default = { mouse = ""; };
+      default = {};
       description = ''
         vim.opt settings injected after the user config, so they override defaults set in config.lua.
       '';

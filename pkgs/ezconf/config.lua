@@ -11,6 +11,7 @@ local api = vim.api
 local cmp = require('cmp')
 local luasnip = require('luasnip')
 
+vim.opt.mouse = ""
 vim.opt.guicursor = ''
 vim.opt.showcmd = false
 vim.opt.ruler = false
