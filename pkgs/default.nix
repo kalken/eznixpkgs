@@ -2,7 +2,7 @@
 {
   nixpkgs.overlays = [
     (final: prev: {
-      ezconf      = final.callPackage ./ezconf { configLua = ./ezconf/config.lua; };
+      ezconf      = final.callPackage ./ezconf { };
       eznetns     = final.callPackage ./eznetns { };
       prettysocks = final.callPackage ./prettysocks { };
       wg-tools    = final.callPackage ./wg-tools  { };
