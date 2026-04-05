@@ -31,7 +31,7 @@ Then set zsh as the shell for a user:
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `programs.ezsh.enable` | bool | `false` | Enable ezsh system-wide |
-| `programs.ezsh.defaultUserShell` | bool | `false` | Set zsh as the system-wide default shell for users who do not have an explicit `users.users.<n>.shell` set. Does **not** override per-user shell settings, and does not retroactively affect users who were created before this option was enabled (see note below). |
+| `programs.ezsh.defaultUserShell` | bool | `false` | Set zsh as the system-wide default shell for all users who do not have an explicit `users.users.<n>.shell` set, including existing users. Does **not** override per-user shell settings. |
 | `programs.ezsh.extraConfig` | lines | `""` | Additional zsh config appended after the ezsh config is sourced |
 
 ## 📝 Notes
@@ -40,6 +40,6 @@ Then set zsh as the shell for a user:
 * Completions from installed packages are picked up automatically since the NixOS fpath is set up before the ezsh config is sourced.
 * Users can still have their own `~/.zshrc` — it is sourced after `/etc/zshrc.local` as usual.
 * Autocompletions work out of the box — any package that ships zsh completions will be picked up automatically.
-* **`defaultUserShell` does not change the shell of existing users** that already have one configured via `users.users.<n>.shell`. To ensure a specific user gets zsh, set it explicitly: `users.users.<n>.shell = pkgs.zsh;`.
+* **`defaultUserShell` applies to all users without an explicit `users.users.<n>.shell` set**, including existing users. Users with an explicit shell configured will not be affected.
 
 *Sensible zsh for everyone — just works.* 🚀

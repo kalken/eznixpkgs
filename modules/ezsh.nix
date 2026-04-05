@@ -13,11 +13,10 @@ in
       type    = lib.types.bool;
       default = false;
       description = ''
-        Set zsh as the system-wide default shell. This applies to users who do
-        not have an explicit shell configured in their users.users.<n>.shell
-        option. It does NOT override the shell of users who already have one set.
-        To ensure a specific user gets zsh, set it explicitly via
-        users.users.<n>.shell = pkgs.zsh.
+        Set zsh as the system-wide default shell. Applies to all users who do
+        not have an explicit shell set via users.users.<n>.shell, including
+        existing users. Users with an explicit shell configured will not be
+        affected.
       '';
     };
     extraConfig = lib.mkOption {
