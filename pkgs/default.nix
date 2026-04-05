@@ -1,16 +1,19 @@
 { inputs, ... }:
-{
-  nixpkgs.overlays = [
-    (final: prev: {
-      ezconf      = final.callPackage ./ezconf { };
-      eznetns     = final.callPackage ./eznetns { };
-      prettysocks = final.callPackage ./prettysocks { };
-      wg-tools    = final.callPackage ./wg-tools  { };
-      ezsensors = final.callPackage ./ezsensors  { };
-      ezman = final.callPackage ./ezman  { };
-      ezprotonge-steam = final.callPackage ./ezprotonge-steam  { };
-      ezsh = final.callPackage ./ezsh  { };
-    })
-  ];
-}
+let
+  overlayDir = ./.;
 
+  autoOverlay = final: prev:
+    let
+      dirs = builtins.readDir overlayDir;
+      subDirs = builtins.filter
+        (name: dirs.${name} == "directory")
+        (builtins.attrNames dirs);
+    in
+      builtins.listToAttrs (map (name: {
+        inherit name;
+        value = final.callPackage (overlayDir + "/${name}") { };
+      }) subDirs);
+in
+{
+  nixpkgs.overlays = [ autoOverlay ];
+}
