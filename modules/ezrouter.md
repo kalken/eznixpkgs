@@ -9,6 +9,8 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 - DNS via `systemd-resolved`
 - Optional inter-VLAN isolation with `nftables`
 - NAT for internal interfaces
+- WAN port opening with optional per-source-IP rate limiting
+- Port forwarding to internal hosts
 - Native Firewall rules are used.
 - **Smart defaults**: VLAN `address` and `subnetId` auto-derived from VLAN ID (only `id` is required)
 
@@ -56,6 +58,8 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `wan.keepConfiguration` | enum or null | `null` | Keep WAN config when link goes down. Values: `"static"`, `"dynamic-on-stop"`, `"dynamic"`, `"yes"`. Use `"static"` or `"dynamic-on-stop"` to retain addresses/routes across reboots while waiting for DHCPv6 lease renewal. |
 | `wan.sendRelease` | bool | `true` | Send a DHCPv6 Release when the interface goes down. Set to `false` to keep your IPv6 address and prefix across reboots — useful for ISPs that hold leases for many hours after a Release anyway. |
 | `wan.useMACAsIdentity` | bool | `false` | Use the interface MAC address as DHCPv4 client identifier and DHCPv6 DUID. Useful for ISPs that bind leases to MAC address. |
+| `wan.openPorts` | list of submodule | `[]` | Ports to open on the WAN interface. See [WAN Open Ports](#-wan-open-ports) below. |
+| `wan.forwardPorts` | list of submodule | `[]` | Port forwarding rules from WAN to internal hosts. See [Port Forwarding](#-port-forwarding) below. |
 
 ### Bridge Settings (`services.ezrouter.bridge`)
 
@@ -107,6 +111,46 @@ vlan.dmz = {
   enableDHCPv6 = false;
   enableDNS = false;
 };
+```
+
+## 🔓 WAN Open Ports
+
+Opens ports directly on the WAN interface. Each entry in `wan.openPorts` supports:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `port` | port or str | *required* | Port number or service name (e.g. `22` or `"ssh"`) |
+| `protocol` | `"tcp"` or `"udp"` | `"tcp"` | Protocol |
+| `rateLimit` | str or null | `null` | Per-source-IP rate limit in nftables format (e.g. `"10/hour"`, `"5/minute"`) |
+
+When `rateLimit` is set, new connections are metered per source IP using an nftables `meter`. Connections within the limit are accepted; those exceeding it are dropped.
+
+```nix
+wan.openPorts = [
+  { port = "ssh"; rateLimit = "10/hour"; }  # SSH with brute-force protection
+  { port = 443; }                            # HTTPS, no rate limit
+  { port = 51820; protocol = "udp"; }        # WireGuard
+];
+```
+
+## 🔀 Port Forwarding
+
+Forwards incoming WAN traffic to an internal host via NAT. Each entry in `wan.forwardPorts` supports:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `port` | port | *required* | External port on the WAN interface |
+| `host` | str | *required* | Internal host IP address |
+| `hostPort` | port or null | `null` | Internal port on the host (defaults to `port`) |
+| `protocol` | `"tcp"` or `"udp"` | `"tcp"` | Protocol |
+
+```nix
+wan.forwardPorts = [
+  { port = 80;    host = "192.168.1.10"; }                          # HTTP → web server
+  { port = 443;   host = "192.168.1.10"; }                          # HTTPS → web server
+  { port = 25565; host = "192.168.10.5"; hostPort = 25565; }        # Minecraft
+  { port = 51821; host = "192.168.1.20"; hostPort = 22; protocol = "tcp"; }  # SSH on non-standard port
+];
 ```
 
 ## 🔐 Firewall & NAT Behavior
