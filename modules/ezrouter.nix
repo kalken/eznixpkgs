@@ -167,11 +167,12 @@ in {
         type = types.nullOr (types.enum [ "static" "dynamic-on-stop" "dynamic" "yes" ]);
         default = null;
         description = ''
-          Keep network configuration on the WAN interface when the link goes
-          down or networkd restarts. Use "static" to retain addresses/routes
-          across reboots while waiting for DHCPv6 lease renewal — useful when
-          the ISP does not honor DHCPv6 Release and holds leases for ~24h.
-          See KeepConfiguration in systemd.network(5).
+          Controls whether addresses and routes on the WAN interface are dropped
+          when systemd-networkd stops or starts. "static" retains statically
+          configured addresses/routes on startup. "dynamic-on-stop" preserves
+          dynamically configured addresses/routes (DHCPv4, DHCPv6, SLAAC) on
+          stop. "dynamic" never drops dynamic addresses/routes and ignores DHCPv4
+          lease lifetimes. "yes" implies both "dynamic" and "static".
         '';
       };
       sendRelease = mkOption {
