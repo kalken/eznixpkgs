@@ -193,6 +193,68 @@ in {
           DUID for DHCPv6. Useful for ISPs that bind leases to MAC address.
         '';
       };
+      openPorts = mkOption {
+        type = types.listOf (types.submodule {
+          options = {
+            port = mkOption {
+              type = types.either types.port types.str;
+              description = "Port number or service name (e.g. 22 or \"ssh\") to open on the WAN interface";
+            };
+            protocol = mkOption {
+              type = types.enum [ "tcp" "udp" ];
+              default = "tcp";
+              description = "Protocol";
+            };
+            rateLimit = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "Per-source-IP rate limit in nftables format, e.g. \"10/hour\" or \"5/minute\"";
+            };
+          };
+        });
+        default = [];
+        description = "Ports to open on the WAN interface, with optional per-source-IP rate limiting";
+        example = literalExpression ''
+          [
+            { port = "ssh"; rateLimit = "10/hour"; }
+            { port = 443; protocol = "tcp"; }
+            { port = 51820; protocol = "udp"; }
+          ]
+        '';
+      };
+      forwardPorts = mkOption {
+        type = types.listOf (types.submodule {
+          options = {
+            port = mkOption {
+              type = types.port;
+              description = "External port on the WAN interface to forward";
+            };
+            host = mkOption {
+              type = types.str;
+              description = "Internal host IP address to forward traffic to";
+            };
+            hostPort = mkOption {
+              type = types.nullOr types.port;
+              default = null;
+              description = "Internal port on the host (defaults to the external port)";
+            };
+            protocol = mkOption {
+              type = types.enum [ "tcp" "udp" ];
+              default = "tcp";
+              description = "Protocol";
+            };
+          };
+        });
+        default = [];
+        description = "Port forwarding rules from the WAN interface to internal hosts";
+        example = literalExpression ''
+          [
+            { port = 80;    host = "192.168.1.10"; }
+            { port = 443;   host = "192.168.1.10"; }
+            { port = 25565; host = "192.168.10.5"; hostPort = 25565; protocol = "tcp"; }
+          ]
+        '';
+      };
     };
 
     internalInterfaces = mkOption {
@@ -347,6 +409,22 @@ in {
     networking.firewall.logRefusedConnections = false;
     networking.nat.enable = true;
     networking.nat.internalInterfaces = cfg.internalInterfaces;
+    networking.nat.forwardPorts = map (rule: {
+      sourcePort = rule.port;
+      destination = "${rule.host}:${toString (if rule.hostPort != null then rule.hostPort else rule.port)}";
+      proto = rule.protocol;
+    }) cfg.wan.forwardPorts;
+
+    # Open ports on WAN interface with optional per-source-IP rate limiting
+    networking.firewall.extraInputRules = mkIf (cfg.wan.openPorts != []) (
+      concatMapStringsSep "\n" (rule:
+        let port = toString rule.port; in
+        if rule.rateLimit != null then
+          ''iifname "${cfg.wan.device}" ${rule.protocol} dport ${port} ct state new meter wan-${rule.protocol}-${port} { ip saddr limit rate ${rule.rateLimit} } accept''
+        else
+          ''iifname "${cfg.wan.device}" ${rule.protocol} dport ${port} accept''
+      ) cfg.wan.openPorts
+    );
 
     # Block inter-VLAN traffic (before NAT's accept rule)
     networking.firewall.extraForwardRules = mkIf cfg.isolateVlans (
