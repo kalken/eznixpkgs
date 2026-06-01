@@ -45,6 +45,14 @@ Minimal entry point — imports `modules/` and `pkgs/`, exports `nixosModules.de
 
 **Documentation**: Each module has a companion `.md` file (e.g., `ezrouter.md`, `ezconf.md`) with full option tables and usage examples. Keep these in sync when changing module options.
 
+## Branch Strategy
+
+Always make changes on the `develop` branch, never directly on `master`.
+
+## Commits
+
+Never add `Co-Authored-By` or any Claude/Anthropic attribution to commit messages.
+
 ## Adding New Modules or Packages
 
 - **Module**: Create `modules/<name>.nix`. It will be auto-imported.

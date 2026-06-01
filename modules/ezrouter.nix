@@ -193,35 +193,6 @@ in {
           DUID for DHCPv6. Useful for ISPs that bind leases to MAC address.
         '';
       };
-      openPorts = mkOption {
-        type = types.listOf (types.submodule {
-          options = {
-            port = mkOption {
-              type = types.either types.port types.str;
-              description = "Port number or service name (e.g. 22 or \"ssh\") to open on the WAN interface";
-            };
-            protocol = mkOption {
-              type = types.enum [ "tcp" "udp" ];
-              default = "tcp";
-              description = "Protocol";
-            };
-            rateLimit = mkOption {
-              type = types.nullOr types.str;
-              default = null;
-              description = "Per-source-IP rate limit in nftables format, e.g. \"10/hour\" or \"5/minute\"";
-            };
-          };
-        });
-        default = [];
-        description = "Ports to open on the WAN interface, with optional per-source-IP rate limiting";
-        example = literalExpression ''
-          [
-            { port = "ssh"; rateLimit = "10/hour"; }
-            { port = 443; protocol = "tcp"; }
-            { port = 51820; protocol = "udp"; }
-          ]
-        '';
-      };
       forwardPorts = mkOption {
         type = types.listOf (types.submodule {
           options = {
@@ -255,6 +226,41 @@ in {
           ]
         '';
       };
+    };
+
+    openPorts = mkOption {
+      type = types.listOf (types.submodule {
+        options = {
+          interfaces = mkOption {
+            type = types.nonEmptyListOf types.str;
+            description = "Interfaces to open this port on";
+            example = [ "eth0" "eth1" ];
+          };
+          port = mkOption {
+            type = types.either types.port types.str;
+            description = "Port number or service name (e.g. 22 or \"ssh\")";
+          };
+          protocol = mkOption {
+            type = types.enum [ "tcp" "udp" ];
+            default = "tcp";
+            description = "Protocol";
+          };
+          rateLimit = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "Per-source-IP rate limit in nftables format, e.g. \"10/hour\" or \"5/minute\"";
+          };
+        };
+      });
+      default = [];
+      description = "Ports to open on specific interfaces, with optional per-source-IP rate limiting";
+      example = literalExpression ''
+        [
+          { interfaces = [ "eth0" ]; port = "ssh"; rateLimit = "10/hour"; }
+          { interfaces = [ "eth0" "eth1" ]; port = 443; protocol = "tcp"; }
+          { interfaces = [ "eth0" ]; port = 51820; protocol = "udp"; }
+        ]
+      '';
     };
 
     internalInterfaces = mkOption {
@@ -415,15 +421,22 @@ in {
       proto = rule.protocol;
     }) cfg.wan.forwardPorts;
 
-    # Open ports on WAN interface with optional per-source-IP rate limiting
-    networking.firewall.extraInputRules = mkIf (cfg.wan.openPorts != []) (
+    # Open ports on specific interfaces with optional per-source-IP rate limiting
+    networking.firewall.extraInputRules = optionalString (cfg.openPorts != []) (
       concatMapStringsSep "\n" (rule:
-        let port = toString rule.port; in
+        let
+          port = toString rule.port;
+          ifaceExpr =
+            if builtins.length rule.interfaces == 1
+            then ''"${builtins.head rule.interfaces}"''
+            else "{ ${concatMapStringsSep ", " (i: ''"${i}"'') rule.interfaces} }";
+          meterName = "${concatStringsSep "-" rule.interfaces}-${rule.protocol}-${port}";
+        in
         if rule.rateLimit != null then
-          ''iifname "${cfg.wan.device}" ${rule.protocol} dport ${port} ct state new meter wan-${rule.protocol}-${port} { ip saddr limit rate ${rule.rateLimit} } accept''
+          ''iifname ${ifaceExpr} ${rule.protocol} dport ${port} ct state new meter ${meterName} { ip saddr limit rate ${rule.rateLimit} } accept''
         else
-          ''iifname "${cfg.wan.device}" ${rule.protocol} dport ${port} accept''
-      ) cfg.wan.openPorts
+          ''iifname ${ifaceExpr} ${rule.protocol} dport ${port} accept''
+      ) cfg.openPorts
     );
 
     # Block inter-VLAN traffic (before NAT's accept rule)
