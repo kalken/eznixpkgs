@@ -226,6 +226,34 @@ in {
           ]
         '';
       };
+      openPorts = mkOption {
+        type = types.listOf (types.submodule {
+          options = {
+            port = mkOption {
+              type = types.either types.port types.str;
+              description = "Port number or service name (e.g. 22 or \"ssh\")";
+            };
+            protocol = mkOption {
+              type = types.enum [ "tcp" "udp" ];
+              default = "tcp";
+              description = "Protocol";
+            };
+            rateLimit = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "Per-source-IP rate limit in nftables format, e.g. \"10/hour\" or \"5/minute\"";
+            };
+          };
+        });
+        default = [];
+        description = "Ports to open on the WAN interface. Shorthand for openPorts entries with interfaces set to the WAN device.";
+        example = literalExpression ''
+          [
+            { port = "ssh"; rateLimit = "10/hour"; }
+            { port = 51820; protocol = "udp"; }
+          ]
+        '';
+      };
     };
 
     openPorts = mkOption {
@@ -422,7 +450,12 @@ in {
     }) cfg.wan.forwardPorts;
 
     # Open ports on specific interfaces with optional per-source-IP rate limiting
-    networking.firewall.extraInputRules = optionalString (cfg.openPorts != []) (
+    networking.firewall.extraInputRules =
+      let
+        allOpenPorts = cfg.openPorts
+          ++ map (r: r // { interfaces = [ cfg.wan.device ]; }) cfg.wan.openPorts;
+      in
+      optionalString (allOpenPorts != []) (
       concatMapStringsSep "\n" (rule:
         let
           port = toString rule.port;
@@ -436,7 +469,7 @@ in {
           ''iifname ${ifaceExpr} ${rule.protocol} dport ${port} ct state new meter ${meterName} { ip saddr limit rate ${rule.rateLimit} } accept''
         else
           ''iifname ${ifaceExpr} ${rule.protocol} dport ${port} accept''
-      ) cfg.openPorts
+      ) allOpenPorts
     );
 
     # Block inter-VLAN traffic (before NAT's accept rule)

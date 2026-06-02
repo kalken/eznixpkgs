@@ -60,6 +60,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `wan.sendRelease` | bool | `true` | Send a DHCPv6 Release when the interface goes down. Set to `false` to keep your IPv6 address and prefix across reboots — useful for ISPs that hold leases for many hours after a Release anyway. |
 | `wan.useMACAsIdentity` | bool | `false` | Use the interface MAC address as DHCPv4 client identifier and DHCPv6 DUID. Useful for ISPs that bind leases to MAC address. |
 | `wan.forwardPorts` | list of submodule | `[]` | Port forwarding rules from WAN to internal hosts. See [Port Forwarding](#-port-forwarding) below. |
+| `wan.openPorts` | list of submodule | `[]` | Ports to open on the WAN interface. Shorthand for `openPorts` entries with `interfaces` set to `wan.device`. See [Open Ports](#-open-ports) below. |
 
 ### Bridge Settings (`services.ezrouter.bridge`)
 
