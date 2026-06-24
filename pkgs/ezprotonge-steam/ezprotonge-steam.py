@@ -6,6 +6,7 @@ Always appears in Steam as GE-Proton-Latest.
 import hashlib
 import json
 import os
+import platform
 import re
 import shutil
 import sys
@@ -154,12 +155,21 @@ def main():
         return
 
     assets = release.get("assets", [])
+    machine = platform.machine().lower()
+    is_arm = machine in ("aarch64", "arm64")
+
+    def arch_match(name):
+        return "aarch64" in name if is_arm else "aarch64" not in name
+
     tar_asset = next(
-        (a for a in assets if a["name"].endswith(".tar.gz") and not a["name"].endswith(".sha512sum")),
+        (a for a in assets if a["name"].endswith(".tar.gz")
+         and arch_match(a["name"])
+         and not a["name"].endswith(".sha512sum")),
         None
     )
     sha_asset = next(
-        (a for a in assets if a["name"].endswith(".sha512sum")),
+        (a for a in assets if a["name"].endswith(".sha512sum")
+         and arch_match(a["name"])),
         None
     )
 
