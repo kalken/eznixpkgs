@@ -167,22 +167,23 @@ in {
         type = types.nullOr (types.enum [ "static" "dynamic-on-stop" "dynamic" "yes" ]);
         default = null;
         description = ''
-          Controls whether addresses and routes on the WAN interface are dropped
-          when systemd-networkd stops or starts. "static" retains statically
-          configured addresses/routes on startup. "dynamic-on-stop" preserves
-          dynamically configured addresses/routes (DHCPv4, DHCPv6, SLAAC) on
-          stop. "dynamic" never drops dynamic addresses/routes and ignores DHCPv4
-          lease lifetimes. "yes" implies both "dynamic" and "static".
+          When set to "static", systemd-networkd will not remove static addresses
+          and routes on the WAN interface when starting up. When set to
+          "dynamic-on-stop", dynamic addresses and routes (DHCPv4, DHCPv6, SLAAC)
+          are not removed when networkd stops. When set to "dynamic", dynamic
+          addresses and routes are never removed, even when a DHCP lease expires.
+          "yes" implies both "static" and "dynamic". Defaults to null (no
+          addresses or routes are kept).
         '';
       };
       sendRelease = mkOption {
         type = types.bool;
-        default = true;
+        default = false;
         description = ''
-          Send a DHCPv6 Release message when the interface goes down or
-          networkd stops. Set to false to keep your IPv6 address and prefix
-          across reboots — useful for ISPs that hold leases for many hours
-          after a Release anyway.
+          When set to false, the DHCPv6 client does not send a Release message
+          when the interface goes down or networkd stops. Defaults to false so
+          that the IPv6 prefix is preserved across reboots; most ISPs reassign
+          the same lease regardless of whether a Release was received.
         '';
       };
       useMACAsIdentity = mkOption {

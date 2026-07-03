@@ -56,8 +56,8 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `wan.device` | str | *required* | WAN interface name (e.g., `"eth0"`) |
 | `wan.ipv6PrivacyExtensions` | str | `"no"` | Enable IPv6 privacy extensions (`"no"`, `"yes"`, `"kernel"`) |
 | `wan.prefixHint` | int | `56` | DHCPv6 prefix delegation hint (e.g., `56` for `/56`, `64` for `/64`) |
-| `wan.keepConfiguration` | enum or null | `null` | Keep WAN config when link goes down. Values: `"static"`, `"dynamic-on-stop"`, `"dynamic"`, `"yes"`. Use `"static"` or `"dynamic-on-stop"` to retain addresses/routes across reboots while waiting for DHCPv6 lease renewal. |
-| `wan.sendRelease` | bool | `true` | Send a DHCPv6 Release when the interface goes down. Set to `false` to keep your IPv6 address and prefix across reboots — useful for ISPs that hold leases for many hours after a Release anyway. |
+| `wan.keepConfiguration` | enum or null | `null` | Controls whether addresses and routes are removed when networkd stops or starts. `"static"`: static addresses/routes are not removed on startup. `"dynamic-on-stop"`: dynamic addresses/routes (DHCP, SLAAC) are not removed on stop. `"dynamic"`: dynamic addresses/routes are never removed, even on lease expiry. `"yes"`: implies both `"static"` and `"dynamic"`. |
+| `wan.sendRelease` | bool | `false` | When `false`, the DHCPv6 client does not send a Release message when the interface goes down or networkd stops. Keeps the IPv6 prefix stable across reboots; most ISPs reassign the same lease regardless. |
 | `wan.useMACAsIdentity` | bool | `false` | Use the interface MAC address as DHCPv4 client identifier and DHCPv6 DUID. Useful for ISPs that bind leases to MAC address. |
 | `wan.forwardPorts` | list of submodule | `[]` | Port forwarding rules from WAN to internal hosts. See [Port Forwarding](#-port-forwarding) below. |
 | `wan.openPorts` | list of submodule | `[]` | Ports to open on the WAN interface. Shorthand for `openPorts` entries with `interfaces` set to `wan.device`. See [Open Ports](#-open-ports) below. |
