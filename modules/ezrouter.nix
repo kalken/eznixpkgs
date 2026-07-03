@@ -357,6 +357,18 @@ in {
             default = true;
             description = "Advertise this router as DNS server via DHCP";
           };
+
+          allowedTCPPorts = mkOption {
+            type = types.listOf types.port;
+            default = [];
+            description = "TCP ports to open on this VLAN interface (merged with vlanFirewallPorts.allowedTCPPorts)";
+          };
+
+          allowedUDPPorts = mkOption {
+            type = types.listOf types.port;
+            default = [];
+            description = "UDP ports to open on this VLAN interface (merged with vlanFirewallPorts.allowedUDPPorts)";
+          };
         };
 
       }));
@@ -571,13 +583,13 @@ in {
       vlanNetworks
     ];
 
-    # Open common ports on all VLAN interfaces
+    # Open ports on VLAN interfaces (global vlanFirewallPorts merged with per-VLAN allowedTCPPorts/allowedUDPPorts)
     networking.firewall.interfaces = builtins.listToAttrs (
       map (vlanName: {
         name = vlanName;
         value = {
-          allowedTCPPorts = cfg.vlanFirewallPorts.allowedTCPPorts;
-          allowedUDPPorts = cfg.vlanFirewallPorts.allowedUDPPorts;
+          allowedTCPPorts = cfg.vlanFirewallPorts.allowedTCPPorts ++ cfg.vlan.${vlanName}.allowedTCPPorts;
+          allowedUDPPorts = cfg.vlanFirewallPorts.allowedUDPPorts ++ cfg.vlan.${vlanName}.allowedUDPPorts;
         };
       }) (builtins.attrNames cfg.vlan)
     );

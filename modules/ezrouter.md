@@ -90,6 +90,8 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `vlan.<name>.enableDHCPv4` | bool | `true` | Enable DHCPv4 server on this VLAN. |
 | `vlan.<name>.enableDHCPv6` | bool | `true` | Enable DHCPv6 Prefix Delegation + RA on this VLAN. |
 | `vlan.<name>.enableDNS` | bool | `true` | Advertise router as DNS server via DHCP on this VLAN. |
+| `vlan.<name>.allowedTCPPorts` | list of port | `[]` | TCP ports to open on this VLAN interface. Merged with `vlanFirewallPorts.allowedTCPPorts`. |
+| `vlan.<name>.allowedUDPPorts` | list of port | `[]` | UDP ports to open on this VLAN interface. Merged with `vlanFirewallPorts.allowedUDPPorts`. |
 
 #### VLAN Example Patterns
 
@@ -111,6 +113,12 @@ vlan.dmz = {
   enableDHCPv4 = false;
   enableDHCPv6 = false;
   enableDNS = false;
+};
+
+# Open specific ports on one VLAN only
+vlan.tap = {
+  id = 20;
+  allowedTCPPorts = [ 139 445 1081 1082 ];  # SMB + proxy ports
 };
 ```
 
@@ -160,7 +168,7 @@ wan.forwardPorts = [
 
 - **NAT**: Applied to all interfaces in `internalInterfaces` (default: bridge + all VLANs)
 - **Inter-VLAN isolation**: When `isolateVlans = true`, forwarding between internal interfaces is dropped *before* NAT rules
-- **VLAN firewall ports**: `allowedTCPPorts` / `allowedUDPPorts` apply to **all VLAN interfaces** (not bridge/WAN)
+- **VLAN firewall ports**: `vlanFirewallPorts.allowedTCPPorts` / `allowedUDPPorts` apply to **all VLAN interfaces**; per-VLAN `vlan.<name>.allowedTCPPorts` / `allowedUDPPorts` are merged on top for that interface only
 - **Trusted interfaces**: Listed in `trustedInterfaces` bypass firewall restrictions (default: bridge only)
 
 ## 🌐 DNS Configuration
