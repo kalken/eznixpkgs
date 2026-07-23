@@ -36,7 +36,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [ezrouter](modules/ezrouter.md) | Router setup with VLANs, DHCP, DNS, and firewall |
 | [eznetns](modules/eznetns.md) | Named Linux network namespace management |
 | [prettysocks](modules/prettysocks.md) | SOCKS5 proxy on `127.0.0.1:1080`, with optional per-namespace instances |
-| [ezprotonge-steam](modules/ezprotonge-steam.md) | Automatically installs the latest Proton-GE into Steam's compatibilitytools.d |
+| [ezproton](modules/ezproton.md) | Automatically installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d |
 
 ## 🛠 Programs
 
@@ -54,7 +54,7 @@ Then enable whichever modules you need in your `configuration.nix`:
     ezman
     eznetns
     ezsensors
-    ezprotonge-steam
+    ezproton
     prettysocks
     wg-tools
   ];
@@ -66,6 +66,6 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [ezman](pkgs/ezman/ezman.sh) | Recursive version of `nixos-option`. |
 | [eznetns](https://github.com/kalken/eznetns) | A command line helper to configure separated network environments (namespaces), and control which processes make use of them. |
 | [ezsensors](pkgs/ezsensors/ezsensors.sh) | Simple script to get temperature readings from `/sys`. |
-| [ezprotonge-steam](pkgs/ezprotonge-steam/ezprotonge-steam.py) | Automatically installs the latest Proton-GE into Steam's compatibilitytools.d. |
+| [ezproton](pkgs/ezproton/ezproton.py) | Automatically installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d. |
 | [prettysocks](https://github.com/twisteroidambassador/prettysocks) | A proxy server that makes your eyeballs happy. |
 | [wg-tools](https://github.com/mullvad/wg-tools) | Generates WireGuard® configuration files for Mullvad. |

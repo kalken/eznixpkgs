@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""ezprotonge-steam - Downloads and installs the latest Proton-GE release to Steam's compatibilitytools.d.
-Always appears in Steam as GE-Proton-Latest.
+"""ezproton - Downloads and installs the latest Proton-GE and/or CachyOS Proton
+builds into Steam's compatibilitytools.d.
+Always appears in Steam as GE-Proton-Latest / Proton-CachyOS-Latest.
 """
 
+import argparse
 import hashlib
 import json
 import os
@@ -14,9 +16,31 @@ import tarfile
 import urllib.request
 import urllib.error
 
-GITHUB_API = "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest"
-DISPLAY_NAME = "GE-Proton-Latest"
-CACHE_DIR = "/tmp/ezprotonge-steam"
+USER_AGENT = "ezproton"
+
+
+def ge_arch_match(name, is_arm):
+    return ("aarch64" in name) if is_arm else ("aarch64" not in name)
+
+
+def cachyos_arch_match(name, is_arm):
+    return ("arm64" in name) if is_arm else ("x86_64" in name and "x86_64_v3" not in name)
+
+
+VARIANTS = {
+    "ge": {
+        "api_url": "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest",
+        "display_name": "GE-Proton-Latest",
+        "cache_dir": "/tmp/ezproton/ge",
+        "arch_match": ge_arch_match,
+    },
+    "cachyos": {
+        "api_url": "https://api.github.com/repos/CachyOS/proton-cachyos/releases/latest",
+        "display_name": "Proton-CachyOS-Latest",
+        "cache_dir": "/tmp/ezproton/cachyos",
+        "arch_match": cachyos_arch_match,
+    },
+}
 
 
 # -- Logging ------------------------------------------------------------------
@@ -36,9 +60,9 @@ def error(msg):
 
 # -- GitHub release -----------------------------------------------------------
 
-def fetch_latest_release():
-    info("Fetching latest Proton-GE release info from GitHub...")
-    req = urllib.request.Request(GITHUB_API, headers={"User-Agent": "ezprotonge-steam"})
+def fetch_latest_release(api_url):
+    info("Fetching latest release info from GitHub...")
+    req = urllib.request.Request(api_url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req) as resp:
             return json.load(resp)
@@ -48,8 +72,8 @@ def fetch_latest_release():
 
 # -- Version check ------------------------------------------------------------
 
-def is_up_to_date(install_dir, tag):
-    vdf = os.path.join(install_dir, DISPLAY_NAME, "compatibilitytool.vdf")
+def is_up_to_date(install_dir, display_name, tag):
+    vdf = os.path.join(install_dir, display_name, "compatibilitytool.vdf")
     try:
         with open(vdf) as f:
             return f'"{tag}"' in f.read()
@@ -60,7 +84,7 @@ def is_up_to_date(install_dir, tag):
 # -- Download with progress ---------------------------------------------------
 
 def download(url, dest, silent=False):
-    req = urllib.request.Request(url, headers={"User-Agent": "ezprotonge-steam"})
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req) as resp:
             total = int(resp.headers.get("Content-Length", 0))
@@ -108,19 +132,19 @@ def verify_checksum(data, sha_content):
 
 # -- Extract with directory rename --------------------------------------------
 
-def extract(tar_path, install_dir):
+def extract(tar_path, install_dir, display_name):
     info("Extracting...")
-    with tarfile.open(tar_path, "r:gz") as tf:
+    with tarfile.open(tar_path, "r:*") as tf:
         for member in tf.getmembers():
             parts = member.name.split("/", 1)
-            member.name = DISPLAY_NAME + ("/" + parts[1] if len(parts) > 1 else "")
+            member.name = display_name + ("/" + parts[1] if len(parts) > 1 else "")
             tf.extract(member, install_dir, filter="tar")
 
 
 # -- Patch compatibilitytool.vdf ----------------------------------------------
 
-def patch_vdf(install_dir):
-    vdf_path = os.path.join(install_dir, DISPLAY_NAME, "compatibilitytool.vdf")
+def patch_vdf(install_dir, display_name):
+    vdf_path = os.path.join(install_dir, display_name, "compatibilitytool.vdf")
     if not os.path.exists(vdf_path):
         error(f"compatibilitytool.vdf not found at {vdf_path} — cannot patch display name.")
 
@@ -129,7 +153,7 @@ def patch_vdf(install_dir):
 
     patched = re.sub(
         r'"display_name"\s*"[^"]*"',
-        f'"display_name"\t\t"{DISPLAY_NAME}"',
+        f'"display_name"\t\t"{display_name}"',
         contents
     )
 
@@ -137,21 +161,20 @@ def patch_vdf(install_dir):
         f.write(patched)
 
 
-# -- Main ---------------------------------------------------------------------
+# -- Install a single variant ---------------------------------------------------
 
-def main():
-    home = os.environ.get("HOME") or error("HOME environment variable not set.")
-    steam_dir = os.path.join(home, ".steam")
-    if not os.path.isdir(steam_dir):
-        error(f"Steam directory not found at {steam_dir} — is Steam installed for this user?")
-    install_dir = os.path.join(steam_dir, "root", "compatibilitytools.d")
+def install_variant(variant, install_dir):
+    cfg = VARIANTS[variant]
+    display_name = cfg["display_name"]
 
-    release = fetch_latest_release()
+    info(f"=== {display_name} ===")
+
+    release = fetch_latest_release(cfg["api_url"])
     tag = release.get("tag_name") or error("Could not determine latest release tag.")
     info(f"Latest release: {tag}")
 
-    if is_up_to_date(install_dir, tag):
-        info(f"{DISPLAY_NAME} is already up to date ({tag}). Nothing to do.")
+    if is_up_to_date(install_dir, display_name, tag):
+        info(f"{display_name} is already up to date ({tag}). Nothing to do.")
         return
 
     assets = release.get("assets", [])
@@ -159,29 +182,30 @@ def main():
     is_arm = machine in ("aarch64", "arm64")
 
     def arch_match(name):
-        return "aarch64" in name if is_arm else "aarch64" not in name
+        return cfg["arch_match"](name, is_arm)
+
+    def is_tarball(name):
+        return name.endswith(".tar.gz") or name.endswith(".tar.xz")
 
     tar_asset = next(
-        (a for a in assets if a["name"].endswith(".tar.gz")
-         and arch_match(a["name"])
-         and not a["name"].endswith(".sha512sum")),
+        (a for a in assets if is_tarball(a["name"]) and arch_match(a["name"])),
         None
     )
     sha_asset = next(
-        (a for a in assets if a["name"].endswith(".sha512sum")
-         and arch_match(a["name"])),
+        (a for a in assets if a["name"].endswith(".sha512sum") and arch_match(a["name"])),
         None
     )
 
     if not tar_asset:
-        error("Could not find .tar.gz asset in release.")
+        error(f"Could not find a tarball asset in the {display_name} release.")
     if not sha_asset:
-        error("Could not find .sha512sum asset in release.")
+        error(f"Could not find a .sha512sum asset in the {display_name} release.")
 
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    tar_path = os.path.join(CACHE_DIR, tar_asset["name"])
+    cache_dir = cfg["cache_dir"]
+    os.makedirs(cache_dir, exist_ok=True)
+    tar_path = os.path.join(cache_dir, tar_asset["name"])
     tar_part = tar_path + ".part"
-    sha_path = os.path.join(CACHE_DIR, sha_asset["name"])
+    sha_path = os.path.join(cache_dir, sha_asset["name"])
 
     # Use cached tarball if it exists and is complete (same version = same filename)
     if os.path.exists(tar_path):
@@ -190,10 +214,9 @@ def main():
             tar_data = f.read()
     else:
         # Remove any stale tarballs or partial downloads from previous versions
-        for old_file in os.listdir(CACHE_DIR):
-            if old_file.endswith(".tar.gz") or old_file.endswith(".tar.gz.part"):
-                os.remove(os.path.join(CACHE_DIR, old_file))
-                info(f"Removed stale cache: {old_file}")
+        for old_file in os.listdir(cache_dir):
+            os.remove(os.path.join(cache_dir, old_file))
+            info(f"Removed stale cache: {old_file}")
 
         info(f"Downloading {tag}...")
         tar_data = download(tar_asset["browser_download_url"], tar_part)
@@ -208,18 +231,46 @@ def main():
 
     os.makedirs(install_dir, exist_ok=True)
 
-    dest = os.path.join(install_dir, DISPLAY_NAME)
+    dest = os.path.join(install_dir, display_name)
     if os.path.isdir(dest):
-        info(f"Removing old {DISPLAY_NAME} install...")
+        info(f"Removing old {display_name} install...")
         shutil.rmtree(dest)
 
-    extract(tar_path, install_dir)
+    extract(tar_path, install_dir, display_name)
 
     info("Patching compatibilitytool.vdf...")
-    patch_vdf(install_dir)
+    patch_vdf(install_dir, display_name)
 
-    info(f"Done! Installed as '{DISPLAY_NAME} ({tag})' -> {dest}")
-    info(f"Restart Steam and select '{DISPLAY_NAME}' in a game's compatibility settings.")
+    info(f"Done! Installed as '{display_name} ({tag})' -> {dest}")
+
+
+# -- Main ---------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Downloads and installs the latest Proton-GE and/or CachyOS Proton "
+                     "builds into Steam's compatibilitytools.d."
+    )
+    parser.add_argument(
+        "--variant",
+        choices=sorted(VARIANTS),
+        action="append",
+        help="Which Proton variant to install. May be given multiple times. "
+             "Defaults to all variants (ge, cachyos)."
+    )
+    args = parser.parse_args()
+    variants = args.variant or list(VARIANTS)
+
+    home = os.environ.get("HOME") or error("HOME environment variable not set.")
+    steam_dir = os.path.join(home, ".steam")
+    if not os.path.isdir(steam_dir):
+        error(f"Steam directory not found at {steam_dir} — is Steam installed for this user?")
+    install_dir = os.path.join(steam_dir, "root", "compatibilitytools.d")
+
+    for variant in variants:
+        install_variant(variant, install_dir)
+
+    info("Restart Steam and select the desired build in a game's compatibility settings.")
 
 
 if __name__ == "__main__":

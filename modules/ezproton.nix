@@ -1,17 +1,27 @@
-# ezprotonge-steam/ezprotonge-steam-service.nix
+# ezproton/ezproton-service.nix
 { config, lib, pkgs, ... }:
 
 let
-  cfg = config.services.ezprotonge-steam;
+  cfg = config.services.ezproton;
 in
 {
-  options.services.ezprotonge-steam = {
-    enable = lib.mkEnableOption "ezprotonge-steam — automatic Proton-GE updater for Steam";
+  options.services.ezproton = {
+    enable = lib.mkEnableOption "ezproton — automatic Proton-GE / CachyOS Proton updater for Steam";
 
     user = lib.mkOption {
       type        = lib.types.str;
-      description = "User account to run ezprotonge-steam as (must have a Steam installation).";
+      description = "User account to run ezproton as (must have a Steam installation).";
       example     = "alice";
+    };
+
+    variants = lib.mkOption {
+      type        = lib.types.listOf (lib.types.enum [ "ge" "cachyos" ]);
+      default     = [ "ge" "cachyos" ];
+      description = ''
+        Which Proton variant(s) to install and keep updated.
+        "ge" installs GE-Proton-Latest, "cachyos" installs Proton-CachyOS-Latest.
+      '';
+      example = [ "ge" ];
     };
 
     timerOnCalendar = lib.mkOption {
@@ -29,16 +39,16 @@ in
       type        = lib.types.bool;
       default     = false;
       description = ''
-        If true, ezprotonge-steam will run after nixos-upgrade.service completes,
-        so Proton-GE is updated alongside every NixOS system upgrade.
+        If true, ezproton will run after nixos-upgrade.service completes,
+        so Proton is updated alongside every NixOS system upgrade.
       '';
     };
   };
 
   config = lib.mkIf cfg.enable {
 
-    systemd.services.ezprotonge-steam = {
-      description = "Update Proton-GE to the latest release";
+    systemd.services.ezproton = {
+      description = "Update Proton-GE / CachyOS Proton to the latest release";
 
       after    = [ "network-online.target" ]
                  ++ lib.optional cfg.afterAutoUpgrade "nixos-upgrade.service";
@@ -48,13 +58,14 @@ in
       serviceConfig = {
         Type           = "oneshot";
         User           = cfg.user;
-        ExecStart      = "${pkgs.ezprotonge-steam}/bin/ezprotonge-steam";
+        ExecStart      = "${pkgs.ezproton}/bin/ezproton"
+                          + lib.concatMapStrings (v: " --variant ${v}") cfg.variants;
         ReadWritePaths = [ "/home/${cfg.user}" ];
       };
     };
 
-    systemd.timers.ezprotonge-steam = lib.mkIf (cfg.timerOnCalendar != null) {
-      description = "Timer for ezprotonge-steam Proton-GE updater";
+    systemd.timers.ezproton = lib.mkIf (cfg.timerOnCalendar != null) {
+      description = "Timer for ezproton Proton updater";
       wantedBy    = [ "timers.target" ];
       timerConfig = {
         OnCalendar         = cfg.timerOnCalendar;

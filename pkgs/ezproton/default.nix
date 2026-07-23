@@ -1,4 +1,4 @@
-# ezprotonge-steam/default.nix
+# ezproton/default.nix
 { lib
 , python3
 , makeWrapper
@@ -8,8 +8,8 @@ let
   python = python3;
 in
 python.pkgs.buildPythonApplication {
-  pname   = "ezprotonge-steam";
-  version = "1.0.0";
+  pname   = "ezproton";
+  version = "2.0.0";
 
   src = ./.;
 
@@ -19,13 +19,13 @@ python.pkgs.buildPythonApplication {
 
   installPhase = ''
     mkdir -p $out/bin
-    cp ezprotonge-steam.py $out/bin/ezprotonge-steam
-    chmod +x $out/bin/ezprotonge-steam
-    patchShebangs $out/bin/ezprotonge-steam
+    cp ezproton.py $out/bin/ezproton
+    chmod +x $out/bin/ezproton
+    patchShebangs $out/bin/ezproton
   '';
 
   meta = with lib; {
-    description = "Installs the latest Proton-GE into Steam's compatibilitytools.d, always presented as GE-Proton-Latest";
+    description = "Installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d, always presented as GE-Proton-Latest / Proton-CachyOS-Latest";
     homepage    = "https://github.com/GloriousEggroll/proton-ge-custom";
     license     = licenses.gpl3;
     platforms   = platforms.linux;
