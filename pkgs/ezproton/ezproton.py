@@ -76,7 +76,11 @@ def is_up_to_date(install_dir, display_name, tag):
     vdf = os.path.join(install_dir, display_name, "compatibilitytool.vdf")
     try:
         with open(vdf) as f:
-            return f'"{tag}"' in f.read()
+            # Match as a plain substring rather than requiring exact quote
+            # boundaries: GE-Proton's internal tool key equals the tag exactly
+            # (e.g. "GE-Proton11-1"), but CachyOS's key embeds it with a prefix/
+            # suffix (e.g. "proton-cachyos-<tag>-x86_64").
+            return tag in f.read()
     except FileNotFoundError:
         return False
 
