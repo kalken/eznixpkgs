@@ -37,6 +37,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [eznetns](modules/eznetns.md) | Named Linux network namespace management |
 | [ezsocks](modules/ezsocks.md) | SOCKS5 proxy on `127.0.0.1:1080`, with optional per-namespace instances |
 | [ezproton](modules/ezproton.md) | Automatically installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d |
+| [ezboot](modules/ezboot.md) | One-time LUKS boot-key unlock for unattended reboots of encrypted systems |
 
 ## 🛠 Programs
 
