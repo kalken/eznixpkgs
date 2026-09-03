@@ -58,14 +58,6 @@ let
     keyFileName = cfg.keyFileName;
     masterKeyPath = cfg.masterKeyPath;
   };
-
-  # When rebootOnlyOnKernelChange is false, also compare kernel-modules and
-  # initrd, since those only take effect after a reboot too even without a
-  # kernel version bump.
-  bootedExtraPaths = optionalString (!cfg.rebootOnlyOnKernelChange)
-    " $(readlink -f /run/booted-system/kernel-modules) $(readlink -f /run/booted-system/initrd)";
-  currentExtraPaths = optionalString (!cfg.rebootOnlyOnKernelChange)
-    " $(readlink -f /run/current-system/kernel-modules) $(readlink -f /run/current-system/initrd)";
 in {
   options.services.ezboot = {
     enable = mkEnableOption "ezboot one-time LUKS boot-key unlock";
@@ -129,24 +121,23 @@ in {
       description = "The ezboot package to use.";
     };
 
-    rebootAfterUpgrade = mkEnableOption ''
-      automatically rebooting via ezboot after system.autoUpgrade applies an
-      update that actually requires a reboot. Requires
-      system.autoUpgrade.enable = true and
-      system.autoUpgrade.allowReboot = false (ezboot handles the reboot
-      instead)
-    '';
-
-    rebootOnlyOnKernelChange = mkOption {
-      type = types.bool;
-      default = true;
+    rebootAfterUpgrade = mkOption {
+      type = types.nullOr (types.enum [ "onkernelchange" "onchange" ]);
+      default = null;
+      example = "onkernelchange";
       description = ''
-        When rebootAfterUpgrade is enabled, only reboot if the running
-        kernel itself changed. If false, also reboot when the kernel
-        modules or initrd changed, even if the kernel version didn't
-        (e.g. a cryptsetup/busybox/etc. update embedded in the initrd, or
-        an initrd-affecting option change) — those only take effect after
-        a reboot too, but on their own don't require one immediately.
+        Automatically reboot via ezboot after system.autoUpgrade applies
+        an update, using the matching `ezboot reboot` mode:
+        "onkernelchange" only reboots if the running kernel changed;
+        "onchange" also reboots when the kernel-modules or initrd changed,
+        even if the kernel version didn't (e.g. a cryptsetup/busybox/etc.
+        update embedded in the initrd, or an initrd-affecting option
+        change) - those only take effect after a reboot too, just without
+        an immediate kernel version bump forcing the issue. `null` (the
+        default) disables this entirely. Requires
+        system.autoUpgrade.enable = true and
+        system.autoUpgrade.allowReboot = false (ezboot handles the reboot
+        instead).
       '';
     };
 
@@ -279,7 +270,7 @@ in {
       };
     })
 
-    (mkIf (cfg.enable && cfg.rebootAfterUpgrade) {
+    (mkIf (cfg.enable && cfg.rebootAfterUpgrade != null) {
       assertions = [
         {
           assertion = config.system.autoUpgrade.enable;
@@ -311,19 +302,9 @@ in {
         after = [ "nixos-upgrade.service" ] ++ cfg.waitForUnits;
         serviceConfig = {
           Type = "oneshot";
-          ExecStart = pkgs.writeShellScript "ezboot-auto-reboot" ''
-            set -eu
-            booted="$(readlink -f /run/booted-system/kernel)${bootedExtraPaths}"
-            current="$(readlink -f /run/current-system/kernel)${currentExtraPaths}"
-
-            if [ "$booted" = "$current" ]; then
-              echo "ezboot-auto-reboot: no reboot needed"
-              exit 0
-            fi
-
-            echo "ezboot-auto-reboot: reboot needed, rebooting via ezboot"
-            exec ${ezbootPackage}/bin/ezboot
-          '';
+          # cfg.rebootAfterUpgrade's enum values are the exact same
+          # strings `ezboot reboot` expects as its mode argument.
+          ExecStart = "${ezbootPackage}/bin/ezboot reboot ${cfg.rebootAfterUpgrade}";
         };
       };
     })

@@ -34,8 +34,11 @@ ezboot init-master-key
 From then on, reboot with:
 
 ```
-ezboot
+ezboot reboot
 ```
+
+Running `ezboot` with no arguments prints usage instead of rebooting —
+see [Commands](#-commands) below for the full list.
 
 `bootPath` defaults to `/boot`, and can be overridden alongside everything
 else:
@@ -73,20 +76,39 @@ config above:
     allowReboot = false; # already the default - ezboot handles rebooting instead
   };
 
-  services.ezboot.rebootAfterUpgrade = true;
+  services.ezboot.rebootAfterUpgrade = "onkernelchange";
 }
 ```
 
 This still requires `ezboot init-master-key` to have been run once
-first — without a master key, the triggered `ezboot` call will just fail
-(and get logged), not fall back to prompting for a passphrase, since
-nobody's there to answer it.
+first — without a master key, the triggered `ezboot reboot onkernelchange`
+call will just fail (and get logged), not fall back to prompting for a
+passphrase, since nobody's there to answer it.
 
 If you have other services that also hook into `nixos-upgrade.service`
 (e.g. `services.ezproton` with `afterAutoUpgrade = true`), see
 [Automatic reboot after system.autoUpgrade](#-automatic-reboot-after-systemautoupgrade)
 below for `waitForUnits`, which makes sure they finish before the reboot
 happens rather than racing it.
+
+## 🛠 Commands
+
+`ezboot` with no arguments (or `help`/`-h`/`--help`) prints this same
+list rather than doing anything — you always have to name a command
+explicitly.
+
+| Command | Description |
+|---------|-------------|
+| `reboot` | Generate a temporary key, add it to the LUKS device via the master key, and reboot immediately. |
+| `reboot onkernelchange` | Like `reboot`, but only if the running kernel has changed since this boot. |
+| `reboot onchange` | Like `reboot`, but if the running kernel, kernel-modules, or initrd has changed since this boot. |
+| `init-master-key` | Generate the permanent master key and add it to the LUKS device. Prompts for an existing passphrase — the only interactive step in normal use. |
+| `remove-key` | Remove a leftover temporary key and its LUKS slot. Safe to run any time; a no-op if there's nothing to remove. This is also what the automatic post-boot cleanup service calls. |
+| `remove-master-key` | Remove the master key and its LUKS slot. You'll need to run `init-master-key` again afterwards before `reboot` will work again. Kept separate from `remove-key` deliberately — the automatic cleanup service only ever calls `remove-key`, and must never touch the master key, or unattended reboots would break on the very next cycle. |
+
+`rebootAfterUpgrade` calls `reboot onkernelchange` or `reboot onchange`
+automatically, matching whichever value it's set to — you'd normally only
+run these by hand to test the check itself.
 
 ## ✨ How it works
 
@@ -97,7 +119,7 @@ default). Because it lives on the encrypted root, it's only readable once
 the disk is already unlocked — but it lets `ezboot` add and remove
 temporary keys without prompting for a passphrase on every reboot.
 
-Running `ezboot` (or `ezboot reboot`):
+Running `ezboot reboot`:
 
 1. Generates a random temporary key and writes it to the boot partition
    (e.g. `/boot/.ezboot.key`).
@@ -147,16 +169,16 @@ a no-op if there's no temporary key to remove.
 `services.ezboot.rebootAfterUpgrade` hooks into `system.autoUpgrade`
 instead of its own `allowReboot`: after `nixos-upgrade.service` succeeds,
 it compares the booted generation against the newly built one, and if a
-reboot would actually change anything, runs `ezboot` to reboot unattended.
-If nothing relevant changed, it does nothing. See
-[Quick Start](#-quick-start) above for the minimal setup.
+reboot would actually change anything, runs the matching `ezboot reboot`
+mode to reboot unattended. If nothing relevant changed, it does nothing.
+See [Quick Start](#-quick-start) above for the minimal setup.
 
-By default (`rebootOnlyOnKernelChange = true`) it only reboots when the
-running kernel itself changed. Set it to `false` to also reboot on
-kernel-modules or initrd-only changes (e.g. an updated cryptsetup/busybox
-inside the initrd, or an initrd-affecting option change) — those only
-take effect after a reboot too, just without an immediate kernel version
-bump forcing the issue.
+`rebootAfterUpgrade = "onkernelchange"` only reboots when the running
+kernel itself changed. `"onchange"` also reboots on kernel-modules or
+initrd-only changes (e.g. an updated cryptsetup/busybox inside the
+initrd, or an initrd-affecting option change) — those only take effect
+after a reboot too, just without an immediate kernel version bump forcing
+the issue. `null` (the default) disables the feature entirely.
 
 `allowReboot` defaults to `false` in NixOS already, so setting it in the
 Quick Start example usually isn't strictly necessary — it's shown
@@ -194,8 +216,7 @@ units that wouldn't otherwise run as part of the same upgrade.
 | `keyFileName` | str           | `".ezboot.key"`     | Filename of the temporary key placed on the boot partition.                  |
 | `masterKeyPath` | str         | `"/var/lib/ezboot/master.key"` | Path on the encrypted root for the permanent master key.        |
 | `package`     | package       | `pkgs.ezboot`        | The ezboot package to use.                                                    |
-| `rebootAfterUpgrade` | bool   | `false`             | Reboot via ezboot after `system.autoUpgrade` applies an update that needs one. |
-| `rebootOnlyOnKernelChange` | bool | `true`         | Only reboot if the kernel itself changed; if `false`, also reboot on kernel-modules/initrd-only changes. |
+| `rebootAfterUpgrade` | `null \| "onkernelchange" \| "onchange"` | `null` | Reboot via the matching `ezboot reboot` mode after `system.autoUpgrade` applies an update that needs one. `null` disables it. |
 | `waitForUnits` | list of str | `[]`           | Extra systemd units for the reboot check to wait for (`after=`), e.g. other post-upgrade hooks like `ezproton.service`. |
 
 ## ⚠️ Security notes
@@ -230,6 +251,5 @@ units that wouldn't otherwise run as part of the same upgrade.
   (`fileSystems.<bootPath>.options = [ "fmask=0137" "dmask=0027" ];`) if so
   — otherwise any local user, not just someone with physical/console
   access, could read the temp key during its exposure window.
-* To rotate the master key: remove its LUKS slot
-  (`cryptsetup luksRemoveKey <device> <masterKeyPath>`), delete the file,
-  then run `ezboot init-master-key` again.
+* To rotate the master key: run `ezboot remove-master-key` (removes its
+  LUKS slot and deletes the file), then `ezboot init-master-key` again.
