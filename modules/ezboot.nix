@@ -53,7 +53,7 @@ let
   '';
 
   ezbootPackage = cfg.package.override {
-    luksDevice = cfg.luksDevice;
+    luksName = cfg.luksName;
     bootPath = cfg.bootPath;
     keyFileName = cfg.keyFileName;
     masterKeyPath = cfg.masterKeyPath;
@@ -66,21 +66,15 @@ in {
       type = types.str;
       description = ''
         Name of the `boot.initrd.luks.devices` entry to target (must be set
-        explicitly). This can't be auto-detected: doing so would require
-        reading the keys of an option this module also writes into,
-        which is circular and fails with "infinite recursion".
-      '';
-    };
-
-    luksDevice = mkOption {
-      type = types.str;
-      description = ''
-        Raw device path of the LUKS-encrypted partition, matching
-        `boot.initrd.luks.devices.<luksName>.device` exactly (e.g.
-        "/dev/disk/by-label/rootfs_luks"). Must be supplied directly here
-        rather than read back from boot.initrd.luks.devices, since this
-        module also writes into that same option - reading it back would
-        be circular for the same reason luksName can't be auto-detected.
+        explicitly, e.g. matching your own
+        `boot.initrd.luks.devices."<name>" = { device = ...; };`
+        declaration). This can't be auto-detected: doing so would require
+        reading the keys of an option this module also writes into, which
+        is circular and fails with "infinite recursion". The raw device
+        path itself is never needed here - the `ezboot` command discovers
+        it at runtime from `cryptsetup status <luksName>` (the mapping is
+        always already open by the time it runs), rather than needing it
+        baked in at build time.
       '';
     };
 
@@ -162,9 +156,9 @@ in {
 
   config = mkMerge [
     (mkIf cfg.enable {
-      # Note: we deliberately don't cross-check luksName/luksDevice against
+      # Note: we deliberately don't cross-check luksName against
       # config.boot.initrd.luks.devices here - reading that back would be
-      # circular for the same reason described on the luksDevice option. A
+      # circular for the same reason described on the luksName option. A
       # typo'd luksName will instead surface as NixOS's own standard "the
       # option `boot.initrd.luks.devices.<name>.device' is used but not
       # defined" error, since ezboot's contribution to a nonexistent name

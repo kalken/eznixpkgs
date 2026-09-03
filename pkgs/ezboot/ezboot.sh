@@ -3,10 +3,30 @@ set -euo pipefail
 
 : "${EZBOOT_BOOT_PATH:=/boot}"
 : "${EZBOOT_KEY_NAME:=.ezboot.key}"
-: "${EZBOOT_LUKS_DEVICE:=}"
+: "${EZBOOT_LUKS_NAME:=}"
 : "${EZBOOT_MASTER_KEY:=}"
 
+# Flags override whatever came from the environment (i.e. from NixOS's
+# wrapProgram --set), so this script works standalone - with no NixOS
+# module involved at all - as long as you're root on a system with LUKS,
+# systemd, and cryptsetup: pass everything explicitly via flags instead
+# of relying on anything being baked in at build time. Flags can appear
+# anywhere in the argument list; positional args (the command and its own
+# arguments) are collected in order into ARGS.
+ARGS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --luks-name) EZBOOT_LUKS_NAME="$2"; shift 2 ;;
+    --boot-path) EZBOOT_BOOT_PATH="$2"; shift 2 ;;
+    --key-name) EZBOOT_KEY_NAME="$2"; shift 2 ;;
+    --master-key) EZBOOT_MASTER_KEY="$2"; shift 2 ;;
+    *) ARGS+=("$1"); shift ;;
+  esac
+done
+set -- "${ARGS[@]}"
+
 KEYFILE="${EZBOOT_BOOT_PATH}/${EZBOOT_KEY_NAME}"
+EZBOOT_LUKS_DEVICE=""
 
 require_root() {
   if [ "$(id -u)" -ne 0 ]; then
@@ -15,20 +35,37 @@ require_root() {
   fi
 }
 
+# Discovers the raw underlying LUKS device for the already-open mapping
+# EZBOOT_LUKS_NAME (e.g. /dev/nvme0n1p2 for /dev/mapper/rootfs), by
+# parsing `cryptsetup status`. This happens entirely at shell runtime,
+# not Nix evaluation time, so it can't create the same "reads back what
+# it also writes" circular dependency that ruled out deriving this from
+# boot.initrd.luks.devices in the Nix module - it just needs the LUKS
+# device to already be open, which it always is by the time this script
+# runs (on the fully booted system).
 require_device() {
-  if [ -z "$EZBOOT_LUKS_DEVICE" ]; then
-    echo "ezboot: no LUKS device configured (check services.ezboot.luksName and boot.initrd.luks.devices)" >&2
+  if [ -z "$EZBOOT_LUKS_NAME" ]; then
+    echo "ezboot: no LUKS device name configured (check services.ezboot.luksName, or pass --luks-name)" >&2
     exit 1
   fi
-  if [ ! -b "$EZBOOT_LUKS_DEVICE" ]; then
-    echo "ezboot: LUKS device '$EZBOOT_LUKS_DEVICE' not found" >&2
+
+  local status_output
+  if ! status_output="$(cryptsetup status "$EZBOOT_LUKS_NAME" 2>/dev/null)"; then
+    echo "ezboot: LUKS mapping '$EZBOOT_LUKS_NAME' is not active" >&2
+    exit 1
+  fi
+
+  EZBOOT_LUKS_DEVICE="$(awk '$1=="device:" {print $2}' <<< "$status_output")"
+
+  if [ -z "$EZBOOT_LUKS_DEVICE" ] || [ ! -b "$EZBOOT_LUKS_DEVICE" ]; then
+    echo "ezboot: could not determine the underlying device for LUKS mapping '$EZBOOT_LUKS_NAME'" >&2
     exit 1
   fi
 }
 
 require_master_key_path() {
   if [ -z "$EZBOOT_MASTER_KEY" ]; then
-    echo "ezboot: no master key path configured (services.ezboot.masterKeyPath)" >&2
+    echo "ezboot: no master key path configured (services.ezboot.masterKeyPath, or pass --master-key)" >&2
     exit 1
   fi
 }
@@ -171,7 +208,7 @@ cmd_remove_master_key() {
 
 cmd_help() {
   cat <<'USAGE'
-usage: ezboot <command>
+usage: ezboot [flags] <command>
 
 commands:
   reboot                    generate a temporary key, add it to the LUKS
@@ -187,6 +224,17 @@ commands:
   remove-key                remove a leftover temporary key and its LUKS slot
   remove-master-key         remove the master key and its LUKS slot (you'll
                             need to run init-master-key again afterwards)
+
+flags (override whatever came from the environment; can appear anywhere,
+before or after the command):
+  --luks-name NAME          boot.initrd.luks.devices entry / mapper name
+  --boot-path PATH          mountpoint of the unencrypted boot partition
+  --key-name NAME           filename of the temporary key on that partition
+  --master-key PATH         path to the permanent master key file
+
+These flags are what let this script run standalone on any system with
+LUKS, systemd, and cryptsetup - not just via the NixOS module, which
+normally supplies all of this by setting environment variables instead.
 USAGE
 }
 

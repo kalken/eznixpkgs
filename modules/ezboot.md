@@ -12,17 +12,19 @@ to type the passphrase.
 {
   services.ezboot = {
     enable = true;
-    luksName = "root"; # matches boot.initrd.luks.devices.root
-    luksDevice = "/dev/disk/by-uuid/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"; # matches boot.initrd.luks.devices.root.device
+    luksName = "root"; # matches your own boot.initrd.luks.devices."root" declaration
   };
 }
 ```
 
-`luksName` must be set explicitly to an existing `boot.initrd.luks.devices`
-entry, and `luksDevice` to that same entry's `device` value — neither can
-be auto-detected or read back from `boot.initrd.luks.devices`, since that
-would require reading an option this module also writes into, which is
-circular in the Nix module system and fails with "infinite recursion".
+`luksName` must match an existing `boot.initrd.luks.devices` entry you've
+already declared yourself (with its own `device = ...;`) — it can't be
+auto-detected, since that would require reading the keys of an option
+this module also writes into, which is circular in the Nix module system
+and fails with "infinite recursion". The raw device path itself is never
+needed here: the `ezboot` command discovers it at runtime by parsing
+`cryptsetup status <luksName>` (the mapping is always already open by the
+time it runs), so there's nothing else to duplicate.
 
 Then, as root, generate the master key once (this is the only step that
 prompts for an existing LUKS passphrase):
@@ -48,7 +50,6 @@ else:
   services.ezboot = {
     enable = true;
     luksName = "root";
-    luksDevice = "/dev/disk/by-uuid/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
     bootPath = "/boot";
   };
 }
@@ -105,6 +106,21 @@ explicitly.
 | `init-master-key` | Generate the permanent master key and add it to the LUKS device. Prompts for an existing passphrase — the only interactive step in normal use. |
 | `remove-key` | Remove a leftover temporary key and its LUKS slot. Safe to run any time; a no-op if there's nothing to remove. This is also what the automatic post-boot cleanup service calls. |
 | `remove-master-key` | Remove the master key and its LUKS slot. You'll need to run `init-master-key` again afterwards before `reboot` will work again. Kept separate from `remove-key` deliberately — the automatic cleanup service only ever calls `remove-key`, and must never touch the master key, or unattended reboots would break on the very next cycle. |
+
+`ezboot` itself doesn't depend on NixOS or this module to function — as
+root, on any system with LUKS, systemd, and cryptsetup, every setting
+this module normally bakes in can be supplied explicitly instead, via
+flags that can appear anywhere in the command line:
+
+```
+ezboot --luks-name rootfs --master-key /var/lib/ezboot/master.key reboot
+```
+
+`--luks-name`, `--boot-path`, `--key-name`, and `--master-key` each
+override whatever came from the environment (i.e. from this module's
+`wrapProgram --set`). Under the module you'd never normally need these —
+it already supplies correct values — but they're there for standalone
+use, or for one-off overrides when testing.
 
 `rebootAfterUpgrade` calls `reboot onkernelchange` or `reboot onchange`
 automatically, matching whichever value it's set to — you'd normally only
@@ -210,8 +226,7 @@ units that wouldn't otherwise run as part of the same upgrade.
 | Option        | Type          | Default            | Description                                                                 |
 |---------------|---------------|---------------------|-------------------------------------------------------------------------------|
 | `enable`      | bool          | `false`             | Enable ezboot.                                                                |
-| `luksName`    | str           | *(required)*        | Name of the `boot.initrd.luks.devices` entry to target. Must be set explicitly. |
-| `luksDevice`  | str           | *(required)*        | Raw device path of that same LUKS partition, matching `boot.initrd.luks.devices.<luksName>.device` exactly. |
+| `luksName`    | str           | *(required)*        | Name of your existing `boot.initrd.luks.devices` entry to target. Must be set explicitly — the raw device path is discovered at runtime via `cryptsetup status`, never needed here. |
 | `bootPath`    | str           | `"/boot"`           | Mountpoint of the unencrypted, pre-unlock-accessible boot partition (must match a `fileSystems.<bootPath>` entry). Use `"/boot/efi"` if `/boot` itself is on the encrypted root. |
 | `keyFileName` | str           | `".ezboot.key"`     | Filename of the temporary key placed on the boot partition.                  |
 | `masterKeyPath` | str         | `"/var/lib/ezboot/master.key"` | Path on the encrypted root for the permanent master key.        |
