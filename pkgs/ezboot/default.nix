@@ -3,10 +3,9 @@
 , makeWrapper
 , bash
 , coreutils
-, gawk
 , cryptsetup
 , systemd
-, luksName ? null
+, luksDevice ? null
 , bootPath ? "/boot"
 , keyFileName ? ".ezboot.key"
 , masterKeyPath ? "/var/lib/ezboot/master.key"
@@ -19,7 +18,7 @@ stdenv.mkDerivation {
   src = ./.;
 
   nativeBuildInputs = [ makeWrapper ];
-  buildInputs = [ bash coreutils gawk cryptsetup systemd ];
+  buildInputs = [ bash coreutils cryptsetup systemd ];
 
   installPhase = ''
     runHook preInstall
@@ -34,8 +33,8 @@ stdenv.mkDerivation {
 
   postInstall = ''
     wrapProgram $out/bin/ezboot \
-      --prefix PATH : ${lib.makeBinPath [ bash coreutils gawk cryptsetup systemd ]} \
-      ${lib.optionalString (luksName != null) "--set EZBOOT_LUKS_NAME ${lib.escapeShellArg luksName}"} \
+      --prefix PATH : ${lib.makeBinPath [ bash coreutils cryptsetup systemd ]} \
+      ${lib.optionalString (luksDevice != null) "--set EZBOOT_LUKS_DEVICE ${lib.escapeShellArg luksDevice}"} \
       --set EZBOOT_BOOT_PATH ${lib.escapeShellArg bootPath} \
       --set EZBOOT_KEY_NAME ${lib.escapeShellArg keyFileName} \
       --set EZBOOT_MASTER_KEY ${lib.escapeShellArg masterKeyPath}

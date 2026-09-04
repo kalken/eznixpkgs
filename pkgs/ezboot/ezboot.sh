@@ -3,11 +3,10 @@ set -euo pipefail
 
 : "${EZBOOT_BOOT_PATH:=/boot}"
 : "${EZBOOT_KEY_NAME:=.ezboot.key}"
-: "${EZBOOT_LUKS_NAME:=}"
+: "${EZBOOT_LUKS_DEVICE:=}"
 : "${EZBOOT_MASTER_KEY:=}"
 
 KEYFILE="${EZBOOT_BOOT_PATH}/${EZBOOT_KEY_NAME}"
-EZBOOT_LUKS_DEVICE=""
 
 require_root() {
   if [ "$(id -u)" -ne 0 ]; then
@@ -16,30 +15,9 @@ require_root() {
   fi
 }
 
-# Discovers the raw underlying LUKS device for the already-open mapping
-# EZBOOT_LUKS_NAME (e.g. /dev/nvme0n1p2 for /dev/mapper/rootfs), by
-# parsing `cryptsetup status`. This happens entirely at shell runtime,
-# not Nix evaluation time, so it can't create the same "reads back what
-# it also writes" circular dependency that ruled out deriving this from
-# boot.initrd.luks.devices in the Nix module - it just needs the LUKS
-# device to already be open, which it always is by the time this script
-# runs (on the fully booted system).
 require_device() {
-  if [ -z "$EZBOOT_LUKS_NAME" ]; then
-    echo "ezboot: no LUKS device name configured (check services.ezboot.luksName)" >&2
-    exit 1
-  fi
-
-  local status_output
-  if ! status_output="$(cryptsetup status "$EZBOOT_LUKS_NAME" 2>/dev/null)"; then
-    echo "ezboot: LUKS mapping '$EZBOOT_LUKS_NAME' is not active" >&2
-    exit 1
-  fi
-
-  EZBOOT_LUKS_DEVICE="$(awk '$1=="device:" {print $2}' <<< "$status_output")"
-
   if [ -z "$EZBOOT_LUKS_DEVICE" ] || [ ! -b "$EZBOOT_LUKS_DEVICE" ]; then
-    echo "ezboot: could not determine the underlying device for LUKS mapping '$EZBOOT_LUKS_NAME'" >&2
+    echo "ezboot: no LUKS device configured (check services.ezboot.luksName)" >&2
     exit 1
   fi
 }

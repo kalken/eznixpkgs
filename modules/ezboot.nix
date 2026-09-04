@@ -7,6 +7,11 @@ let
 
   targetLuksName = cfg.luksName;
 
+  # Safe to read: this module only ever writes keyFile/preOpenCommands/
+  # fallbackToPassword for this entry, never device, so there's no cycle -
+  # just a plain read of the value the user already declared themselves.
+  luksDevice = config.boot.initrd.luks.devices.${targetLuksName}.device;
+
   bootFs = config.fileSystems.${cfg.bootPath} or null;
 
   keyFilePath = "${cfg.bootPath}/${cfg.keyFileName}";
@@ -41,7 +46,7 @@ let
   '';
 
   ezbootPackage = cfg.package.override {
-    luksName = cfg.luksName;
+    luksDevice = luksDevice;
     bootPath = cfg.bootPath;
     keyFileName = cfg.keyFileName;
     masterKeyPath = cfg.masterKeyPath;
@@ -59,10 +64,10 @@ in {
         declaration). This can't be auto-detected: doing so would require
         reading the keys of an option this module also writes into, which
         is circular and fails with "infinite recursion". The raw device
-        path itself is never needed here - the `ezboot` command discovers
-        it at runtime from `cryptsetup status <luksName>` (the mapping is
-        always already open by the time it runs), rather than needing it
-        baked in at build time.
+        path itself doesn't need to be repeated separately - it's read
+        directly from that same `boot.initrd.luks.devices."<name>".device`
+        declaration (a different field than the ones this module writes,
+        so reading it is safe) and baked into the `ezboot` package.
       '';
     };
 

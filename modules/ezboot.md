@@ -21,10 +21,10 @@ to type the passphrase.
 already declared yourself (with its own `device = ...;`) — it can't be
 auto-detected, since that would require reading the keys of an option
 this module also writes into, which is circular in the Nix module system
-and fails with "infinite recursion". The raw device path itself is never
-needed here: the `ezboot` command discovers it at runtime by parsing
-`cryptsetup status <luksName>` (the mapping is always already open by the
-time it runs), so there's nothing else to duplicate.
+and fails with "infinite recursion". The raw device path itself doesn't
+need to be repeated separately, though: it's read directly from that same
+`device = ...;` declaration (a different field than the ones this module
+writes, so reading it is safe) and baked into the `ezboot` package.
 
 Then, as root, generate the master key once (this is the only step that
 prompts for an existing LUKS passphrase):
@@ -211,7 +211,7 @@ units that wouldn't otherwise run as part of the same upgrade.
 | Option        | Type          | Default            | Description                                                                 |
 |---------------|---------------|---------------------|-------------------------------------------------------------------------------|
 | `enable`      | bool          | `false`             | Enable ezboot.                                                                |
-| `luksName`    | str           | *(required)*        | Name of your existing `boot.initrd.luks.devices` entry to target. Must be set explicitly — the raw device path is discovered at runtime via `cryptsetup status`, never needed here. |
+| `luksName`    | str           | *(required)*        | Name of your existing `boot.initrd.luks.devices` entry to target. Must be set explicitly; the raw device path is read from that same entry's `device`, never needed here. |
 | `bootPath`    | str           | `"/boot"`           | Mountpoint of the unencrypted, pre-unlock-accessible boot partition (must match a `fileSystems.<bootPath>` entry). Use `"/boot/efi"` if `/boot` itself is on the encrypted root. |
 | `keyFileName` | str           | `".ezboot.key"`     | Filename of the temporary key placed on the boot partition.                  |
 | `masterKeyPath` | str         | `"/var/lib/ezboot/master.key"` | Path on the encrypted root for the permanent master key.        |
