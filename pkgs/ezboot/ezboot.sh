@@ -6,25 +6,6 @@ set -euo pipefail
 : "${EZBOOT_LUKS_NAME:=}"
 : "${EZBOOT_MASTER_KEY:=}"
 
-# Flags override whatever came from the environment (i.e. from NixOS's
-# wrapProgram --set), so this script works standalone - with no NixOS
-# module involved at all - as long as you're root on a system with LUKS,
-# systemd, and cryptsetup: pass everything explicitly via flags instead
-# of relying on anything being baked in at build time. Flags can appear
-# anywhere in the argument list; positional args (the command and its own
-# arguments) are collected in order into ARGS.
-ARGS=()
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --luks-name) EZBOOT_LUKS_NAME="$2"; shift 2 ;;
-    --boot-path) EZBOOT_BOOT_PATH="$2"; shift 2 ;;
-    --key-name) EZBOOT_KEY_NAME="$2"; shift 2 ;;
-    --master-key) EZBOOT_MASTER_KEY="$2"; shift 2 ;;
-    *) ARGS+=("$1"); shift ;;
-  esac
-done
-set -- "${ARGS[@]}"
-
 KEYFILE="${EZBOOT_BOOT_PATH}/${EZBOOT_KEY_NAME}"
 EZBOOT_LUKS_DEVICE=""
 
@@ -45,7 +26,7 @@ require_root() {
 # runs (on the fully booted system).
 require_device() {
   if [ -z "$EZBOOT_LUKS_NAME" ]; then
-    echo "ezboot: no LUKS device name configured (check services.ezboot.luksName, or pass --luks-name)" >&2
+    echo "ezboot: no LUKS device name configured (check services.ezboot.luksName)" >&2
     exit 1
   fi
 
@@ -65,7 +46,7 @@ require_device() {
 
 require_master_key_path() {
   if [ -z "$EZBOOT_MASTER_KEY" ]; then
-    echo "ezboot: no master key path configured (services.ezboot.masterKeyPath, or pass --master-key)" >&2
+    echo "ezboot: no master key path configured (services.ezboot.masterKeyPath)" >&2
     exit 1
   fi
 }
@@ -208,7 +189,7 @@ cmd_remove_master_key() {
 
 cmd_help() {
   cat <<'USAGE'
-usage: ezboot [flags] <command>
+usage: ezboot <command>
 
 commands:
   reboot                    generate a temporary key, add it to the LUKS
@@ -224,17 +205,6 @@ commands:
   remove-key                remove a leftover temporary key and its LUKS slot
   remove-master-key         remove the master key and its LUKS slot (you'll
                             need to run init-master-key again afterwards)
-
-flags (override whatever came from the environment; can appear anywhere,
-before or after the command):
-  --luks-name NAME          boot.initrd.luks.devices entry / mapper name
-  --boot-path PATH          mountpoint of the unencrypted boot partition
-  --key-name NAME           filename of the temporary key on that partition
-  --master-key PATH         path to the permanent master key file
-
-These flags are what let this script run standalone on any system with
-LUKS, systemd, and cryptsetup - not just via the NixOS module, which
-normally supplies all of this by setting environment variables instead.
 USAGE
 }
 

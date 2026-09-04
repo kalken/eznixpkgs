@@ -11,14 +11,9 @@ let
 
   keyFilePath = "${cfg.bootPath}/${cfg.keyFileName}";
 
-  # Mount the unencrypted boot partition and stage the temp key where the
-  # LUKS unlock step (keyFile = "/ezboot.key") can read it, before that
-  # device is opened. Shared between the classic and systemd stage 1
-  # mechanisms below, which each hook it in differently. Commands are
-  # referenced by full store path (rather than relying on $PATH) so Nix's
-  # reference scanning pulls them into whichever initrd closure mechanism
-  # picks this script up (extraUtils for the classic stage 1, storePaths
-  # for systemd stage 1 below).
+  # Mounts the boot partition and stages the temp key for the LUKS unlock
+  # step (keyFile = "/ezboot.key"). Used by the classic stage-1 path below.
+  # Full store paths so Nix's closure scanner picks these up.
   stageKeyCommands = ''
     ${pkgs.coreutils}/bin/mkdir -p /ezboot-boot
     if ${pkgs.util-linux}/bin/mount -t ${bootFs.fsType} -o ro ${bootFs.device} /ezboot-boot 2>/dev/null; then
@@ -30,17 +25,10 @@ let
     fi
   '';
 
-  # Same steps as stageKeyCommands, but unguarded and with `set -x`, and
-  # using bare command names instead of full store paths - matching
-  # nixpkgs's own cryptsetup-clevis-<name> script exactly, which relies on
-  # `script = ''...'';` (rather than a manually built ExecStart) to wire up
-  # both the closure (via the initrd's jobScripts mechanism) and a working
-  # $PATH from boot.initrd.systemd.package. Referencing pkgs.util-linux's
-  # own mount binary directly (the previous approach) doesn't work in this
-  # environment - Type=exec reported it couldn't be found at all. Used only
-  # for the systemd-stage-1 unit below, which runs independently
-  # (wantedBy=, not requiredBy=) so it's safe to let it fail loudly rather
-  # than silently as stageKeyCommands does for preOpenCommands.
+  # Same as stageKeyCommands, for the systemd stage-1 unit below. Bare
+  # command names (script= supplies the closure/PATH, matching nixpkgs's
+  # own cryptsetup-clevis pattern) and unguarded, since this unit runs
+  # independently and can fail loudly.
   stageKeyScriptText = ''
     set -x
     mkdir -p /ezboot-boot
@@ -156,13 +144,9 @@ in {
 
   config = mkMerge [
     (mkIf cfg.enable {
-      # Note: we deliberately don't cross-check luksName against
-      # config.boot.initrd.luks.devices here - reading that back would be
-      # circular for the same reason described on the luksName option. A
-      # typo'd luksName will instead surface as NixOS's own standard "the
-      # option `boot.initrd.luks.devices.<name>.device' is used but not
-      # defined" error, since ezboot's contribution to a nonexistent name
-      # creates a new device entry with no `device` field.
+      # A typo'd luksName isn't cross-checked here (would be circular);
+      # it instead surfaces as NixOS's own "option ... is used but not
+      # defined" error.
       assertions = [
         {
           assertion = bootFs != null;
@@ -178,38 +162,24 @@ in {
     })
 
     (mkIf (cfg.enable && bootFs != null) {
-      # kernelModules (force-loaded at initrd startup), not
-      # availableKernelModules (only auto-loaded via hotplug/hardware
-      # detection, which a plain `mount` call doesn't trigger) - confirmed
-      # via a live initrd debug shell that `mount -t vfat` failed with
-      # "wrong fs type" even with the module present, until it was loaded
-      # explicitly. vfat also needs an NLS codepage module to actually
-      # mount, which was completely absent from the initrd (modprobe
-      # reported it not found, not just unloaded).
+      # Force-loaded, not hotplug-only (availableKernelModules) - a plain
+      # `mount` doesn't trigger hotplug loading. vfat also needs an NLS
+      # codepage module to mount at all.
       boot.initrd.kernelModules = [ bootFs.fsType ]
         ++ optionals (bootFs.fsType == "vfat") [ "nls_cp437" "nls_iso8859-1" ];
 
-      # Always contribute the same fields here, with only their values (not
-      # their presence) depending on config.boot.initrd.systemd.enable.
-      # Making the presence of preOpenCommands/fallbackToPassword itself
-      # conditional caused an infinite recursion: nixpkgs's own luksroot.nix
-      # asserts (when systemd stage 1 is enabled) that every device's
-      # preOpenCommands is "" - checking that requires resolving what this
-      # module contributes here, which (with a conditional shape) required
-      # resolving config.boot.initrd.systemd.enable again first - circular.
+      # Fields are always present, only their values are conditional -
+      # making presence itself conditional causes infinite recursion via
+      # nixpkgs's own systemd-stage-1 assertion on preOpenCommands.
       boot.initrd.luks.devices.${targetLuksName} = {
         keyFile = "/ezboot.key";
         fallbackToPassword = !config.boot.initrd.systemd.enable;
         preOpenCommands = if config.boot.initrd.systemd.enable then "" else stageKeyCommands;
       };
 
-      # systemd stage 1 ignores this whole option when
-      # boot.initrd.systemd.enable is false, so it's safe to always declare
-      # it unconditionally. Ordered directly against the specific
-      # systemd-cryptsetup instance for our device (guaranteed to run, since
-      # root can't unlock without it) rather than cryptsetup-pre.target -
-      # After=/Before= relative to a target doesn't guarantee that target is
-      # ever actually activated, only orders things if it is.
+      # Ignored under classic stage 1, so safe to declare unconditionally.
+      # Ordered against the specific systemd-cryptsetup instance (always
+      # runs) rather than cryptsetup-pre.target (not guaranteed activated).
       boot.initrd.systemd.services.ezboot-stage-key = {
         description = "Stage temporary ezboot LUKS key";
         wantedBy = [ "systemd-cryptsetup@${utils.escapeSystemdPath targetLuksName}.service" ];
@@ -218,29 +188,15 @@ in {
           "initrd-switch-root.target"
           "shutdown.target"
         ];
-        # Needed so the boot fs kernel module (loaded via
-        # boot.initrd.kernelModules) is actually available before this
-        # unit tries to mount it - omitted from the initial port of
-        # nixpkgs's cryptsetup-clevis-<name> pattern, which has the same
-        # ordering for the same reason.
-        #
-        # Also wait for udev to have actually created the boot device's
-        # symlink (confirmed live: mount failed with "can't lookup
-        # blockdev" because /dev/disk/by-label/bootfs didn't exist yet).
-        # Nothing else in the initrd needs /boot's device at all - it's
-        # only mounted after switch-root as part of the real system - so
-        # nothing else pulls this in; wants= is needed, not just after=.
+        # Needs the boot fs module loaded and the device symlink present
+        # before mounting (both confirmed necessary via live testing).
         wants = [ "${utils.escapeSystemdPath bootFs.device}.device" ];
         after = [
           "systemd-modules-load.service"
           "${utils.escapeSystemdPath bootFs.device}.device"
         ];
-        # Without this, systemd adds an implicit After= on the early-boot
-        # barrier target - and since unlocking root is itself part of
-        # reaching that target, this unit couldn't start until after the
-        # unlock attempt regardless of the explicit before=/wantedBy=
-        # above. Confirmed against nixpkgs's own cryptsetup-clevis-<name>
-        # units, which solve the identical problem the same way.
+        # Without this, the implicit early-boot barrier ordering would
+        # delay this unit until after root is already unlocked.
         unitConfig.DefaultDependencies = false;
         script = stageKeyScriptText;
         serviceConfig = {
@@ -282,22 +238,11 @@ in {
 
       systemd.services.ezboot-auto-reboot = {
         description = "Reboot via ezboot if the last system upgrade requires it";
-        # nixos-upgrade.service itself: belt-and-suspenders, since
-        # OnSuccess= already means this can't start until it has finished
-        # (it's the event that triggers it), and that service's own
-        # switch-to-configuration run is synchronous, so every restart it
-        # directly causes has already completed by then too.
-        #
-        # waitForUnits: other post-upgrade hooks (e.g. services.ezproton
-        # with afterAutoUpgrade = true) become eligible to start at
-        # essentially the same moment nixos-upgrade.service finishes -
-        # the same moment that triggers this unit via OnSuccess= - so
-        # without this they'd race rather than run in sequence.
+        # waitForUnits lets other post-upgrade hooks finish first instead
+        # of racing this one.
         after = [ "nixos-upgrade.service" ] ++ cfg.waitForUnits;
         serviceConfig = {
           Type = "oneshot";
-          # cfg.rebootAfterUpgrade's enum values are the exact same
-          # strings `ezboot reboot` expects as its mode argument.
           ExecStart = "${ezbootPackage}/bin/ezboot reboot ${cfg.rebootAfterUpgrade}";
         };
       };

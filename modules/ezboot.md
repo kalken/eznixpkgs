@@ -107,21 +107,6 @@ explicitly.
 | `remove-key` | Remove a leftover temporary key and its LUKS slot. Safe to run any time; a no-op if there's nothing to remove. This is also what the automatic post-boot cleanup service calls. |
 | `remove-master-key` | Remove the master key and its LUKS slot. You'll need to run `init-master-key` again afterwards before `reboot` will work again. Kept separate from `remove-key` deliberately — the automatic cleanup service only ever calls `remove-key`, and must never touch the master key, or unattended reboots would break on the very next cycle. |
 
-`ezboot` itself doesn't depend on NixOS or this module to function — as
-root, on any system with LUKS, systemd, and cryptsetup, every setting
-this module normally bakes in can be supplied explicitly instead, via
-flags that can appear anywhere in the command line:
-
-```
-ezboot --luks-name rootfs --master-key /var/lib/ezboot/master.key reboot
-```
-
-`--luks-name`, `--boot-path`, `--key-name`, and `--master-key` each
-override whatever came from the environment (i.e. from this module's
-`wrapProgram --set`). Under the module you'd never normally need these —
-it already supplies correct values — but they're there for standalone
-use, or for one-off overrides when testing.
-
 `rebootAfterUpgrade` calls `reboot onkernelchange` or `reboot onchange`
 automatically, matching whichever value it's set to — you'd normally only
 run these by hand to test the check itself.
