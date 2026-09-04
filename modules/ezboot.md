@@ -13,6 +13,7 @@ to type the passphrase.
   services.ezboot = {
     enable = true;
     luksName = "root"; # matches your own boot.initrd.luks.devices."root" declaration
+    # rebootAfterUpgrade = "onkernelchange"; # also reboot automatically after system.autoUpgrade
   };
 }
 ```
@@ -30,6 +31,7 @@ Then, as root, generate the master key once (this is the only step that
 prompts for an existing LUKS passphrase):
 
 ```
+# only needs to be run once, ever - not on every reboot
 ezboot init-master-key
 ```
 
