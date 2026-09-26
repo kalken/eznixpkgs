@@ -1,9 +1,9 @@
 { config, lib, pkgs, ... }:
 let
-  cfg = config.programs.ezconf;
+  cfg = config.programs.ezconf-cli;
 in {
-  options.programs.ezconf = {
-    enable = lib.mkEnableOption "ezconf - custom Neovim";
+  options.programs.ezconf-cli = {
+    enable = lib.mkEnableOption "ezconf-cli - custom Neovim";
     theme = lib.mkOption {
       default = {
         plugin      = pkgs.vimPlugins.onedarkpro-nvim;
@@ -48,7 +48,7 @@ in {
   };
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [
-      (pkgs.ezconf.override {
+      (pkgs.ezconf-cli.override {
         theme     = cfg.theme;
         nerdFonts = cfg.nerdFonts;
         extraConfig = cfg.extraConfig;

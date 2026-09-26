@@ -32,7 +32,7 @@ The repo has two top-level layers:
 Each `.nix` file is a self-contained NixOS module (e.g., `services.ezrouter`, `programs.ezsh`). `modules/default.nix` auto-discovers and imports all `.nix` files in the directory via `builtins.readDir`, so adding a new module requires only creating the file — no registration needed.
 
 ### `pkgs/` — Standalone packages
-Each subdirectory is a package exposed via a Nix overlay. `pkgs/default.nix` auto-discovers subdirectories and calls `callPackage` on each, making them available as `pkgs.ezconf`, `pkgs.ezman`, etc. External projects (eznetns, ezsocks, wg-tools) are fetched from GitHub via `fetchFromGitHub` and wrapped with Nix-managed dependencies.
+Each subdirectory is a package exposed via a Nix overlay. `pkgs/default.nix` auto-discovers subdirectories and calls `callPackage` on each, making them available as `pkgs.ezconf-cli`, `pkgs.ezman`, etc. External projects (eznetns, ezsocks, wg-tools) are fetched from GitHub via `fetchFromGitHub` and wrapped with Nix-managed dependencies.
 
 ### `flake.nix`
 Minimal entry point — imports `modules/` and `pkgs/`, exports `nixosModules.default` (all modules combined) and the package overlay.
@@ -43,7 +43,7 @@ Minimal entry point — imports `modules/` and `pkgs/`, exports `nixosModules.de
 
 **systemd integration**: `eznetns` uses `systemd.sockets` + `systemd-socket-proxyd` for port forwarding via socket activation. Services can be attached to arbitrary systemd units via the `netnsService` mapping.
 
-**Documentation**: Each module has a companion `.md` file (e.g., `ezrouter.md`, `ezconf.md`) with full option tables and usage examples. Keep these in sync when changing module options.
+**Documentation**: Each module has a companion `.md` file (e.g., `ezrouter.md`, `ezconf-cli.md`) with full option tables and usage examples. Keep these in sync when changing module options.
 
 ## Branch Strategy
 

@@ -1,6 +1,6 @@
-# ezconf
+# ezconf-cli
 
-A custom Neovim distribution for NixOS, preconfigured for Nix development with LSP, autocompletion, and optional theming. Launched with the `ezconf` command.
+A custom Neovim distribution for NixOS, preconfigured for Nix development with LSP, autocompletion, and optional theming. Launched with the `ezconf-cli` command.
 
 ## ✨ Features
 
@@ -17,14 +17,14 @@ A custom Neovim distribution for NixOS, preconfigured for Nix development with L
 
 ```
 {
-  programs.ezconf.enable = true;
+  programs.ezconf-cli.enable = true;
 }
 ```
 
 Then launch with:
 
 ```
-ezconf
+ezconf-cli
 ```
 
 ## 🎨 Setting a Theme
@@ -33,7 +33,7 @@ Pass any plugin from `pkgs.vimPlugins` directly:
 
 ```
 {
-  programs.ezconf = {
+  programs.ezconf-cli = {
     enable = true;
     theme = {
       plugin      = pkgs.vimPlugins.vim-moonfly-colors;
@@ -47,7 +47,7 @@ For themes that require a setup call:
 
 ```
 {
-  programs.ezconf = {
+  programs.ezconf-cli = {
     enable = true;
     theme = {
       plugin      = pkgs.vimPlugins.catppuccin-nvim;
@@ -62,7 +62,7 @@ You can also use a plugin from a custom source:
 
 ```
 {
-  programs.ezconf = {
+  programs.ezconf-cli = {
     enable = true;
     theme = {
       plugin = pkgs.vimUtils.buildVimPlugin {
@@ -86,7 +86,7 @@ By default the mouse is disabled so terminal text selection works normally. To e
 
 ```
 {
-  programs.ezconf = {
+  programs.ezconf-cli = {
     enable = true;
     extraConfig = ''
       vim.opt.mouse = "n"  -- normal mode only, or "a" for all modes
@@ -101,7 +101,7 @@ By default the mouse is disabled so terminal text selection works normally. To e
 
 ```
 {
-  programs.ezconf = {
+  programs.ezconf-cli = {
     enable = true;
     extraConfig = ''
       -- vim.opt settings
@@ -127,7 +127,7 @@ By default the completion popup shows text labels for each item kind (e.g. `Func
 
 ```
 {
-  programs.ezconf = {
+  programs.ezconf-cli = {
     enable     = true;
     nerdFonts  = true;
   };
@@ -148,13 +148,13 @@ Then set `Iosevka Nerd Font Mono` as your terminal font and rebuild.
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `programs.ezconf.enable` | bool | `false` | Enable ezconf and install the `ezconf` command |
-| `programs.ezconf.theme` | attrs or null | `null` | Theme to apply. If null, Neovim's built-in default is used |
-| `programs.ezconf.theme.plugin` | package | — | Any `vimPlugins` package |
-| `programs.ezconf.theme.colorscheme` | str | — | The colorscheme name passed to `vim.cmd.colorscheme()` |
-| `programs.ezconf.theme.setup` | str | `""` | Optional Lua setup call, e.g. `require("catppuccin").setup()` |
-| `programs.ezconf.nerdFonts` | bool | `false` | Show Nerd Fonts icons in the completion popup instead of text labels |
-| `programs.ezconf.extraConfig` | lines | `""` | Arbitrary Lua injected after the user config — use for `vim.opt` settings, keymaps, autocmds, or anything else |
+| `programs.ezconf-cli.enable` | bool | `false` | Enable ezconf-cli and install the `ezconf-cli` command |
+| `programs.ezconf-cli.theme` | attrs or null | `null` | Theme to apply. If null, Neovim's built-in default is used |
+| `programs.ezconf-cli.theme.plugin` | package | — | Any `vimPlugins` package |
+| `programs.ezconf-cli.theme.colorscheme` | str | — | The colorscheme name passed to `vim.cmd.colorscheme()` |
+| `programs.ezconf-cli.theme.setup` | str | `""` | Optional Lua setup call, e.g. `require("catppuccin").setup()` |
+| `programs.ezconf-cli.nerdFonts` | bool | `false` | Show Nerd Fonts icons in the completion popup instead of text labels |
+| `programs.ezconf-cli.extraConfig` | lines | `""` | Arbitrary Lua injected after the user config — use for `vim.opt` settings, keymaps, autocmds, or anything else |
 
 ## 📦 Bundled Packages
 
@@ -173,7 +173,7 @@ The following are installed automatically and do not need to be added separately
 
 ## 🛠️ Custom Syntax for `.nix` Files
 
-ezconf adds two special comment conventions for `.nix` files that power the sidebar and button panel.
+ezconf-cli adds two special comment conventions for `.nix` files that power the sidebar and button panel.
 
 ### Headings
 
@@ -203,7 +203,7 @@ Press `<Tab>` to open the button panel at the bottom of the screen, navigate wit
 
 ## ⌨️ Added Keybindings
 
-These are added by ezconf on top of stock Neovim.
+These are added by ezconf-cli on top of stock Neovim.
 
 | Key | Mode | Action |
 | --- | --- | --- |
@@ -218,9 +218,9 @@ These are added by ezconf on top of stock Neovim.
 
 ## 📝 Notes
 
-* The `ezconf` command is a wrapper around `nvim` — all standard Neovim flags and arguments work.
+* The `ezconf-cli` command is a wrapper around `nvim` — all standard Neovim flags and arguments work.
 * LSP is configured to read your system flake from `/etc/nixos` using the current hostname automatically.
-* `~/.config/nvim` and other user config files are ignored entirely — ezconf is fully self-contained.
+* `~/.config/nvim` and other user config files are ignored entirely — ezconf-cli is fully self-contained.
 * `extraConfig` is injected after the user config, so it overrides anything set in `config.lua`.
 * Autocompletion is manual-only — the popup never appears unless you press `<Tab>`.
 * The heading sidebar (`HeadingSidebarToggle`) parses `##! Heading` style comments in `.nix` files.

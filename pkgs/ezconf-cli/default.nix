@@ -14,7 +14,7 @@ let
   neovimPackage = pkgs.neovim.override {
     configure = {
       customRC = "luafile ${initLua}";
-      packages.ezconf = {
+      packages.ezconf-cli = {
         start = lib.optionals (theme != null) [ theme.plugin ] ++ [
           pkgs.vimPlugins.nvim-cmp
           pkgs.vimPlugins.luasnip
@@ -27,9 +27,9 @@ let
     };
   };
 in pkgs.symlinkJoin {
-  name = "ezconf";
+  name = "ezconf-cli";
   paths = [ neovimPackage pkgs.nixd pkgs.alejandra ];
   postBuild = ''
-    ln -s $out/bin/nvim $out/bin/ezconf
+    ln -s $out/bin/nvim $out/bin/ezconf-cli
   '';
 }
