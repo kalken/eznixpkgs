@@ -70,3 +70,4 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [ezproton](pkgs/ezproton/ezproton.py) | Automatically installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d. |
 | [ezsocks](https://github.com/kalken/ezsocks) | A proxy server that makes your eyeballs happy, forked from [prettysocks](https://github.com/twisteroidambassador/prettysocks). |
 | [wg-tools](https://github.com/mullvad/wg-tools) | Generates WireGuard® configuration files for Mullvad. |
+| [qbit-dark](pkgs/qbit-dark/qbit-dark.md) | Dark alternative WebUI for qBittorrent, for use with `services.qbittorrent`. |
