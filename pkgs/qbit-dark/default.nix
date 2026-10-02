@@ -3,8 +3,8 @@ let
   qbit-dark-src = pkgs.fetchFromGitHub {
     owner = "kalken";
     repo = "qbit-dark";
-    rev = "fa1f5a4841e9f7dae8f98614278b6aadab0f0024";
-    hash = "sha256-Og1c51uNtJv4bR+GbF2+Sg93jblpUHKVciEBpfBLpiA=";
+    rev = "b173cd084ad4c376ad09758eeae2ed1e9523c941";
+    hash = "sha256-TnunwR/5F9U7VPcrb3t9HJHtRdv6rYy4gH4cEQk0QNA=";
   };
 in
 pkgs.stdenvNoCC.mkDerivation {
