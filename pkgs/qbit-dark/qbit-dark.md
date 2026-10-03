@@ -2,7 +2,13 @@
 
 A dark alternative WebUI for qBittorrent, packaged from [`kalken/qbit-dark`](https://github.com/kalken/qbit-dark).
 
-Based on the stock WebUI from qBittorrent **5.2.4**, so use it with qBittorrent 5.2.x. Everything runs offline: no web fonts, CDNs or external images.
+The upstream repo only holds the theme CSS. The package runs its `build.sh` against the stock WebUI files from `pkgs.qbittorrent-nox.src`, so the WebUI always matches the qBittorrent version from your nixpkgs. Built and tested against qBittorrent 5.2.x. Everything runs offline: no web fonts, CDNs or external images.
+
+If `services.qbittorrent.package` is set to something other than `qbittorrent-nox`, build the WebUI from that package instead:
+
+```nix
+pkgs.qbit-dark.override { qbittorrent-nox = config.services.qbittorrent.package; }
+```
 
 ## 🚀 Quick Start
 

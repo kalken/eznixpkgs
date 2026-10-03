@@ -1,10 +1,10 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, qbittorrent-nox, ... }:
 let
   qbit-dark-src = pkgs.fetchFromGitHub {
     owner = "kalken";
     repo = "qbit-dark";
-    rev = "b0757b3e5168813b6e7cb3dc26a6fd3540cf6b86";
-    hash = "sha256-891Vr20hVOxOadgudSKaan7tMtrvI7jDSDWUZYFEDqQ=";
+    rev = "5bb947474092f5de48491db676f4f85ba874ebe3";
+    hash = "sha256-RIDCQF33weZg2OPQMb/nZHkJ9marBs8s9nnUtDfgM8I=";
   };
 in
 pkgs.stdenvNoCC.mkDerivation {
@@ -12,10 +12,12 @@ pkgs.stdenvNoCC.mkDerivation {
   version = "unstable-2026-10-03";
   src = qbit-dark-src;
 
+  # The repo only holds the theme CSS; build.sh combines it with the stock
+  # WebUI files from the qBittorrent source. Override qbittorrent-nox if
+  # services.qbittorrent.package is set to something else.
   installPhase = ''
     runHook preInstall
-    mkdir -p $out/share/qbit-dark
-    cp -r public private $out/share/qbit-dark/
+    sh ./build.sh ${qbittorrent-nox.src}/src/webui/www $out/share/qbit-dark
     runHook postInstall
   '';
 
