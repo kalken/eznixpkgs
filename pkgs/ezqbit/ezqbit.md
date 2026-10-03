@@ -1,6 +1,6 @@
 # ezqbit
 
-A flat dark alternative WebUI for qBittorrent, packaged from [`kalken/ezqbit`](https://github.com/kalken/ezqbit).
+A flat alternative WebUI for qBittorrent, in dark and light, packaged from [`kalken/ezqbit`](https://github.com/kalken/ezqbit).
 
 The upstream repo only holds the theme CSS. The package runs its `build.sh` against the stock WebUI files from `pkgs.qbittorrent-nox.src`, so the WebUI always matches the qBittorrent version from your nixpkgs. Built and tested against qBittorrent 5.2.x. Everything runs offline: no web fonts, CDNs or external images.
 
@@ -25,6 +25,8 @@ The package installs the WebUI to `share/ezqbit` (the folder containing `public/
 ```
 
 Hard-refresh the browser after switching, since the old styles may be cached.
+
+Dark or light follows the WebUI's own setting (Options → Behavior → Color scheme). The login page follows the browser's preference.
 
 ## 🔓 Locked out?
 

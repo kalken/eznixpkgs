@@ -3,8 +3,8 @@ let
   ezqbit-src = pkgs.fetchFromGitHub {
     owner = "kalken";
     repo = "ezqbit";
-    rev = "b2027dbc51283435d0d8b0c88e688cd3f3fae19c";
-    hash = "sha256-AC7iQMcqOz0N8u/mm7O1pMszCh8B9Jw6iE6yKFgooTw=";
+    rev = "79ec9e6c353c2afbd0511b586a952d66686c1d68";
+    hash = "sha256-RVUc4WQwVNtz2SGlsyBJ4KeYnZCC5x969i1i4k3D/LI=";
   };
 in
 pkgs.stdenvNoCC.mkDerivation {
@@ -22,7 +22,7 @@ pkgs.stdenvNoCC.mkDerivation {
   '';
 
   meta = with lib; {
-    description = "Flat dark alternative WebUI for qBittorrent";
+    description = "Flat alternative WebUI for qBittorrent, dark and light";
     homepage = "https://github.com/kalken/ezqbit";
     license = licenses.gpl3Plus;
     platforms = platforms.all;
