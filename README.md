@@ -71,3 +71,4 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [ezsocks](https://github.com/kalken/ezsocks) | A proxy server that makes your eyeballs happy, forked from [prettysocks](https://github.com/twisteroidambassador/prettysocks). |
 | [wg-tools](https://github.com/mullvad/wg-tools) | Generates WireGuard® configuration files for Mullvad. |
 | [qbit-dark](pkgs/qbit-dark/qbit-dark.md) | Dark alternative WebUI for qBittorrent, for use with `services.qbittorrent`. |
+| [ezqbit](pkgs/ezqbit/ezqbit.md) | Flat dark alternative WebUI for qBittorrent, for use with `services.qbittorrent`. |
