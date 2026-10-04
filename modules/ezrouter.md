@@ -59,7 +59,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `wan.keepConfiguration` | enum or null | `null` | Controls whether addresses and routes are removed when networkd stops or starts. `"static"`: static addresses/routes are not removed on startup. `"dynamic-on-stop"`: dynamic addresses/routes (DHCP, SLAAC) are not removed on stop. `"dynamic"`: dynamic addresses/routes are never removed, even on lease expiry. `"yes"`: implies both `"static"` and `"dynamic"`. |
 | `wan.sendRelease` | bool | `false` | When `false`, the DHCPv6 client does not send a Release message when the interface goes down or networkd stops. Keeps the IPv6 prefix stable across reboots; most ISPs reassign the same lease regardless. |
 | `wan.useMACAsIdentity` | bool | `false` | Use the interface MAC address as DHCPv4 client identifier and DHCPv6 DUID. Useful for ISPs that bind leases to MAC address. |
-| `wan.masqueradeOnly` | bool | `false` | Only masquerade traffic leaving through the WAN interface. See [Firewall & NAT Behavior](#-firewall--nat-behavior) below. |
+| `wan.masqueradeOnly` | bool | `true` | Only masquerade traffic leaving through the WAN interface. See [Firewall & NAT Behavior](#-firewall--nat-behavior) below. |
 | `wan.forwardPorts` | list of submodule | `[]` | Port forwarding rules from WAN to internal hosts. See [Port Forwarding](#-port-forwarding) below. |
 | `wan.openPorts` | list of submodule | `[]` | Ports to open on the WAN interface. Shorthand for `openPorts` entries with `interfaces` set to `wan.device`. See [Open Ports](#-open-ports) below. |
 
@@ -168,7 +168,7 @@ wan.forwardPorts = [
 ## 🔐 Firewall & NAT Behavior
 
 - **NAT**: Applied to all interfaces in `internalInterfaces` (default: bridge + all VLANs)
-- **Masquerading**: By default, traffic from the internal interfaces is masqueraded on every outgoing interface, not just the WAN. With `wan.masqueradeOnly = true` only traffic leaving through `wan.device` is masqueraded, so whatever the router forwards to elsewhere (another VLAN, an [eznetns](eznetns.md) `nat` port forward) sees the real client address. Using `wan.forwardPorts` always turns this on, since port forwards need the external interface to be set.
+- **Masquerading**: By default (`wan.masqueradeOnly = true`) only traffic leaving through `wan.device` is masqueraded, so whatever the router forwards to elsewhere (another VLAN, an [eznetns](eznetns.md) `nat` port forward) sees the real client address. With `wan.masqueradeOnly = false`, traffic from the internal interfaces is masqueraded on every outgoing interface. Using `wan.forwardPorts` always restricts masquerading to the WAN, since port forwards need the external interface to be set.
 - **Inter-VLAN isolation**: When `isolateVlans = true`, forwarding between internal interfaces is dropped *before* NAT rules
 - **VLAN firewall ports**: `vlanFirewallPorts.allowedTCPPorts` / `allowedUDPPorts` apply to **all VLAN interfaces**; per-VLAN `vlan.<name>.allowedTCPPorts` / `allowedUDPPorts` are merged on top for that interface only
 - **Trusted interfaces**: Listed in `trustedInterfaces` bypass firewall restrictions (default: bridge only)
@@ -205,6 +205,7 @@ nft list ruleset  # inspect firewall/NAT rules
 - **VLAN definitions are now minimal**: You **only** need to specify `id`. `address` and `subnetId` are optional and auto-derived.
 - **`wan.keepConfiguration` default is now `null`**: If you previously relied on a default value, set it explicitly.
 - **`wan.keepConfiguration` is now an enum or null**: If you previously used `true`, replace with `"yes"` or `"static"` depending on desired behavior.
+- **`wan.masqueradeOnly` is now `true` by default**: Internal traffic is only masqueraded when it leaves through `wan.device`. Set it to `false` if you rely on masquerading towards another interface: a VPN tunnel on the router itself, a second uplink, PPPoE where traffic leaves through `ppp0` rather than `wan.device`, or devices on other VLANs that only answer the router's address (with `isolateVlans = false`).
 - **Firewall ports apply to VLANs only**: `vlanFirewallPorts` now affects VLAN interfaces explicitly, not the bridge.
 
 ---

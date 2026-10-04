@@ -607,7 +607,7 @@ in
     warnings =
       let nat = config.networking.nat; in
       optional (natInstances != {} && nat.enable && nat.externalInterface == null && nat.internalInterfaces != [])
-        "services.eznetns: networking.nat masquerades everything coming from ${concatStringsSep ", " nat.internalInterfaces}, so nat port forwards will not see the client addresses of those interfaces. Set networking.nat.externalInterface (services.ezrouter.wan.masqueradeOnly = true when using ezrouter).";
+        "services.eznetns: networking.nat masquerades everything coming from ${concatStringsSep ", " nat.internalInterfaces}, so nat port forwards will not see the client addresses of those interfaces. Set networking.nat.externalInterface (or leave services.ezrouter.wan.masqueradeOnly enabled when using ezrouter).";
 
     assertions =
       # Assertions to ensure valid netnsService mappings

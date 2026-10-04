@@ -106,7 +106,7 @@ What an instance with `nat` forwards sets up:
 
 Things to know:
 
-- **Masquerading on the host hides the client address.** With `networking.nat` and no `externalInterface`, everything from the internal interfaces is masqueraded, including what goes into the netns. The module warns about this. With ezrouter, set `services.ezrouter.wan.masqueradeOnly = true`.
+- **Masquerading on the host hides the client address.** With `networking.nat` and no `externalInterface`, everything from the internal interfaces is masqueraded, including what goes into the netns. The module warns about this. With ezrouter this is handled by `services.ezrouter.wan.masqueradeOnly`, which is on by default.
 - **Custom `nftables`.** If the instance sets a complete `nftables` config, accept the forwarded ports yourself: `iifname "host0" tcp dport 8080 accept`.
 - **Host forward filtering.** The NixOS firewall accepts DNAT'd connections when `networking.firewall.filterForward` is on. A custom forward chain with policy drop needs `ct status dnat accept`.
 - **Connections from the host itself** are not forwarded unless `fromHost = true`, and never when made to `127.0.0.1`. The host can always connect to `veth.nsAddress` directly.

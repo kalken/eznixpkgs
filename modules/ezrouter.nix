@@ -196,13 +196,15 @@ in {
       };
       masqueradeOnly = mkOption {
         type = types.bool;
-        default = false;
+        default = true;
         description = ''
           Only masquerade traffic that leaves through the WAN interface. When
           false, traffic from the internal interfaces is masqueraded on every
           outgoing interface, which hides client addresses from anything the
-          router forwards to (e.g. eznetns nat port forwards). Always in effect
-          when wan.forwardPorts is used.
+          router forwards to (e.g. eznetns nat port forwards). Set to false if
+          internal clients also leave through another interface that needs
+          masquerading (a VPN tunnel on the router, a second uplink, PPPoE on
+          top of wan.device). Always in effect when wan.forwardPorts is used.
         '';
       };
       forwardPorts = mkOption {
