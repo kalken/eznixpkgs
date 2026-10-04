@@ -94,6 +94,7 @@ With custom settings, e.g. running 4 worker processes and listening on all inter
 - Instance services run inside `/run/netns/<name>` and are bound to `eznetns-<name>.service`; if the namespace goes down, the instance stops with it. The namespace can be of any kind.
 - Namespace-local DNS resolution is provided by bind-mounting `/etc/eznetns/<name>/resolv.conf` and `/etc/eznetns/<name>/nsswitch.conf` into the service, with nscd disabled via `/var/empty:/var/run/nscd`.
 - Each service (default and every instance) gets its own generated TOML config file passed via `--config`, built from the `settings` submodule — the underlying `ezsocks` binary defaults are not used.
+- Services run with `LimitNOFILE=65536`. Each proxied connection uses two file descriptors per worker, so the systemd default of 1024 would cap a worker at about 500 connections. Override with `systemd.services.ezsocks-<name>.serviceConfig.LimitNOFILE` (`ezsocks` for the default-namespace service).
 - `workerProcesses` > 1 requires `SO_REUSEPORT` support (Linux, *BSD, macOS; not Windows) — fine for NixOS.
 - Both the default service and instances can be active simultaneously, each with independent `settings`.
 

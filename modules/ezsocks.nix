@@ -1,7 +1,7 @@
 { config, lib, pkgs, options, ... }:
 let
   cfg = config.services.ezsocks;
-  inherit (lib) mkEnableOption mkIf mkOption types mkMerge nameValuePair mkAliasOptionModule;
+  inherit (lib) mkEnableOption mkIf mkOption types mkMerge nameValuePair mkAliasOptionModule mkDefault;
 
   legacyOptionNames = [ "enable" "user" "group" "settings" "instances" ];
   legacyOptionWarnings = lib.concatMap (name:
@@ -188,6 +188,9 @@ in {
               Group = cfg.group;
               ExecStart = "${pkgs.ezsocks}/bin/ezsocks --config ${mkConfigFile "default" cfg.settings}";
               Restart = "always";
+              # Every proxied connection uses two file descriptors, the systemd
+              # default of 1024 caps a worker at about 500 connections
+              LimitNOFILE = mkDefault 65536;
             };
             wantedBy = [ "multi-user.target" ];
           };
@@ -214,6 +217,9 @@ in {
                   "/var/empty:/var/run/nscd"
                 ];
                 Restart = "always";
+                # Every proxied connection uses two file descriptors, the systemd
+                # default of 1024 caps a worker at about 500 connections
+                LimitNOFILE = mkDefault 65536;
               };
               wantedBy = [ "multi-user.target" ];
             }
