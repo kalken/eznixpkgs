@@ -4,13 +4,13 @@ let
   ezsocks-src = pkgs.fetchFromGitHub {
     owner = "kalken";
     repo = "ezsocks";
-    rev = "12c0279a185b98eecc0624c65c3f4e3625282b43";          # master branch
-    hash = "sha256-5cqgK1xVuC9YaY+wJcz86aMuDtoOOGjZmqbp9nRQAI0=";
+    rev = "be10a4b8066daaf9ee6de9770b6f2a2cb82643de";          # master branch
+    hash = "sha256-RSJlU2gu5BzPqIjxnLtq7XnshIqOUWFmgopcOct1Z5w=";
   };
 in
 pkgs.stdenv.mkDerivation rec {
   pname = "ezsocks";
-  version = "unstable-2026-08-28";
+  version = "unstable-2026-10-04";
   src = ezsocks-src;
 
   dontUnpack = true;

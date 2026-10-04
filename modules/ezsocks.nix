@@ -84,6 +84,16 @@ let
           upstream connections.
         '';
       };
+      keepaliveIdle = mkOption {
+        type = types.ints.unsigned;
+        default = 300;
+        description = ''
+          Seconds a connection may be idle before TCP keepalive probes are
+          sent to the client and the upstream server. Connections whose peer
+          has disappeared without closing are dropped after about two more
+          minutes. Set to 0 to disable keepalive.
+        '';
+      };
     };
   };
 
@@ -98,6 +108,7 @@ let
     connection_attempt_delay = settings.connectionAttemptDelay;
     worker_processes = settings.workerProcesses;
     relay_buffer_size = settings.relayBufferSize;
+    keepalive_idle = settings.keepaliveIdle;
   };
 in {
   imports = map (name:

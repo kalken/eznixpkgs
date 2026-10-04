@@ -86,6 +86,7 @@ With custom settings, e.g. running 4 worker processes and listening on all inter
 | `connectionAttemptDelay` | float | `0.25` | `connection_attempt_delay` | Delay in seconds between successive connection attempts (RFC 8305 §8) |
 | `workerProcesses` | int or `"auto"` | `"auto"` | `worker_processes` | Number of worker processes sharing the listen port via `SO_REUSEPORT`; `"auto"` uses one per CPU core |
 | `relayBufferSize` | int | `131072` | `relay_buffer_size` | Buffer size, in bytes, used to relay data between downstream and upstream connections |
+| `keepaliveIdle` | int | `300` | `keepalive_idle` | Seconds of silence before TCP keepalive probes are sent to the client and the upstream server, so connections to peers that have disappeared are dropped; `0` disables keepalive |
 
 ## 📝 Notes
 
