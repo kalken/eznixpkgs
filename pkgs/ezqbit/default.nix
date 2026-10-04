@@ -3,13 +3,13 @@ let
   ezqbit-src = pkgs.fetchFromGitHub {
     owner = "kalken";
     repo = "ezqbit";
-    rev = "80dcceeff89e48e6219bd0e598b0bb69b5b97275";
-    hash = "sha256-Yd7D+j9W/VdkTg7IYnODdJ4dd5ZpLWQoI/j4x/o0CSU=";
+    rev = "28e3f084405fa56f45b2b2120de447d9a68dcfa0";
+    hash = "sha256-cGu+5PIgKex5sta03VXb8kU2Ic4GofvGpN1aVRHXW7o=";
   };
 in
 pkgs.stdenvNoCC.mkDerivation {
   pname = "ezqbit";
-  version = "unstable-2026-10-04";
+  version = "unstable-2026-10-05";
   src = ezqbit-src;
 
   # The repo only holds the theme CSS; build.sh combines it with the stock
