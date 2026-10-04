@@ -4,7 +4,7 @@ let
   ezsocks-src = pkgs.fetchFromGitHub {
     owner = "kalken";
     repo = "ezsocks";
-    rev = "be10a4b8066daaf9ee6de9770b6f2a2cb82643de";          # master branch
+    rev = "6f45eb4a6a8e1ade08ff2ee2bb820c43b52f05a4";          # master branch
     hash = "sha256-RSJlU2gu5BzPqIjxnLtq7XnshIqOUWFmgopcOct1Z5w=";
   };
 in
