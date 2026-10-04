@@ -144,11 +144,21 @@ let
 
   # Hash input for CONFIG_HASH. Instances without nat forwards hash the same
   # as before the nat options existed, so they are not restarted by them.
+  # WireGuard rotation runs in its own units and is never part of the hash.
   hashedConfig = instanceCfg:
-    if hasNat instanceCfg then instanceCfg
-    else removeAttrs instanceCfg [ "veth" ] // {
+    let base = removeAttrs instanceCfg [ "wireguard" ]; in
+    if hasNat instanceCfg then base
+    else removeAttrs base [ "veth" ] // {
       portForwards = map (fwd: removeAttrs fwd ([ "mode" ] ++ natOnlyOptions)) instanceCfg.portForwards;
     };
+
+  # WireGuard interfaces with config rotation, as { name, dev, rotate } entries
+  rotations = concatLists (mapAttrsToList (name: instanceCfg:
+    optionals instanceCfg.enable (mapAttrsToList (dev: wg: {
+      inherit name dev;
+      inherit (wg) rotate;
+    }) (filterAttrs (_: wg: wg.rotate != null) instanceCfg.wireguard))
+  ) cfg.instances);
 in
 {
   options.services.eznetns = {
@@ -325,6 +335,63 @@ in
             description = "Firewall configuration for this netns instance";
           };
 
+          wireguard = mkOption {
+            type = types.attrsOf (types.submodule {
+              options = {
+                rotate = mkOption {
+                  type = types.nullOr (types.submodule {
+                    options = {
+                      source = mkOption {
+                        type = types.str;
+                        default = "/root/.config/ezwgen";
+                        example = "/etc/nixos/ezwgen";
+                        description = ''
+                          Folder ezwgen reads from. It needs <source>/<netns>/<interface>.conf
+                          (settings such as the private key) and the folder
+                          <source>/<netns>/<interface>/ with templates to pick from.
+                          Read at runtime, so the private key is not copied to the nix store.
+                        '';
+                      };
+
+                      pattern = mkOption {
+                        type = types.str;
+                        default = ".";
+                        example = "se-";
+                        description = "Only pick templates whose file name contains this text";
+                      };
+
+                      interval = mkOption {
+                        type = types.nullOr types.str;
+                        default = null;
+                        example = "daily";
+                        description = ''
+                          How often to rotate, as a systemd calendar expression (see systemd.time(7)).
+                          If null there is no timer and the service only runs when started manually.
+                        '';
+                      };
+                    };
+                  });
+                  default = null;
+                  description = ''
+                    Generate a new config for this WireGuard interface with ezwgen (a random
+                    template merged with your settings) and reload the interface. Creates
+                    eznetns-<netns>-rotate-<interface>.service, and a timer if interval is set.
+                  '';
+                };
+              };
+            });
+            default = {};
+            description = "Per-interface WireGuard settings, keyed by interface name (the config file name without .conf)";
+            example = literalExpression ''
+              {
+                wg0-surf.rotate = {
+                  source = "/etc/nixos/ezwgen";
+                  interval = "daily";
+                };
+              }
+            '';
+          };
+
           veth = {
             hostInterface = mkOption {
               type = types.str;
@@ -458,8 +525,32 @@ in
           else []
         ) cfg.instances);
 
+        # WireGuard config rotation, also usable manually with systemctl start
+        rotateServices = map ({ name, dev, rotate }:
+          nameValuePair "eznetns-${name}-rotate-${dev}" ({
+            description = "New WireGuard config for ${dev} in ${name}";
+            unitConfig = {
+              Requires = [ "eznetns-${name}.service" ];
+              After = [ "eznetns-${name}.service" ];
+            };
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStartPre = escapeShellArgs [
+                "${cfg.package}/bin/ezwgen"
+                "--source" rotate.source
+                "--netns" name
+                "--dev" dev
+                "--pattern" rotate.pattern
+              ];
+              ExecStart = escapeShellArgs [ "${cfg.package}/bin/eznetns" name "wg.reload" dev ];
+            };
+          } // optionalAttrs (rotate.interval != null) {
+            startAt = rotate.interval;
+          })
+        ) rotations;
+
       in
-      (mainServices // netnsServices) // (listToAttrs forwardServices);
+      (mainServices // netnsServices) // (listToAttrs forwardServices) // (listToAttrs rotateServices);
 
     # Create sockets for port forwarding using systemd.sockets.<name>
     systemd.sockets = 

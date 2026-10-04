@@ -12,9 +12,27 @@ A NixOS module for managing isolated network namespaces with port forwarding, pe
 - Run existing systemd services inside network namespaces
 - Hash-based config change detection for automatic reloads
 - automatically setup wireguard files
+- Optional WireGuard config rotation with ezwgen, on a timer and on demand
 
 ## Wireguard
 eznetns can automatically setup wireguard files it finds in **/etc/eznetns/nameofnetns/wireguard/**. Put them there either manually or declaratively. Remember wireguard files are born in the default namespace and moved into the correct netns. Thus the names should be unique. A good naming standard is **wg0-nameofnetns.conf**. Any file not ending with extension .conf will be ignored.
+
+### Rotating the WireGuard config
+
+`ezwgen` builds a WireGuard config by picking a random template and merging your settings (private key and so on) into it. The module can run it for you and reload the interface:
+
+```nix
+services.eznetns.instances.surf.wireguard.wg0-surf.rotate = {
+  source = "/etc/nixos/ezwgen";   # default: /root/.config/ezwgen
+  interval = "daily";             # optional, leave out for manual only
+};
+```
+
+This expects `/etc/nixos/ezwgen/surf/wg0-surf.conf` (settings) and the folder `/etc/nixos/ezwgen/surf/wg0-surf/` (templates), and writes `/etc/eznetns/surf/wireguard/wg0-surf.conf`.
+
+- Change the config by hand at any time: `systemctl start eznetns-surf-rotate-wg0-surf`
+- See when the timer fires next: `systemctl list-timers 'eznetns-*'`
+- `source` is read at runtime and never copied to the nix store. If `/etc/nixos` is a git repository, keep the settings file with the private key out of it.
 
 ## Quick Start
 
@@ -129,6 +147,10 @@ Things to know:
 | `services.eznetns.instances.<name>.portForwards[].allowedSources` | list of str | [] | nat only: source addresses/networks to forward (empty = any) |
 | `services.eznetns.instances.<name>.portForwards[].fromHost` | bool | false | nat only: also forward connections made by the host itself |
 | `services.eznetns.instances.<name>.portForwards[].*` | any | - | proxy only: extra attrs passed to socketConfig |
+| `services.eznetns.instances.<name>.wireguard.<interface>.rotate` | null or submodule | null | Rotate this interface's config with ezwgen, see [Rotating the WireGuard config](#rotating-the-wireguard-config) |
+| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.source` | str | /root/.config/ezwgen | Folder with `<name>/<interface>.conf` and `<name>/<interface>/` templates |
+| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.pattern` | str | . | Only pick templates whose file name contains this text |
+| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.interval` | null or str | null | systemd calendar expression for the timer, null for manual only |
 | `services.eznetns.instances.<name>.veth.hostInterface` | str | ve-<name> | Host end of the veth pair (max 15 characters) |
 | `services.eznetns.instances.<name>.veth.nsInterface` | str | host0 | Netns end of the veth pair |
 | `services.eznetns.instances.<name>.veth.hostAddress` | str | 10.200.N.1 | Address of the host end (N derived from the instance name) |
