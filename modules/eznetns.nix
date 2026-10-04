@@ -343,8 +343,8 @@ in
                     options = {
                       source = mkOption {
                         type = types.str;
-                        default = "/etc/nixos/.secrets/ezwgen";
-                        example = "/root/.config/ezwgen";
+                        default = "/root/.config/ezwgen";
+                        example = "/var/lib/ezwgen";
                         description = ''
                           Folder ezwgen reads from. It needs <source>/<netns>/<interface>.conf
                           (settings such as the private key) and the folder
