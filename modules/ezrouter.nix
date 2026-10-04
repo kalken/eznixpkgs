@@ -194,6 +194,17 @@ in {
           DUID for DHCPv6. Useful for ISPs that bind leases to MAC address.
         '';
       };
+      masqueradeOnly = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Only masquerade traffic that leaves through the WAN interface. When
+          false, traffic from the internal interfaces is masqueraded on every
+          outgoing interface, which hides client addresses from anything the
+          router forwards to (e.g. eznetns nat port forwards). Always in effect
+          when wan.forwardPorts is used.
+        '';
+      };
       forwardPorts = mkOption {
         type = types.listOf (types.submodule {
           options = {
@@ -456,6 +467,9 @@ in {
     networking.firewall.logRefusedConnections = false;
     networking.nat.enable = true;
     networking.nat.internalInterfaces = cfg.internalInterfaces;
+    # Port forwards need the external interface to be set
+    networking.nat.externalInterface =
+      mkIf (cfg.wan.masqueradeOnly || cfg.wan.forwardPorts != []) cfg.wan.device;
     networking.nat.forwardPorts = map (rule: {
       sourcePort = rule.port;
       destination = "${rule.host}:${toString (if rule.hostPort != null then rule.hostPort else rule.port)}";

@@ -4,6 +4,151 @@ with lib;
 
 let
   cfg = config.services.eznetns;
+
+  # Routed ("nat") port forwards send packets over a veth pair instead of
+  # proxying them, so services in the netns see the real client address.
+  # Replies are steered back over the veth with a connection mark.
+  natMark = "0x657a";
+  natTable = "25978";
+
+  # Stable per-instance number (0-255) derived from the instance name
+  nameOctet = name:
+    (builtins.fromTOML "v = 0x${substring 0 2 (builtins.hashString "sha256" name)}").v;
+
+  natOnlyOptions = [ "interfaces" "allowedSources" "fromHost" ];
+
+  natForwards = instanceCfg: filter (fwd: fwd.mode == "nat") instanceCfg.portForwards;
+  hasNat = instanceCfg: instanceCfg.enable && natForwards instanceCfg != [];
+  natInstances = filterAttrs (_: hasNat) cfg.instances;
+
+  # Proxy forwards keep their position in portForwards as unit index
+  proxyForwards = instanceCfg:
+    filter (f: f.forward.mode == "proxy")
+      (imap0 (idx: forward: { inherit idx forward; }) instanceCfg.portForwards);
+
+  # "8080" or "192.168.1.10:8080" -> { address, port }, null if not parseable
+  parseListen = s:
+    let m = builtins.match "(([0-9.]+):)?([0-9]+)" s;
+    in if m == null then null else {
+      address = let a = elemAt m 1; in if a == "0.0.0.0" then null else a;
+      port = elemAt m 2;
+    };
+
+  # One entry per listen address of every nat forward
+  natRules = instanceCfg: concatMap (fwd:
+    let
+      mkRule = proto: s:
+        let l = parseListen s; in
+        optional (l != null) {
+          inherit proto fwd;
+          inherit (l) address port;
+          targetPort = if fwd.target != null then fwd.target else l.port;
+        };
+    in
+    concatMap (mkRule "tcp") fwd.listenStreams ++ concatMap (mkRule "udp") fwd.listenDatagrams
+  ) (natForwards instanceCfg);
+
+  nftSet = elems: "{ ${concatStringsSep ", " elems} }";
+
+  # DNAT rules in the host namespace
+  natHostRuleset = name: instanceCfg:
+    let
+      veth = instanceCfg.veth;
+      rules = natRules instanceCfg;
+      dnat = r: "${r.proto} dport ${r.port} dnat to ${veth.nsAddress}:${r.targetPort}";
+      preRule = r:
+        optionalString (r.fwd.interfaces != []) "iifname ${nftSet (map (i: ''"${i}"'') r.fwd.interfaces)} "
+        + optionalString (r.fwd.allowedSources != []) "ip saddr ${nftSet r.fwd.allowedSources} "
+        # Only traffic addressed to the host itself, never traffic routed through it
+        + (if r.address != null then "ip daddr ${r.address} " else "fib daddr type local ")
+        + dnat r;
+      outRule = r:
+        (if r.address != null then "ip daddr ${r.address} " else "ip daddr != 127.0.0.0/8 fib daddr type local ")
+        + dnat r;
+    in
+    pkgs.writeText "eznetns-${name}-nat-host.nft" (concatStringsSep "\n" (
+      [
+        "table ip eznetns-${name}"
+        "delete table ip eznetns-${name}"
+        "table ip eznetns-${name} {"
+        "\tchain prerouting {"
+        "\t\ttype nat hook prerouting priority -100; policy accept;"
+        "\t\tiifname \"${veth.hostInterface}\" return"
+      ]
+      ++ map (r: "\t\t${preRule r}") rules
+      ++ [
+        "\t}"
+        "\tchain output {"
+        "\t\ttype nat hook output priority -100; policy accept;"
+      ]
+      ++ map (r: "\t\t${outRule r}") (filter (r: r.fwd.fromHost) rules)
+      ++ [
+        "\t}"
+        "}"
+        ""
+      ]
+    ));
+
+  # Connection marking inside the netns, kept in its own table so it also
+  # works together with a custom nftables config
+  natNetnsRuleset = name: instanceCfg:
+    pkgs.writeText "eznetns-${name}-nat-netns.nft" ''
+      table ip eznetns-nat
+      delete table ip eznetns-nat
+      table ip eznetns-nat {
+      	chain prerouting {
+      		type filter hook prerouting priority mangle; policy accept;
+      		iifname "${instanceCfg.veth.nsInterface}" meta mark set ${natMark} ct mark set ${natMark}
+      	}
+      	chain output {
+      		type route hook output priority mangle; policy accept;
+      		ct mark ${natMark} meta mark set ${natMark}
+      	}
+      }
+    '';
+
+  natPath = makeBinPath [ pkgs.iproute2 pkgs.nftables pkgs.procps ];
+
+  # Idempotent, runs after both setup and reload
+  natUp = name: instanceCfg:
+    let veth = instanceCfg.veth; in
+    pkgs.writeShellScript "eznetns-${name}-nat-up" ''
+      set -eu
+      export PATH=${natPath}
+
+      if ! ip link show ${veth.hostInterface} >/dev/null 2>&1; then
+        ip link add ${veth.hostInterface} type veth peer name ${veth.nsInterface} netns ${name}
+      fi
+      ip addr replace ${veth.hostAddress}/${toString veth.prefixLength} dev ${veth.hostInterface}
+      ip link set ${veth.hostInterface} up
+      ip -n ${name} addr replace ${veth.nsAddress}/${toString veth.prefixLength} dev ${veth.nsInterface}
+      ip -n ${name} link set ${veth.nsInterface} up
+
+      # Replies to forwarded connections leave through the veth, everything
+      # else keeps using the main routing table of the netns
+      ip netns exec ${name} sysctl -q -w net.ipv4.conf.all.src_valid_mark=1
+      ip -n ${name} rule del fwmark ${natMark} lookup ${natTable} 2>/dev/null || true
+      ip -n ${name} rule add fwmark ${natMark} lookup ${natTable}
+      ip -n ${name} route replace default via ${veth.hostAddress} dev ${veth.nsInterface} table ${natTable}
+
+      ip netns exec ${name} nft -f ${natNetnsRuleset name instanceCfg}
+      nft -f ${natHostRuleset name instanceCfg}
+    '';
+
+  natDown = name: instanceCfg:
+    pkgs.writeShellScript "eznetns-${name}-nat-down" ''
+      export PATH=${natPath}
+      nft delete table ip eznetns-${name} 2>/dev/null || true
+      ip link del ${instanceCfg.veth.hostInterface} 2>/dev/null || true
+    '';
+
+  # Hash input for CONFIG_HASH. Instances without nat forwards hash the same
+  # as before the nat options existed, so they are not restarted by them.
+  hashedConfig = instanceCfg:
+    if hasNat instanceCfg then instanceCfg
+    else removeAttrs instanceCfg [ "veth" ] // {
+      portForwards = map (fwd: removeAttrs fwd ([ "mode" ] ++ natOnlyOptions)) instanceCfg.portForwards;
+    };
 in
 {
   options.services.eznetns = {
@@ -16,7 +161,7 @@ in
     };
 
     instances = mkOption {
-      type = types.attrsOf (types.submodule {
+      type = types.attrsOf (types.submodule ({ name, ... }: {
         options = {
           enable = mkEnableOption "this eznetns instance";
 
@@ -39,13 +184,46 @@ in
                 };
 
                 target = mkOption {
-                  type = types.str;
-                  description = "Target address and port in the netns (e.g., '127.0.0.1:3000')";
+                  type = types.nullOr types.str;
+                  default = null;
+                  description = ''
+                    Mode "proxy": target address and port in the netns (e.g., '127.0.0.1:3000'), required.
+                    Mode "nat": target port on the veth address of the netns (e.g., '3000'), defaults to the listen port.
+                  '';
+                };
+
+                mode = mkOption {
+                  type = types.enum [ "proxy" "nat" ];
+                  default = "proxy";
+                  description = ''
+                    "proxy" relays connections with systemd-socket-proxyd, the service sees them coming from 127.0.0.1.
+                    "nat" routes them into the netns over a veth pair (IPv4 only), the service sees the real client address.
+                  '';
+                };
+
+                interfaces = mkOption {
+                  type = types.listOf types.str;
+                  default = [];
+                  description = "Mode \"nat\" only: host interfaces to forward from. Empty means all interfaces.";
+                  example = [ "br0" "vlan30" ];
+                };
+
+                allowedSources = mkOption {
+                  type = types.listOf types.str;
+                  default = [];
+                  description = "Mode \"nat\" only: source addresses or networks to forward. Empty means any source.";
+                  example = [ "192.168.30.0/24" ];
+                };
+
+                fromHost = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = "Mode \"nat\" only: also forward connections the host itself makes to its own (non-loopback) addresses.";
                 };
               };
             });
             default = [];
-            description = "Port forwards for this netns instance. Any additional options (like BindToDevice) will be passed to socketConfig.";
+            description = "Port forwards for this netns instance. For proxy forwards, any additional options (like BindToDevice) will be passed to socketConfig.";
           };
 
           nftables = mkOption {
@@ -146,8 +324,42 @@ in
             default = {};
             description = "Firewall configuration for this netns instance";
           };
+
+          veth = {
+            hostInterface = mkOption {
+              type = types.str;
+              default = "ve-${name}";
+              description = "Name of the veth interface in the host namespace (at most 15 characters)";
+            };
+
+            nsInterface = mkOption {
+              type = types.str;
+              default = "host0";
+              description = "Name of the veth interface inside the netns";
+            };
+
+            hostAddress = mkOption {
+              type = types.str;
+              default = "10.200.${toString (nameOctet name)}.1";
+              defaultText = literalExpression ''"10.200.<derived from instance name>.1"'';
+              description = "IPv4 address of the host end of the veth pair";
+            };
+
+            nsAddress = mkOption {
+              type = types.str;
+              default = "10.200.${toString (nameOctet name)}.2";
+              defaultText = literalExpression ''"10.200.<derived from instance name>.2"'';
+              description = "IPv4 address of the netns end of the veth pair. Forwards with mode \"nat\" are sent to this address.";
+            };
+
+            prefixLength = mkOption {
+              type = types.ints.between 1 30;
+              default = 30;
+              description = "Prefix length of the veth addresses";
+            };
+          };
         };
-      });
+      }));
       default = {};
       description = "Named eznetns instances to create";
     };
@@ -167,12 +379,6 @@ in
     systemd.services = 
       let
         mainServices = mapAttrs' (name: instanceCfg: 
-          let
-            # Get list of socket names for this instance
-            socketNames = if instanceCfg.enable && instanceCfg.portForwards != [] then
-              imap0 (idx: _: "eznetns-${name}-forward-${toString idx}.socket") instanceCfg.portForwards
-            else [];
-          in
           nameValuePair "eznetns-${name}" {
             enable = instanceCfg.enable;
             description = "eznetns instance: ${name}";
@@ -180,7 +386,7 @@ in
             # Add environment variable with hash of configuration
             # This forces systemd to see the service as changed when config changes
             environment = {
-              CONFIG_HASH = builtins.hashString "sha256" (builtins.toJSON instanceCfg);
+              CONFIG_HASH = builtins.hashString "sha256" (builtins.toJSON (hashedConfig instanceCfg));
             };
             
             unitConfig = {
@@ -193,6 +399,15 @@ in
               ExecReload = "${cfg.package}/bin/eznetns ${name} reload";
               ExecStop = "${cfg.package}/bin/eznetns ${name} remove";
               RemainAfterExit = true;
+            } // optionalAttrs (hasNat instanceCfg) {
+              # The veth and nat rules are set up after the netns exists, and
+              # again after a reload since that flushes the netns ruleset
+              ExecStartPost = natUp name instanceCfg;
+              ExecReload = [
+                "${cfg.package}/bin/eznetns ${name} reload"
+                (natUp name instanceCfg)
+              ];
+              ExecStopPost = natDown name instanceCfg;
             };
             
             wantedBy = [ "multi-user.target" ];
@@ -222,8 +437,8 @@ in
 
         # Port forwarding services
         forwardServices = flatten (mapAttrsToList (name: instanceCfg:
-          if instanceCfg.enable && instanceCfg.portForwards != [] then
-            imap0 (idx: forward:
+          if instanceCfg.enable then
+            map ({ idx, forward }:
               nameValuePair "eznetns-${name}-forward-${toString idx}" {
                 description = "Port forward proxy for ${name} (-> ${forward.target})";
                 unitConfig = {
@@ -239,7 +454,7 @@ in
                   RestartSec = 5;
                 };
               }
-            ) instanceCfg.portForwards
+            ) (proxyForwards instanceCfg)
           else []
         ) cfg.instances);
 
@@ -250,11 +465,11 @@ in
     systemd.sockets = 
       let
         forwardSockets = flatten (mapAttrsToList (name: instanceCfg:
-          if instanceCfg.enable && instanceCfg.portForwards != [] then
-            imap0 (idx: forward:
+          if instanceCfg.enable then
+            map ({ idx, forward }:
               let
                 # Extract socket-specific options (listenStreams, listenDatagrams, target)
-                socketSpecificOptions = [ "listenStreams" "listenDatagrams" "target" ];
+                socketSpecificOptions = [ "listenStreams" "listenDatagrams" "target" "mode" ] ++ natOnlyOptions;
                 # Everything else goes into socketConfig
                 extraConfig = removeAttrs forward socketSpecificOptions;
               in
@@ -279,7 +494,7 @@ in
                   # wantedBy multi-user.target to avoid cycle
                 };
               }
-            ) instanceCfg.portForwards
+            ) (proxyForwards instanceCfg)
           else []
         ) cfg.instances);
       in
@@ -307,6 +522,10 @@ in
                 "nftables.conf" = {
                   content = 
                     let
+                      # Accept nat forwards arriving over the veth
+                      natInputRules = concatStrings (unique (map (r:
+                        "\n\t\tiifname \"${instanceCfg.veth.nsInterface}\" ${r.proto} dport ${r.targetPort} accept"
+                      ) (natRules instanceCfg)));
                       extraInputRules = if instanceCfg.firewall.extraInputRules != "" 
                                         then "\n\t\t" + instanceCfg.firewall.extraInputRules 
                                         else "";
@@ -323,7 +542,7 @@ in
                       		ct state invalid drop
                       		icmp type echo-request accept
                       		icmpv6 type != { nd-redirect, 139 } accept
-                      		iifname "lo" accept${extraInputRules}
+                      		iifname "lo" accept${natInputRules}${extraInputRules}
                       		reject with icmp port-unreachable
                       		reject with icmpv6 port-unreachable
                       	}
@@ -370,10 +589,69 @@ in
       in
       foldr (a: b: a // b) {} configFiles;
 
-    # Assertions to ensure valid netnsService mappings
-    assertions = mapAttrsToList (serviceName: netnsName: {
-      assertion = hasAttr netnsName cfg.instances;
-      message = "netnsService: Service '${serviceName}' references undefined eznetns instance '${netnsName}'";
-    }) cfg.netnsService;
+    # Forwarding between the host interfaces and the veth pairs
+    boot.kernel.sysctl = mkIf (natInstances != {}) {
+      "net.ipv4.conf.all.forwarding" = mkDefault true;
+      "net.ipv4.conf.default.forwarding" = mkDefault true;
+    };
+
+    warnings =
+      let nat = config.networking.nat; in
+      optional (natInstances != {} && nat.enable && nat.externalInterface == null && nat.internalInterfaces != [])
+        "services.eznetns: networking.nat masquerades everything coming from ${concatStringsSep ", " nat.internalInterfaces}, so nat port forwards will not see the client addresses of those interfaces. Set networking.nat.externalInterface (services.ezrouter.wan.masqueradeOnly = true when using ezrouter).";
+
+    assertions =
+      # Assertions to ensure valid netnsService mappings
+      mapAttrsToList (serviceName: netnsName: {
+        assertion = hasAttr netnsName cfg.instances;
+        message = "netnsService: Service '${serviceName}' references undefined eznetns instance '${netnsName}'";
+      }) cfg.netnsService
+      # Assertions on port forwards
+      ++ flatten (mapAttrsToList (name: instanceCfg:
+        imap0 (idx: fwd:
+          let
+            where = "services.eznetns.instances.${name}.portForwards[${toString idx}]";
+            listens = fwd.listenStreams ++ fwd.listenDatagrams;
+            extraAttrs = attrNames (removeAttrs fwd ([ "listenStreams" "listenDatagrams" "target" "mode" ] ++ natOnlyOptions));
+          in
+          if fwd.mode == "proxy" then [
+            {
+              assertion = fwd.target != null;
+              message = "${where}: target is required for proxy forwards";
+            }
+            {
+              assertion = fwd.interfaces == [] && fwd.allowedSources == [] && !fwd.fromHost;
+              message = "${where}: interfaces, allowedSources and fromHost are only supported with mode = \"nat\"";
+            }
+          ] else [
+            {
+              assertion = listens != [] && all (s: parseListen s != null) listens;
+              message = "${where}: nat forwards need at least one listen address of the form \"port\" or \"ipv4:port\"";
+            }
+            {
+              assertion = fwd.target == null || builtins.match "[0-9]+" fwd.target != null;
+              message = "${where}: target of a nat forward is a port on the veth address of the netns (e.g. \"8080\"), not an address";
+            }
+            {
+              assertion = extraAttrs == [];
+              message = "${where}: socket options (${concatStringsSep ", " extraAttrs}) are not supported with mode = \"nat\"";
+            }
+          ]
+        ) instanceCfg.portForwards
+      ) cfg.instances)
+      # Assertions on the veth pairs of instances with nat forwards
+      ++ mapAttrsToList (name: instanceCfg: {
+        assertion = stringLength instanceCfg.veth.hostInterface <= 15;
+        message = "services.eznetns.instances.${name}.veth.hostInterface: '${instanceCfg.veth.hostInterface}' is longer than 15 characters, set a shorter name";
+      }) natInstances
+      ++ [
+        (let
+          addrs = concatMap (i: [ i.veth.hostAddress i.veth.nsAddress ]) (attrValues natInstances);
+          names = map (i: i.veth.hostInterface) (attrValues natInstances);
+        in {
+          assertion = allUnique addrs && allUnique names;
+          message = "services.eznetns: instances with nat forwards need distinct veth addresses and host interface names, set instances.<name>.veth explicitly";
+        })
+      ];
   };
 }
