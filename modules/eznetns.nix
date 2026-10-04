@@ -343,8 +343,8 @@ in
                     options = {
                       source = mkOption {
                         type = types.str;
-                        default = "/root/.config/ezwgen";
-                        example = "/etc/nixos/ezwgen";
+                        default = "/etc/nixos/.secrets/ezwgen";
+                        example = "/root/.config/ezwgen";
                         description = ''
                           Folder ezwgen reads from. It needs <source>/<netns>/<interface>.conf
                           (settings such as the private key) and the folder
@@ -385,7 +385,6 @@ in
             example = literalExpression ''
               {
                 wg0-surf.rotate = {
-                  source = "/etc/nixos/ezwgen";
                   interval = "daily";
                 };
               }

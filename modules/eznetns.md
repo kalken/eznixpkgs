@@ -23,16 +23,16 @@ eznetns can automatically setup wireguard files it finds in **/etc/eznetns/nameo
 
 ```nix
 services.eznetns.instances.surf.wireguard.wg0-surf.rotate = {
-  source = "/etc/nixos/ezwgen";   # default: /root/.config/ezwgen
-  interval = "daily";             # optional, leave out for manual only
+  interval = "daily";                        # optional, leave out for manual only
+  # source = "/etc/nixos/.secrets/ezwgen";   # the default
 };
 ```
 
-This expects `/etc/nixos/ezwgen/surf/wg0-surf.conf` (settings) and the folder `/etc/nixos/ezwgen/surf/wg0-surf/` (templates), and writes `/etc/eznetns/surf/wireguard/wg0-surf.conf`.
+This expects `/etc/nixos/.secrets/ezwgen/surf/wg0-surf.conf` (settings) and the folder `/etc/nixos/.secrets/ezwgen/surf/wg0-surf/` (templates), and writes `/etc/eznetns/surf/wireguard/wg0-surf.conf`.
 
 - Change the config by hand at any time: `systemctl start eznetns-surf-rotate-wg0-surf`
 - See when the timer fires next: `systemctl list-timers 'eznetns-*'`
-- `source` is read at runtime and never copied to the nix store. If `/etc/nixos` is a git repository, keep the settings file with the private key out of it.
+- `source` is read at runtime and never copied to the nix store. If `/etc/nixos` is a git repository, keep `.secrets/` out of it (`.gitignore`). Note that this default differs from ezwgen's own (`/root/.config/ezwgen`).
 
 ## Quick Start
 
@@ -148,7 +148,7 @@ Things to know:
 | `services.eznetns.instances.<name>.portForwards[].fromHost` | bool | false | nat only: also forward connections made by the host itself |
 | `services.eznetns.instances.<name>.portForwards[].*` | any | - | proxy only: extra attrs passed to socketConfig |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate` | null or submodule | null | Rotate this interface's config with ezwgen, see [Rotating the WireGuard config](#rotating-the-wireguard-config) |
-| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.source` | str | /root/.config/ezwgen | Folder with `<name>/<interface>.conf` and `<name>/<interface>/` templates |
+| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.source` | str | /etc/nixos/.secrets/ezwgen | Folder with `<name>/<interface>.conf` and `<name>/<interface>/` templates |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.pattern` | str | . | Only pick templates whose file name contains this text |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.interval` | null or str | null | systemd calendar expression for the timer, null for manual only |
 | `services.eznetns.instances.<name>.veth.hostInterface` | str | ve-<name> | Host end of the veth pair (max 15 characters) |
