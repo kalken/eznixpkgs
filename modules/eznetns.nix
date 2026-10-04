@@ -595,6 +595,15 @@ in
       "net.ipv4.conf.default.forwarding" = mkDefault true;
     };
 
+    # systemd-networkd ships a default config for container interfaces named
+    # ve-* that would replace the veth addresses, so keep its hands off
+    systemd.network.networks = mapAttrs' (name: instanceCfg:
+      nameValuePair "10-eznetns-${name}" {
+        matchConfig.Name = instanceCfg.veth.hostInterface;
+        linkConfig.Unmanaged = true;
+      }
+    ) natInstances;
+
     warnings =
       let nat = config.networking.nat; in
       optional (natInstances != {} && nat.enable && nat.externalInterface == null && nat.internalInterfaces != [])

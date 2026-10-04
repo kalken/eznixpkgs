@@ -102,6 +102,7 @@ What an instance with `nat` forwards sets up:
 - Connection marking in the netns (table `ip eznetns-nat`) and a routing rule, so replies to forwarded connections go back over the veth. Everything the service initiates itself keeps using the normal routes of the netns (the VPN).
 - Accept rules for the forwarded ports in the generated netns firewall.
 - IPv4 forwarding on the host (`net.ipv4.conf.all.forwarding`).
+- A systemd-networkd config that marks the host end of the veth as unmanaged, so networkd's built-in rules for `ve-*` container interfaces do not replace its addresses.
 
 Things to know:
 
