@@ -76,6 +76,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `bridge.enableDHCPv4` | bool | `true` | Enable DHCPv4 server on bridge |
 | `bridge.enableDHCPv6` | bool | `true` | Enable DHCPv6 Prefix Delegation on bridge |
 | `bridge.enableDNS` | bool | `true` | Advertise router as DNS server via DHCP on bridge |
+| `bridge.staticLeases` | list of submodule | `[]` | Clients that always get the same DHCPv4 address. See [Static Leases](#-static-leases) below. |
 
 ### VLAN Settings (`services.ezrouter.vlan.<name>`)
 
@@ -91,6 +92,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `vlan.<name>.enableDHCPv4` | bool | `true` | Enable DHCPv4 server on this VLAN. |
 | `vlan.<name>.enableDHCPv6` | bool | `true` | Enable DHCPv6 Prefix Delegation + RA on this VLAN. |
 | `vlan.<name>.enableDNS` | bool | `true` | Advertise router as DNS server via DHCP on this VLAN. |
+| `vlan.<name>.staticLeases` | list of submodule | `[]` | Clients that always get the same DHCPv4 address on this VLAN. See [Static Leases](#-static-leases) below. |
 | `vlan.<name>.allowedTCPPorts` | list of port | `[]` | TCP ports to open on this VLAN interface. Merged with `vlanFirewallPorts.allowedTCPPorts`. |
 | `vlan.<name>.allowedUDPPorts` | list of port | `[]` | UDP ports to open on this VLAN interface. Merged with `vlanFirewallPorts.allowedUDPPorts`. |
 
@@ -122,6 +124,29 @@ vlan.tap = {
   allowedTCPPorts = [ 139 445 1081 1082 ];  # SMB + proxy ports
 };
 ```
+
+## 📌 Static Leases
+
+Gives a client the same IPv4 address every time, based on its MAC address. Each entry in `bridge.staticLeases` or `vlan.<name>.staticLeases` supports:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mac` | str | *required* | MAC address of the client |
+| `address` | str | *required* | IPv4 address it always gets (inside that interface's network) |
+| `name` | str or null | `null` | Host name the router's DNS answers with this address |
+
+```nix
+bridge.staticLeases = [
+  { mac = "aa:bb:cc:dd:ee:01"; address = "192.168.1.50"; }
+  { mac = "aa:bb:cc:dd:ee:02"; address = "192.168.1.51"; name = "printer.lan"; }
+];
+
+vlan.iot.staticLeases = [
+  { mac = "aa:bb:cc:dd:ee:03"; address = "192.168.30.20"; name = "camera.lan"; }
+];
+```
+
+A client picks up its fixed address the next time it renews its lease; reconnect it to force that. Names are served from the router's hosts file, so they resolve for every client that uses the router as DNS server.
 
 ## 🔓 Open Ports
 

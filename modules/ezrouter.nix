@@ -50,8 +50,50 @@ with lib; let
         PoolOffset = 10;
         DNS = if vlan.enableDNS then "_server_address" else "";
       };
-    };
+    } // mkStaticLeases vlan.staticLeases;
   };
+
+  # Fixed DHCPv4 addresses, shared by the bridge and every VLAN
+  staticLeasesOption = mkOption {
+    type = types.listOf (types.submodule {
+      options = {
+        mac = mkOption {
+          type = types.str;
+          example = "aa:bb:cc:dd:ee:ff";
+          description = "MAC address of the client";
+        };
+        address = mkOption {
+          type = types.str;
+          example = "192.168.1.50";
+          description = "IPv4 address the client always gets";
+        };
+        name = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = "laptop.lan";
+          description = "Optional host name the router's DNS answers with this address";
+        };
+      };
+    });
+    default = [];
+    description = "Clients that always get the same address from the DHCPv4 server on this interface";
+    example = literalExpression ''
+      [
+        { mac = "aa:bb:cc:dd:ee:01"; address = "192.168.1.50"; }
+        { mac = "aa:bb:cc:dd:ee:02"; address = "192.168.1.51"; name = "printer.lan"; }
+      ]
+    '';
+  };
+
+  mkStaticLeases = leases: optionalAttrs (leases != []) {
+    dhcpServerStaticLeases = map (lease: {
+      MACAddress = lease.mac;
+      Address = lease.address;
+    }) leases;
+  };
+
+  allStaticLeases = cfg.bridge.staticLeases
+    ++ concatMap (vlan: vlan.staticLeases) (attrValues cfg.vlan);
 
   # Generate all VLAN netdevs and networks dynamically
   vlanNetdevs = concatMapAttrs mkVlanNetdev cfg.vlan;
@@ -146,6 +188,7 @@ in {
         default = true;
         description = "Enable DNS server on the bridge interface";
       };
+      staticLeases = staticLeasesOption;
     };
 
     wan = {
@@ -371,6 +414,8 @@ in {
             description = "Advertise this router as DNS server via DHCP";
           };
 
+          staticLeases = staticLeasesOption;
+
           allowedTCPPorts = mkOption {
             type = types.listOf types.port;
             default = [];
@@ -593,10 +638,26 @@ in {
             PoolOffset = 10;
             DNS = if cfg.bridge.enableDNS then "_server_address" else "";
           };
-        };
+        } // mkStaticLeases cfg.bridge.staticLeases;
       }
       # 60- VLAN networks
       vlanNetworks
+    ];
+
+    # Names of static leases, answered by the DNS server from the hosts file
+    networking.hosts = mkMerge (map (lease: { ${lease.address} = [ lease.name ]; })
+      (filter (lease: lease.name != null) allStaticLeases));
+
+    assertions = [
+      {
+        assertion = all (lease: builtins.match "([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" lease.mac != null) allStaticLeases;
+        message = "services.ezrouter: staticLeases mac must look like \"aa:bb:cc:dd:ee:ff\"";
+      }
+      {
+        assertion = allUnique (map (lease: lease.address) allStaticLeases)
+          && allUnique (map (lease: toLower lease.mac) allStaticLeases);
+        message = "services.ezrouter: a mac or address is used by more than one entry in staticLeases";
+      }
     ];
 
     # Open ports on VLAN interfaces (global vlanFirewallPorts merged with per-VLAN allowedTCPPorts/allowedUDPPorts)
