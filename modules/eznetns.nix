@@ -21,16 +21,26 @@ let
   hasNat = instanceCfg: instanceCfg.enable && natForwards instanceCfg != [];
   natInstances = filterAttrs (_: hasNat) cfg.instances;
 
-  # Source routing sends everything selected clients forward through the
-  # netns, over the same veth pair the nat forwards use.
-  hasRoute = instanceCfg: instanceCfg.enable && instanceCfg.route.sources != [];
+  # Routing sends everything selected clients forward (IPv4 and IPv6) through
+  # the netns, over the same veth pair the nat forwards use. Clients are
+  # selected by the interface they arrive on or by their MAC address.
+  hasRoute = instanceCfg: instanceCfg.enable
+    && (instanceCfg.route.interfaces != [] || instanceCfg.route.macs != []);
   routeInstances = filterAttrs (_: hasRoute) cfg.instances;
   hasVeth = instanceCfg: hasNat instanceCfg || hasRoute instanceCfg;
   vethInstances = filterAttrs (_: hasVeth) cfg.instances;
 
-  # Routing table and rule priority on the host, per instance
+  # Routing table, rule priority and packet mark on the host, per instance
   routeTable = name: toString (25979 + nameOctet name);
   routePref = name: 20000 + 2 * nameOctet name;
+  routeMark = name: toString (1702494208 + nameOctet name); # 0x657a0000 + n
+
+  # nftables expressions matching the routed clients of an instance
+  routeSelectors = instanceCfg:
+    optional (instanceCfg.route.interfaces != [])
+      "iifname ${nftSet (map (i: ''"${i}"'') instanceCfg.route.interfaces)}"
+    ++ optional (instanceCfg.route.macs != [])
+      "ether saddr ${nftSet (map toLower instanceCfg.route.macs)}";
 
   # Proxy forwards keep their position in portForwards as unit index
   proxyForwards = instanceCfg:
@@ -105,13 +115,13 @@ let
   natNetnsRuleset = name: instanceCfg:
     let nsIf = instanceCfg.veth.nsInterface; in
     if hasRoute instanceCfg then
-    # With source routing the netns also forwards: traffic from the veth is
+    # With routing the netns also forwards: traffic from the veth is
     # masqueraded out through the tunnel, and its replies are marked so they
-    # are routed back over the veth.
-    pkgs.writeText "eznetns-${name}-nat-netns.nft" ''
-      table ip eznetns-nat
-      delete table ip eznetns-nat
-      table ip eznetns-nat {
+    # are routed back over the veth. Same rules for IPv4 and IPv6.
+    pkgs.writeText "eznetns-${name}-nat-netns.nft" (concatMapStrings (family: ''
+      table ${family} eznetns-nat
+      delete table ${family} eznetns-nat
+      table ${family} eznetns-nat {
       	chain prerouting {
       		type filter hook prerouting priority mangle; policy accept;
       		iifname "${nsIf}" ct mark set ${natMark}
@@ -130,7 +140,7 @@ let
       		iifname "${nsIf}" oifname != "${nsIf}" masquerade
       	}
       }
-    ''
+    '') [ "ip" "ip6" ])
     else
     pkgs.writeText "eznetns-${name}-nat-netns.nft" ''
       table ip eznetns-nat
@@ -158,19 +168,31 @@ let
       # Marked replies must not be judged by the reverse path filter when
       # the netns forwards, so it is switched off on the veth instead
       srcValidMark = if hasRoute instanceCfg then "0" else "1";
+      mark = routeMark name;
       routeUp = optionalString (hasRoute instanceCfg) ("\n" + ''
 
-        # Source routing: the netns forwards, and the host sends the selected
-        # sources to it. The first rule keeps their traffic to local networks
-        # on the main table, the second sends everything else to the netns.
-        ip netns exec ${name} sysctl -q -w net.ipv4.ip_forward=1 net.ipv4.conf.all.rp_filter=0 net.ipv4.conf.${veth.nsInterface}.rp_filter=0
+        # Routing: the netns forwards, and the host sends packets carrying
+        # the instance mark to it. The first rule keeps traffic to local
+        # networks on the main table, the second sends the rest to the netns.
+        ip netns exec ${name} sysctl -q -w net.ipv4.ip_forward=1 net.ipv4.conf.all.rp_filter=0 net.ipv4.conf.${veth.nsInterface}.rp_filter=0 net.ipv6.conf.all.forwarding=1
         sysctl -q -w net.ipv4.conf.${veth.hostInterface}.rp_filter=0
-        while ip rule del pref ${toString pref} 2>/dev/null; do :; done
-        while ip rule del pref ${toString (pref + 1)} 2>/dev/null; do :; done
+
+        ip -6 addr replace ${veth.hostAddress6}/64 dev ${veth.hostInterface} nodad
+        ip -n ${name} -6 addr replace ${veth.nsAddress6}/64 dev ${veth.nsInterface} nodad
+        ip -n ${name} -6 rule del fwmark ${natMark} lookup ${natTable} 2>/dev/null || true
+        ip -n ${name} -6 rule add fwmark ${natMark} lookup ${natTable}
+        ip -n ${name} -6 route replace default via ${veth.hostAddress6} dev ${veth.nsInterface} table ${natTable}
+
+        for family in -4 -6; do
+          while ip $family rule del pref ${toString pref} 2>/dev/null; do :; done
+          while ip $family rule del pref ${toString (pref + 1)} 2>/dev/null; do :; done
+        done
         ip route replace default via ${veth.nsAddress} dev ${veth.hostInterface} table ${table}
-        ${concatMapStringsSep "\n" (src: ''
-          ip rule add pref ${toString pref} from ${src} lookup main suppress_prefixlength 0
-          ip rule add pref ${toString (pref + 1)} from ${src} lookup ${table}'') instanceCfg.route.sources}'');
+        ip -6 route replace default via ${veth.nsAddress6} dev ${veth.hostInterface} table ${table}
+        for family in -4 -6; do
+          ip $family rule add pref ${toString pref} fwmark ${mark} lookup main suppress_prefixlength 0
+          ip $family rule add pref ${toString (pref + 1)} fwmark ${mark} lookup ${table}
+        done'');
     in
     pkgs.writeShellScript "eznetns-${name}-nat-up" ''
       set -eu
@@ -199,9 +221,11 @@ let
     let
       pref = routePref name;
       routeDown = optionalString (hasRoute instanceCfg) ("\n" + ''
-        while ip rule del pref ${toString pref} 2>/dev/null; do :; done
-        while ip rule del pref ${toString (pref + 1)} 2>/dev/null; do :; done
-        ip route flush table ${routeTable name} 2>/dev/null || true'');
+        for family in -4 -6; do
+          while ip $family rule del pref ${toString pref} 2>/dev/null; do :; done
+          while ip $family rule del pref ${toString (pref + 1)} 2>/dev/null; do :; done
+          ip $family route flush table ${routeTable name} 2>/dev/null || true
+        done'');
     in
     pkgs.writeShellScript "eznetns-${name}-nat-down" ''
       export PATH=${natPath}
@@ -217,11 +241,14 @@ let
       base = removeAttrs instanceCfg ([ "wireguard" ]
         ++ optional (!hasRoute instanceCfg) "route"
         ++ optional (!hasVeth instanceCfg) "veth");
+      stripVeth6 = c: if hasVeth instanceCfg && !hasRoute instanceCfg
+        then c // { veth = removeAttrs c.veth [ "hostAddress6" "nsAddress6" ]; }
+        else c;
     in
-    if hasNat instanceCfg then base
+    stripVeth6 (if hasNat instanceCfg then base
     else base // {
       portForwards = map (fwd: removeAttrs fwd ([ "mode" ] ++ natOnlyOptions)) instanceCfg.portForwards;
-    };
+    });
 
   # WireGuard interfaces with config rotation, as { name, dev, rotate } entries
   rotations = concatLists (mapAttrsToList (name: instanceCfg:
@@ -463,17 +490,24 @@ in
           };
 
           route = {
-            sources = mkOption {
+            interfaces = mkOption {
               type = types.listOf types.str;
               default = [];
-              example = [ "192.168.1.50" "192.168.30.0/24" ];
+              example = [ "vpn" ];
               description = ''
-                IPv4 addresses or networks whose forwarded traffic is routed through
-                this netns instead of the normal default route. Traffic to the host
-                itself and to its directly connected networks is not affected. The
-                sources are blocked from every other way out, also while the netns
-                is down. IPv4 only, and requires the nftables firewall with
-                networking.firewall.filterForward.
+                Host interfaces (for example a VLAN) whose clients are routed through
+                this netns: everything they send that the host would forward, IPv4
+                and IPv6, leaves through the netns instead of the normal default route.
+              '';
+            };
+
+            macs = mkOption {
+              type = types.listOf types.str;
+              default = [];
+              example = [ "aa:bb:cc:dd:ee:ff" ];
+              description = ''
+                MAC addresses of single clients to route through this netns, IPv4
+                and IPv6, whichever interface they are on.
               '';
             };
           };
@@ -503,6 +537,20 @@ in
               default = "10.200.${toString (nameOctet name)}.2";
               defaultText = literalExpression ''"10.200.<derived from instance name>.2"'';
               description = "IPv4 address of the netns end of the veth pair. Forwards with mode \"nat\" are sent to this address.";
+            };
+
+            hostAddress6 = mkOption {
+              type = types.str;
+              default = "fd7a:657a:${toLower (toHexString (nameOctet name))}::1";
+              defaultText = literalExpression ''"fd7a:657a:<derived from instance name>::1"'';
+              description = "IPv6 address of the host end of the veth pair, only used with route.*";
+            };
+
+            nsAddress6 = mkOption {
+              type = types.str;
+              default = "fd7a:657a:${toLower (toHexString (nameOctet name))}::2";
+              defaultText = literalExpression ''"fd7a:657a:<derived from instance name>::2"'';
+              description = "IPv6 address of the netns end of the veth pair, only used with route.*";
             };
 
             prefixLength = mkOption {
@@ -706,7 +754,7 @@ in
                       extraInputRules = if instanceCfg.firewall.extraInputRules != "" 
                                         then "\n\t\t" + instanceCfg.firewall.extraInputRules 
                                         else "";
-                      # Let routed sources out through the netns
+                      # Let routed clients out through the netns
                       routeForwardRules = optionalString (hasRoute instanceCfg)
                         "\n\t\tiifname \"${instanceCfg.veth.nsInterface}\" oifname != \"${instanceCfg.veth.nsInterface}\" accept";
                       extraForwardRules = if instanceCfg.firewall.extraForwardRules != ""
@@ -770,10 +818,15 @@ in
       foldr (a: b: a // b) {} configFiles;
 
     # Forwarding between the host interfaces and the veth pairs
-    boot.kernel.sysctl = mkIf (vethInstances != {}) {
-      "net.ipv4.conf.all.forwarding" = mkDefault true;
-      "net.ipv4.conf.default.forwarding" = mkDefault true;
-    };
+    boot.kernel.sysctl = mkMerge [
+      (mkIf (vethInstances != {}) {
+        "net.ipv4.conf.all.forwarding" = mkDefault true;
+        "net.ipv4.conf.default.forwarding" = mkDefault true;
+      })
+      (mkIf (routeInstances != {}) {
+        "net.ipv6.conf.all.forwarding" = mkDefault true;
+      })
+    ];
 
     # systemd-networkd ships a default config for container interfaces named
     # ve-* that would replace the veth addresses, so keep its hands off
@@ -784,20 +837,36 @@ in
       }
     ) vethInstances;
 
-    # Routed sources may only leave through their netns. These rules are part
+    # Routed clients are marked as they arrive, for the routing rules
+    networking.nftables.tables = mkIf (routeInstances != {}) {
+      eznetns-route = {
+        family = "inet";
+        content = ''
+          chain prerouting {
+            type filter hook prerouting priority mangle - 10; policy accept;
+          ${concatStrings (mapAttrsToList (name: instanceCfg:
+            concatMapStrings (sel: "  ${sel} meta mark set ${routeMark name} comment \"eznetns ${name}\"\n") (routeSelectors instanceCfg)
+          ) routeInstances)}}
+        '';
+      };
+    };
+
+    # Routed clients may only leave through their netns. These rules are part
     # of the host firewall, so they also hold while the netns is down.
     networking.firewall.extraForwardRules = mkIf (routeInstances != {}) (mkBefore (
-      concatStrings (mapAttrsToList (name: instanceCfg: ''
-        ip saddr ${nftSet instanceCfg.route.sources} oifname "${instanceCfg.veth.hostInterface}" accept comment "eznetns ${name}: routed sources"
-        ip saddr ${nftSet instanceCfg.route.sources} oifname != "${instanceCfg.veth.hostInterface}" drop comment "eznetns ${name}: routed sources only leave through the netns"
-      '') routeInstances)
+      concatStrings (mapAttrsToList (name: instanceCfg:
+        concatMapStrings (sel: ''
+          ${sel} oifname "${instanceCfg.veth.hostInterface}" accept comment "eznetns ${name}: routed clients"
+          ${sel} oifname != "${instanceCfg.veth.hostInterface}" drop comment "eznetns ${name}: routed clients only leave through the netns"
+        '') (routeSelectors instanceCfg)
+      ) routeInstances)
     ));
 
     # Replies come back over the veth from addresses the host would reach
     # through its own default route
     networking.firewall.extraReversePathFilterRules = mkIf (routeInstances != {}) (
       concatStrings (mapAttrsToList (name: instanceCfg: ''
-        iifname "${instanceCfg.veth.hostInterface}" accept comment "eznetns ${name}: routed sources"
+        iifname "${instanceCfg.veth.hostInterface}" accept comment "eznetns ${name}: routed clients"
       '') routeInstances)
     );
 
@@ -861,26 +930,26 @@ in
           names = map (i: i.veth.hostInterface) (attrValues vethInstances);
         in {
           assertion = allUnique addrs && allUnique names;
-          message = "services.eznetns: instances with nat forwards or routed sources need distinct veth addresses and host interface names, set instances.<name>.veth explicitly";
+          message = "services.eznetns: instances with nat forwards or routed clients need distinct veth addresses and host interface names, set instances.<name>.veth explicitly";
         })
       ]
-      # Assertions on source routing
+      # Assertions on routing
       ++ mapAttrsToList (name: instanceCfg: {
-        assertion = all (src: builtins.match "([0-9]{1,3}[.]){3}[0-9]{1,3}(/[0-9]{1,2})?" src != null) instanceCfg.route.sources;
-        message = "services.eznetns.instances.${name}.route.sources: entries must be IPv4 addresses or networks, e.g. \"192.168.1.50\" or \"192.168.30.0/24\"";
+        assertion = all (mac: builtins.match "([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" mac != null) instanceCfg.route.macs;
+        message = "services.eznetns.instances.${name}.route.macs: entries must look like \"aa:bb:cc:dd:ee:ff\"";
       }) routeInstances
       ++ optionals (routeInstances != {}) [
         {
           assertion = config.networking.nftables.enable && config.networking.firewall.enable && config.networking.firewall.filterForward;
-          message = "services.eznetns: route.sources needs networking.nftables.enable, networking.firewall.enable and networking.firewall.filterForward, so the sources can be kept from leaving any other way";
+          message = "services.eznetns: route.interfaces and route.macs need networking.nftables.enable, networking.firewall.enable and networking.firewall.filterForward, so the clients can be kept from leaving any other way";
         }
         {
           assertion = allUnique (map nameOctet (attrNames routeInstances));
-          message = "services.eznetns: two instances with route.sources share the same derived routing table, rename one of them";
+          message = "services.eznetns: two instances with route.* share the same derived routing table, rename one of them";
         }
         {
-          assertion = allUnique (concatMap (i: i.route.sources) (attrValues routeInstances));
-          message = "services.eznetns: the same entry is listed in route.sources of more than one instance";
+          assertion = allUnique (concatMap (i: i.route.interfaces ++ map toLower i.route.macs) (attrValues routeInstances));
+          message = "services.eznetns: the same interface or mac is listed in route.* of more than one instance";
         }
       ];
   };
