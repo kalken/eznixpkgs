@@ -29,7 +29,7 @@ services.eznetns.instances.surf.wireguard.wg0-surf.rotate = {
 };
 ```
 
-This expects `/root/.config/ezwgen/surf/wg0-surf.conf` (settings) and the folder `/root/.config/ezwgen/surf/wg0-surf/` (templates), and writes `/etc/eznetns/surf/wireguard/wg0-surf.conf`.
+This expects the folder `/root/.config/ezwgen/surf/wg0-surf/` (templates) and writes `/etc/eznetns/surf/wireguard/wg0-surf.conf`. The settings file `/root/.config/ezwgen/surf/wg0-surf.conf` is optional; without it the chosen template is used unchanged. If no config can be generated the service fails instead of reloading the old one.
 
 - Change the config by hand at any time: `systemctl start eznetns-surf-rotate-wg0-surf`
 - See when the timer fires next: `systemctl list-timers 'eznetns-*'`
