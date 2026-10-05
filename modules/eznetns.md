@@ -13,6 +13,7 @@ A NixOS module for managing isolated network namespaces with port forwarding, pe
 - Hash-based config change detection for automatic reloads
 - automatically setup wireguard files
 - Optional WireGuard config rotation with ezwgen, on a timer and on demand
+- Route selected clients or networks through a netns by source address
 
 ## Wireguard
 eznetns can automatically setup wireguard files it finds in **/etc/eznetns/nameofnetns/wireguard/**. Put them there either manually or declaratively. Remember wireguard files are born in the default namespace and moved into the correct netns. Thus the names should be unique. A good naming standard is **wg0-nameofnetns.conf**. Any file not ending with extension .conf will be ignored.
@@ -131,6 +132,32 @@ Things to know:
 - **UDP.** A service bound to `0.0.0.0` has to reply from the address it was contacted on (most servers do). If replies get lost, bind it to `veth.nsAddress`.
 - **Forwarding.** On a host with several networks and no forward filtering, enabling IP forwarding lets it route between them.
 
+## Routing clients through a netns
+
+`route.sources` sends everything the listed IPv4 addresses or networks forward through the netns, so those clients use its tunnel without any proxy settings:
+
+```nix
+services.eznetns.instances.surf.route.sources = [
+  "192.168.1.50"       # one client
+  "192.168.30.0/24"    # a whole network
+];
+```
+
+How it works:
+
+- The host gets a policy-routing rule per source that sends its traffic to the netns over the veth pair. Traffic to the host itself and to its directly connected networks keeps using the normal routes.
+- The netns forwards that traffic, masquerades it out through its default route (the tunnel) and routes the replies back over the veth.
+- The sources may leave **only** through the netns. The host firewall drops anything else they try to forward, also while the netns is stopped or the tunnel is down, so they never fall back to the WAN.
+
+Things to know:
+
+- **Requirements.** `networking.nftables.enable`, `networking.firewall.enable` and `networking.firewall.filterForward` (all set by ezrouter). The module refuses to build otherwise, because it could not keep the sources from leaking.
+- **IPv4 only.** A client's IPv6 traffic is not routed through the netns and still leaves normally. Turn IPv6 off for those clients or that network if that matters (with ezrouter: `vlan.<name>.enableDHCPv6 = false`).
+- **DNS.** Nothing is done about DNS. A client that uses the router as its DNS server has its lookups resolved by the router; a client that uses a public DNS server has them routed through the netns like everything else.
+- **Other internal networks.** Because of the firewall rule, the sources can no longer be routed to other networks behind the router (for example another VLAN). Port forwards into a netns still work.
+- **Custom `nftables`.** If the instance sets a complete `nftables` config, allow the forwarding yourself: `iifname "host0" oifname != "host0" accept` in the forward chain.
+- **systemd-networkd** is told not to remove routing rules it did not create (`ManageForeignRoutingPolicyRules = false`).
+
 ## All Options
 
 | Option | Type | Default | Description |
@@ -151,6 +178,7 @@ Things to know:
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.source` | str | /root/.config/ezwgen | Folder with `<name>/<interface>.conf` and `<name>/<interface>/` templates |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.pattern` | str | . | Only pick templates whose file name contains this text |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.interval` | null or str | null | systemd calendar expression for the timer, null for manual only |
+| `services.eznetns.instances.<name>.route.sources` | list of str | [] | IPv4 addresses/networks routed through this netns, see [Routing clients through a netns](#routing-clients-through-a-netns) |
 | `services.eznetns.instances.<name>.veth.hostInterface` | str | ve-<name> | Host end of the veth pair (max 15 characters) |
 | `services.eznetns.instances.<name>.veth.nsInterface` | str | host0 | Netns end of the veth pair |
 | `services.eznetns.instances.<name>.veth.hostAddress` | str | 10.200.N.1 | Address of the host end (N derived from the instance name) |
@@ -172,7 +200,7 @@ Things to know:
 
 - Each netns instance creates a oneshot eznetns-<name>.service for setup/reload/teardown
 - Proxy port forwards use eznetns-<name>-forward-*.socket + .service pairs with systemd-socket-proxyd
-- Nat port forwards are set up by eznetns-<name>.service itself; the veth pair only exists for instances that have one
+- Nat port forwards and source routing are set up by eznetns-<name>.service itself; the veth pair only exists for instances that use one of them
 - Config files stored in /etc/eznetns/<name>/ (nftables.conf, nsswitch.conf, etc.)
 - Services mapped via netnsService get NetworkNamespacePath=/run/netns/<name> and bind mounts
 - Default firewall drops input/forward except established connections, ICMP, and loopback
