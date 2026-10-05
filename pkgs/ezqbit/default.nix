@@ -3,8 +3,8 @@ let
   ezqbit-src = pkgs.fetchFromGitHub {
     owner = "kalken";
     repo = "ezqbit";
-    rev = "2ee0e5f47360093de07e54cd5676faa0892b7e75";
-    hash = "sha256-BQoXuzmrXTxoEhCNr4PPVu2Qi1fJxs1AhmrlYvBouqc=";
+    rev = "d8f58debc80389cf3c47e7dfc2363f85fc09859a";
+    hash = "sha256-M3tpc/ZDWkFbzfTh3dK1k8os5SSe/Kq0VLg7HaeO0VA=";
   };
 in
 pkgs.stdenvNoCC.mkDerivation {
