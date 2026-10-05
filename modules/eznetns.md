@@ -150,13 +150,14 @@ How it works:
 - The host marks the packets of the selected clients as they arrive and routes them to the netns over the veth pair. Traffic to the host itself and to its directly connected networks keeps using the normal routes.
 - The netns forwards that traffic, masquerades it out through its default route (the tunnel) and routes the replies back over the veth.
 - The clients may leave **only** through the netns. The host firewall drops anything else they try to forward, also while the netns is stopped or the tunnel is down, so they never fall back to the WAN.
+- Their DNS lookups go through the netns as well. Queries they send to the host (the usual case, since the router is their DNS server) are redirected to the nameserver of the netns, which is the `DNS =` entry of its WireGuard config. Nothing needs to be configured for this.
 
 Things to know:
 
 - **Requirements.** `networking.nftables.enable`, `networking.firewall.enable` and `networking.firewall.filterForward` (all set by ezrouter). The module refuses to build otherwise, because it could not keep the clients from leaking.
 - **IPv6.** Clients keep the IPv6 addresses the router gives them; their IPv6 traffic is masqueraded into the tunnel like IPv4. If the tunnel has no IPv6, their IPv6 connections fail and they fall back to IPv4.
 - **MAC addresses.** A device that randomises its MAC address (phones often do, per network) only matches while it uses the listed one. Turn that off on the device, or put it on a routed interface instead.
-- **DNS.** Nothing is done about DNS. A client that uses the router as its DNS server has its lookups resolved by the router; a client that uses a public DNS server has them routed through the netns like everything else.
+- **DNS.** With `route.redirectDns` (on by default) lookups sent to the host are answered through the tunnel, over IPv4; DNS over IPv6 to the host is refused so clients fall back to IPv4. If the netns is down or its `resolv.conf` has no IPv4 nameserver, lookups fail rather than go out another way. Names only the router knows (for example ezrouter static lease names) do not resolve for routed clients. Lookups sent to any other DNS server are simply routed through the netns. Set `route.redirectDns = false` to let the host answer as for other clients.
 - **Other internal networks.** Because of the firewall rule, routed clients can no longer be routed to other networks behind the router (for example another VLAN). Port forwards into a netns still work.
 - **Custom `nftables`.** If the instance sets a complete `nftables` config, allow the forwarding yourself: `iifname "host0" oifname != "host0" accept` in the forward chain.
 - **systemd-networkd** is told not to remove routing rules it did not create (`ManageForeignRoutingPolicyRules = false`).
@@ -183,6 +184,7 @@ Things to know:
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.interval` | null or str | null | systemd calendar expression for the timer, null for manual only |
 | `services.eznetns.instances.<name>.route.interfaces` | list of str | [] | Host interfaces whose clients are routed through this netns (IPv4 and IPv6), see [Routing clients through a netns](#routing-clients-through-a-netns) |
 | `services.eznetns.instances.<name>.route.macs` | list of str | [] | MAC addresses of single clients routed through this netns (IPv4 and IPv6) |
+| `services.eznetns.instances.<name>.route.redirectDns` | bool | true | Answer DNS queries routed clients send to the host through the netns, using its nameserver |
 | `services.eznetns.instances.<name>.veth.hostInterface` | str | ve-<name> | Host end of the veth pair (max 15 characters) |
 | `services.eznetns.instances.<name>.veth.nsInterface` | str | host0 | Netns end of the veth pair |
 | `services.eznetns.instances.<name>.veth.hostAddress` | str | 10.200.N.1 | Address of the host end (N derived from the instance name) |

@@ -192,7 +192,35 @@ let
         for family in -4 -6; do
           ip $family rule add pref ${toString pref} fwmark ${mark} lookup main suppress_prefixlength 0
           ip $family rule add pref ${toString (pref + 1)} fwmark ${mark} lookup ${table}
-        done'');
+        done
+        ${optionalString instanceCfg.route.redirectDns ''
+
+          # DNS queries of routed clients arrive here redirected by the host.
+          # Send them to the nameserver of the netns (taken from the tunnel
+          # config), so they are resolved through the tunnel as well.
+          ns4=
+          if [ -r /etc/eznetns/${name}/resolv.conf ]; then
+            while read -r key value _; do
+              [ "$key" = nameserver ] || continue
+              case "$value" in
+                *:*) ;;
+                *) [ -n "$ns4" ] || ns4=$value ;;
+              esac
+            done < /etc/eznetns/${name}/resolv.conf
+          fi
+          if [ -z "$ns4" ]; then
+            echo "eznetns ${name}: no IPv4 nameserver in /etc/eznetns/${name}/resolv.conf, DNS of routed clients will not resolve" >&2
+          fi
+          {
+            echo "table ip eznetns-dns"
+            echo "delete table ip eznetns-dns"
+            echo "table ip eznetns-dns {"
+            echo "  chain prerouting {"
+            echo "    type nat hook prerouting priority -100; policy accept;"
+            [ -z "$ns4" ] || echo "    iifname \"${veth.nsInterface}\" ip daddr ${veth.nsAddress} meta l4proto { tcp, udp } th dport 53 dnat to $ns4"
+            echo "  }"
+            echo "}"
+          } | ip netns exec ${name} nft -f -''}'');
     in
     pkgs.writeShellScript "eznetns-${name}-nat-up" ''
       set -eu
@@ -510,6 +538,18 @@ in
                 and IPv6, whichever interface they are on.
               '';
             };
+
+            redirectDns = mkOption {
+              type = types.bool;
+              default = true;
+              description = ''
+                Answer DNS queries that routed clients send to the host through the
+                netns instead: they are redirected to the nameserver of the netns
+                (the DNS of its tunnel config), so lookups do not leave through the
+                normal uplink. Names only the host knows no longer resolve for
+                these clients.
+              '';
+            };
           };
 
           veth = {
@@ -677,6 +717,9 @@ in
                 "--pattern" rotate.pattern
               ];
               ExecStart = escapeShellArgs [ "${cfg.package}/bin/eznetns" name "wg.reload" dev ];
+            } // optionalAttrs (hasRoute cfg.instances.${name}) {
+              # The new config may name another DNS server
+              ExecStartPost = natUp name cfg.instances.${name};
             };
           } // optionalAttrs (rotate.interval != null) {
             startAt = rotate.interval;
@@ -837,27 +880,48 @@ in
       }
     ) vethInstances;
 
-    # Routed clients are marked as they arrive, for the routing rules
+    # Host side of routing, as part of the host ruleset so that it also holds
+    # while the netns is down:
+    # - routed clients are marked as they arrive, for the routing rules
+    # - they are only ever forwarded into a netns, never out another way
+    # - DNS queries they send to the host are redirected into their netns
+    #   (IPv4; over IPv6 they are refused, so clients fall back to IPv4)
     networking.nftables.tables = mkIf (routeInstances != {}) {
       eznetns-route = {
         family = "inet";
-        content = ''
-          chain prerouting {
-            type filter hook prerouting priority mangle - 10; policy accept;
-          ${concatStrings (mapAttrsToList (name: instanceCfg:
-            concatMapStrings (sel: "  ${sel} meta mark set ${routeMark name} comment \"eznetns ${name}\"\n") (routeSelectors instanceCfg)
-          ) routeInstances)}}
-        '';
+        content =
+          let
+            vethSet = nftSet (map (i: ''"${i.veth.hostInterface}"'') (attrValues vethInstances));
+            perSelector = f: concatStrings (mapAttrsToList (name: instanceCfg:
+              concatMapStrings (sel: "  ${f name instanceCfg sel}\n") (routeSelectors instanceCfg)
+            ) routeInstances);
+            dnsInstances = filterAttrs (_: i: i.route.redirectDns) routeInstances;
+            perDnsSelector = f: concatStrings (mapAttrsToList (name: instanceCfg:
+              concatMapStrings (sel: "  ${f name instanceCfg sel}\n") (routeSelectors instanceCfg)
+            ) dnsInstances);
+          in ''
+            chain prerouting {
+              type filter hook prerouting priority mangle - 10; policy accept;
+            ${perSelector (name: _: sel: "${sel} meta mark set ${routeMark name} comment \"eznetns ${name}\"")}}
+            chain forward {
+              type filter hook forward priority filter - 5; policy accept;
+            ${perSelector (name: _: sel: "${sel} oifname != ${vethSet} drop comment \"eznetns ${name}: routed clients only leave through a netns\"")}}
+          '' + optionalString (dnsInstances != {}) ''
+            chain dns {
+              type nat hook prerouting priority dstnat - 5; policy accept;
+            ${perDnsSelector (name: i: sel: "${sel} meta nfproto ipv4 fib daddr type local meta l4proto { tcp, udp } th dport 53 dnat ip to ${i.veth.nsAddress} comment \"eznetns ${name}\"")}}
+            chain input {
+              type filter hook input priority filter - 5; policy accept;
+            ${perDnsSelector (name: _: sel: "${sel} meta nfproto ipv6 meta l4proto { tcp, udp } th dport 53 reject comment \"eznetns ${name}: DNS over IPv4 only\"")}}
+          '';
       };
     };
 
-    # Routed clients may only leave through their netns. These rules are part
-    # of the host firewall, so they also hold while the netns is down.
+    # Let routed clients into their netns
     networking.firewall.extraForwardRules = mkIf (routeInstances != {}) (mkBefore (
       concatStrings (mapAttrsToList (name: instanceCfg:
         concatMapStrings (sel: ''
           ${sel} oifname "${instanceCfg.veth.hostInterface}" accept comment "eznetns ${name}: routed clients"
-          ${sel} oifname != "${instanceCfg.veth.hostInterface}" drop comment "eznetns ${name}: routed clients only leave through the netns"
         '') (routeSelectors instanceCfg)
       ) routeInstances)
     ));
