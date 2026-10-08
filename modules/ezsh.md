@@ -39,20 +39,14 @@ darwinConfigurations.mymac = nix-darwin.lib.darwinSystem {
 };
 ```
 
-zsh is already the default shell for accounts on macOS, so there is nothing more to set for ordinary users. `root` is the exception: its shell is `/bin/sh`. To get ezsh in a root shell, change it once:
-
-```sh
-sudo dscl . -change /Users/root UserShell /bin/sh /bin/zsh
-```
-
-`defaultUserShell` has no effect on macOS.
+zsh is already the default shell for accounts on macOS, so there is nothing more to set for ordinary users. `root` is the exception: its shell is `/bin/sh`. Set `programs.ezsh.defaultUserShell = true;` to have the rebuild change root's shell to `/bin/zsh` as well. It only ever moves root off `/bin/sh`; a shell you picked yourself is left alone. To go back: `sudo dscl . -create /Users/root UserShell /bin/sh`.
 
 ## ⚙️ All Options
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `programs.ezsh.enable` | bool | `false` | Enable ezsh system-wide |
-| `programs.ezsh.defaultUserShell` | bool | `false` | NixOS only. Set zsh as the system-wide default shell for all users who do not have an explicit `users.users.<n>.shell` set, including existing users. Does **not** override per-user shell settings. |
+| `programs.ezsh.defaultUserShell` | bool | `false` | On macOS: change root's shell from `/bin/sh` to `/bin/zsh` (other accounts already use zsh). On NixOS: set zsh as the system-wide default shell for all users who do not have an explicit `users.users.<n>.shell` set, including existing users. Does **not** override per-user shell settings. |
 | `programs.ezsh.extraConfig` | lines | `""` | Additional zsh config appended after the ezsh config is sourced |
 
 ## 📝 Notes
