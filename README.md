@@ -44,7 +44,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 | Program | Description |
 | --- | --- |
 | [ezconf-cli](modules/ezconf-cli.md) | A configuration tool wrapped in nvim to make it easier to edit nix files. |
-| [ezsh](modules/ezsh.md) | Sensible zsh configuration for all users. |
+| [ezsh](modules/ezsh.md) | Sensible zsh configuration for all users. Also works on macOS via `darwinModules.default`. |
 
 ## 📦 Packages
 

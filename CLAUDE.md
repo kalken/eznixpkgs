@@ -35,7 +35,7 @@ Each `.nix` file is a self-contained NixOS module (e.g., `services.ezrouter`, `p
 Each subdirectory is a package exposed via a Nix overlay. `pkgs/default.nix` auto-discovers subdirectories and calls `callPackage` on each, making them available as `pkgs.ezconf-cli`, `pkgs.ezman`, etc. External projects (eznetns, ezsocks, wg-tools) are fetched from GitHub via `fetchFromGitHub` and wrapped with Nix-managed dependencies.
 
 ### `flake.nix`
-Minimal entry point — imports `modules/` and `pkgs/`, exports `nixosModules.default` (all modules combined) and the package overlay.
+Minimal entry point — imports `modules/` and `pkgs/`, exports `nixosModules.default` (all modules combined) and the package overlay. `darwinModules` lists, by hand, only the modules that also evaluate under nix-darwin (currently `ezsh`); a module added there must not set options nix-darwin lacks — `ezsh.nix` guards `users.defaultUserShell` behind `options.users ? defaultUserShell` for that reason.
 
 ## Key Patterns
 
