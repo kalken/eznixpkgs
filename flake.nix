@@ -11,5 +11,12 @@
         ]; 
       };
     };
+
+    # The modules that also work under nix-darwin. Not ./modules as a whole: the rest are
+    # built on systemd, networkd and the like.
+    darwinModules = {
+      default = { imports = [ ./modules/ezsh.nix ]; };
+      ezsh    = ./modules/ezsh.nix;
+    };
   };
 }
