@@ -77,6 +77,8 @@ This expects the folder `/root/.config/ezwgen/surf/wg0-surf/` (templates) and wr
     
     # make a specifik systemd-service start inside the netns (enable the service in nixos as usual first)
     netnsService."qbittorrent.service" = "torrent";
+    # or list it on the instance, which does the same thing:
+    # instances.torrent.services = [ "qbittorrent.service" ];
   };
 }
 ```
@@ -182,6 +184,7 @@ Things to know:
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.source` | str | /root/.config/ezwgen | Folder with `<name>/<interface>.conf` and `<name>/<interface>/` templates |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.pattern` | str | . | Only pick templates whose file name contains this text |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.interval` | null or str | null | systemd calendar expression for the timer, null for manual only |
+| `services.eznetns.instances.<name>.services` | list of str | [] | Systemd services to run inside this netns, same as mapping them in `netnsService` |
 | `services.eznetns.instances.<name>.route.interfaces` | list of str | [] | Host interfaces whose clients are routed through this netns (IPv4 and IPv6), see [Routing clients through a netns](#routing-clients-through-a-netns) |
 | `services.eznetns.instances.<name>.route.macs` | list of str | [] | MAC addresses of single clients routed through this netns (IPv4 and IPv6) |
 | `services.eznetns.instances.<name>.route.redirectDns` | bool | true | Answer DNS queries routed clients send to the host through the netns, using its nameserver |
@@ -210,7 +213,7 @@ Things to know:
 - Proxy port forwards use eznetns-<name>-forward-*.socket + .service pairs with systemd-socket-proxyd
 - Nat port forwards and client routing are set up by eznetns-<name>.service itself; the veth pair only exists for instances that use one of them
 - Config files stored in /etc/eznetns/<name>/ (nftables.conf, nsswitch.conf, etc.)
-- Services mapped via netnsService get NetworkNamespacePath=/run/netns/<name> and bind mounts
+- Services mapped via netnsService or listed in instances.<name>.services get NetworkNamespacePath=/run/netns/<name> and bind mounts
 - Default firewall drops input/forward except established connections, ICMP, and loopback
 - Set nftables = "..."; to provide complete custom firewall and bypass defaults
 - Config changes trigger reloads via CONFIG_HASH environment variable

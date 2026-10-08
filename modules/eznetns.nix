@@ -263,10 +263,11 @@ let
 
   # Hash input for CONFIG_HASH. Instances without nat forwards hash the same
   # as before the nat options existed, so they are not restarted by them.
-  # WireGuard rotation runs in its own units and is never part of the hash.
+  # WireGuard rotation runs in its own units and is never part of the hash,
+  # and neither is the list of services, which only changes those services.
   hashedConfig = instanceCfg:
     let
-      base = removeAttrs instanceCfg ([ "wireguard" ]
+      base = removeAttrs instanceCfg ([ "wireguard" "services" ]
         ++ optional (!hasRoute instanceCfg) "route"
         ++ optional (!hasVeth instanceCfg) "veth");
       stripVeth6 = c: if hasVeth instanceCfg && !hasRoute instanceCfg
@@ -277,6 +278,16 @@ let
     else base // {
       portForwards = map (fwd: removeAttrs fwd ([ "mode" ] ++ natOnlyOptions)) instanceCfg.portForwards;
     });
+
+  # Services to run inside a netns, as { service, netns } entries, from both
+  # netnsService and instances.<name>.services
+  unitName = removeSuffix ".service";
+  netnsServiceEntries =
+    mapAttrsToList (service: netns: { service = unitName service; inherit netns; }) cfg.netnsService
+    ++ concatLists (mapAttrsToList (netns: instanceCfg:
+      map (service: { service = unitName service; inherit netns; }) instanceCfg.services
+    ) cfg.instances);
+  netnsServiceMap = listToAttrs (map (e: nameValuePair e.service e.netns) netnsServiceEntries);
 
   # WireGuard interfaces with config rotation, as { name, dev, rotate } entries
   rotations = concatLists (mapAttrsToList (name: instanceCfg:
@@ -517,6 +528,13 @@ in
             '';
           };
 
+          services = mkOption {
+            type = types.listOf types.str;
+            default = [];
+            description = "Systemd services to run inside this netns, same as mapping them in services.eznetns.netnsService";
+            example = [ "qbittorrent.service" ];
+          };
+
           route = {
             interfaces = mkOption {
               type = types.listOf types.str;
@@ -657,10 +675,7 @@ in
 
         # Apply netns configuration to specified services
         netnsServices = mapAttrs' (serviceName: netnsName:
-          let
-            cleanServiceName = removeSuffix ".service" serviceName;
-          in
-          nameValuePair cleanServiceName {
+          nameValuePair serviceName {
             unitConfig = {
               Requires = [ "eznetns-${netnsName}.service" ];
               After = [ "eznetns-${netnsName}.service" ];
@@ -674,7 +689,7 @@ in
               ];
             };
           }
-        ) cfg.netnsService;
+        ) netnsServiceMap;
 
         # Port forwarding services
         forwardServices = flatten (mapAttrsToList (name: instanceCfg:
@@ -950,6 +965,15 @@ in
         assertion = hasAttr netnsName cfg.instances;
         message = "netnsService: Service '${serviceName}' references undefined eznetns instance '${netnsName}'";
       }) cfg.netnsService
+      # A service can only run in one netns
+      ++ mapAttrsToList (service: netns:
+        let
+          instances = unique (map (e: e.netns) (filter (e: e.service == service) netnsServiceEntries));
+        in {
+          assertion = length instances == 1;
+          message = "services.eznetns: service '${service}' is assigned to more than one eznetns instance (${concatStringsSep ", " instances})";
+        }
+      ) netnsServiceMap
       # Assertions on port forwards
       ++ flatten (mapAttrsToList (name: instanceCfg:
         imap0 (idx: fwd:
