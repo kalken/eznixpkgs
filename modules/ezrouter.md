@@ -78,6 +78,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `bridge.enableDHCPv6` | bool | `true` | Enable DHCPv6 Prefix Delegation on bridge |
 | `bridge.enableDNS` | bool | `true` | Advertise router as DNS server via DHCP on bridge |
 | `bridge.staticLeases` | list of submodule | `[]` | Clients that always get the same DHCPv4 address. See [Static Leases](#-static-leases) below. |
+| `bridge.dhcpOptions` | list of str | `[]` | Further DHCPv4 options to send, each as `number:type:value` (systemd-networkd's `SendOption=`), e.g. `"44:ipv4address:192.168.1.1"` for a WINS server |
 
 ### VLAN Settings (`services.ezrouter.vlan.<name>`)
 
@@ -94,6 +95,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `vlan.<name>.enableDHCPv6` | bool | `true` | Enable DHCPv6 Prefix Delegation + RA on this VLAN. |
 | `vlan.<name>.enableDNS` | bool | `true` | Advertise router as DNS server via DHCP on this VLAN. |
 | `vlan.<name>.staticLeases` | list of submodule | `[]` | Clients that always get the same DHCPv4 address on this VLAN. See [Static Leases](#-static-leases) below. |
+| `vlan.<name>.dhcpOptions` | list of str | `[]` | Further DHCPv4 options to send on this VLAN, as for the bridge |
 | `vlan.<name>.allowedTCPPorts` | list of port | `[]` | TCP ports to open on this VLAN interface. Merged with `vlanFirewallPorts.allowedTCPPorts`. |
 | `vlan.<name>.allowedUDPPorts` | list of port | `[]` | UDP ports to open on this VLAN interface. Merged with `vlanFirewallPorts.allowedUDPPorts`. |
 

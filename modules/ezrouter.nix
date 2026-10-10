@@ -23,9 +23,10 @@ with lib; let
   # The domain handed to DHCP clients (option 15), where the router is also their DNS server:
   # without it a client has no way to know that a short name belongs under it, and only the
   # full name resolves. macOS and Windows take it as their search domain.
-  dhcpDomain = dns: optionalAttrs (dns && cfg.domain != null && cfg.domain != "") {
-    SendOption = "15:string:${cfg.domain}";
-  };
+  # Then whatever the interface lists itself (dhcpOptions), as further SendOption lines.
+  dhcpSendOptions = dns: extra:
+    let all = optional (dns && cfg.domain != null && cfg.domain != "") "15:string:${cfg.domain}" ++ extra;
+    in optionalAttrs (all != []) { SendOption = all; };
 
   # Function to generate network configuration for a VLAN
   mkVlanNetwork = name: vlan: {
@@ -56,8 +57,21 @@ with lib; let
       dhcpServerConfig = {
         PoolOffset = 10;
         DNS = if vlan.enableDNS then "_server_address" else "";
-      } // dhcpDomain vlan.enableDNS;
+      } // dhcpSendOptions vlan.enableDNS vlan.dhcpOptions;
     } // mkStaticLeases vlan.staticLeases;
+  };
+
+  # Extra DHCPv4 options, shared by the bridge and every VLAN
+  dhcpOptionsOption = mkOption {
+    type = types.listOf types.str;
+    default = [];
+    example = [ "44:ipv4address:192.168.1.1" "42:ipv4address:192.168.1.1" ];
+    description = ''
+      Further options the DHCPv4 server on this interface sends to its clients, each as
+      `number:type:value`, the form of systemd-networkd's `SendOption=`. The types are
+      uint8, uint16, uint32, ipv4address, ipv6address and string. For what ezrouter has no
+      setting of its own for: a WINS server (44), a time server (42), a boot file (67).
+    '';
   };
 
   # Fixed DHCPv4 addresses, shared by the bridge and every VLAN
@@ -208,6 +222,7 @@ in {
         description = "Enable DNS server on the bridge interface";
       };
       staticLeases = staticLeasesOption;
+      dhcpOptions = dhcpOptionsOption;
     };
 
     wan = {
@@ -434,6 +449,7 @@ in {
           };
 
           staticLeases = staticLeasesOption;
+          dhcpOptions = dhcpOptionsOption;
 
           allowedTCPPorts = mkOption {
             type = types.listOf types.port;
@@ -656,7 +672,7 @@ in {
           dhcpServerConfig = {
             PoolOffset = 10;
             DNS = if cfg.bridge.enableDNS then "_server_address" else "";
-          } // dhcpDomain cfg.bridge.enableDNS;
+          } // dhcpSendOptions cfg.bridge.enableDNS cfg.bridge.dhcpOptions;
         } // mkStaticLeases cfg.bridge.staticLeases;
       }
       # 60- VLAN networks
