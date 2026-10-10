@@ -3,7 +3,7 @@ let
   cfg = config.programs.ezsh;
   ezshrc = pkgs.fetchurl {
     url    = "https://raw.githubusercontent.com/kalken/ezsh/master/zshrc";
-    sha256 = "sha256-4/stHooYEj+Ukhb9iUwKi39VjIPawdrzHXMae/a75y4=";
+    sha256 = "sha256-o3F6jZCXQu9AiNjQHVCREtGZv0mbWZEwjyYt+79C3No=";
   };
 in
 {
