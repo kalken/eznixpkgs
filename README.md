@@ -38,6 +38,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [ezsocks](modules/ezsocks.md) | SOCKS5 proxy on `127.0.0.1:1080`, with optional per-namespace instances |
 | [ezproton](modules/ezproton.md) | Automatically installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d |
 | [ezboot](modules/ezboot.md) | One-time LUKS boot-key unlock for unattended reboots of encrypted systems |
+| [ezcert](modules/ezcert.md) | Certificates for a machine's services, signed by an authority of your own or an existing one |
 
 ## 🛠 Programs
 
