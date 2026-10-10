@@ -20,6 +20,13 @@ with lib; let
     };
   };
 
+  # The domain handed to DHCP clients (option 15), where the router is also their DNS server:
+  # without it a client has no way to know that a short name belongs under it, and only the
+  # full name resolves. macOS and Windows take it as their search domain.
+  dhcpDomain = dns: optionalAttrs (dns && cfg.domain != null && cfg.domain != "") {
+    SendOption = "15:string:${cfg.domain}";
+  };
+
   # Function to generate network configuration for a VLAN
   mkVlanNetwork = name: vlan: {
     "60-${name}" = {
@@ -49,7 +56,7 @@ with lib; let
       dhcpServerConfig = {
         PoolOffset = 10;
         DNS = if vlan.enableDNS then "_server_address" else "";
-      };
+      } // dhcpDomain vlan.enableDNS;
     } // mkStaticLeases vlan.staticLeases;
   };
 
@@ -140,6 +147,18 @@ in {
       defaultText = literalExpression ''[config.services.ezrouter.bridge.name]'';
       description = "List of trusted interfaces (no firewall restrictions)";
       example = [ "lan" ];
+    };
+
+    domain = mkOption {
+      type = types.nullOr types.str;
+      default = config.networking.domain;
+      defaultText = literalExpression "config.networking.domain";
+      example = "lan";
+      description = ''
+        Domain the DHCP server tells its clients they are in (DHCP option 15), on the bridge
+        and on every VLAN where the router is the DNS server. A client then looks a short
+        name up with the domain added, so `nas` finds `nas.lan`. null sends none.
+      '';
     };
 
     bridge = {
@@ -637,7 +656,7 @@ in {
           dhcpServerConfig = {
             PoolOffset = 10;
             DNS = if cfg.bridge.enableDNS then "_server_address" else "";
-          };
+          } // dhcpDomain cfg.bridge.enableDNS;
         } // mkStaticLeases cfg.bridge.staticLeases;
       }
       # 60- VLAN networks

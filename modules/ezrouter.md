@@ -46,6 +46,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `services.ezrouter.vlanFirewallPorts.allowedTCPPorts` | list of port | `[]` | TCP ports to open from all VLAN interfaces to router |
 | `services.ezrouter.vlanFirewallPorts.allowedUDPPorts` | list of port | `[53 67]` | UDP ports to open from all VLAN interfaces to router (DNS + DHCP) |
 | `services.ezrouter.trustedInterfaces` | list of str | `[bridge.name]` | Interfaces with no firewall restrictions |
+| `services.ezrouter.domain` | null or str | `networking.domain` | Domain sent to DHCP clients (option 15), so a short name like `nas` finds `nas.lan`; `null` sends none |
 | `services.ezrouter.internalInterfaces` | list of str | *auto* | Internal interfaces for NAT/masquerading (default: bridge + all VLANs) |
 | `services.ezrouter.openPorts` | list of submodule | `[]` | Ports to open on specific interfaces. See [Open Ports](#-open-ports) below. |
 
