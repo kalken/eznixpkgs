@@ -75,6 +75,19 @@ with lib; let
   };
 
   # Fixed DHCPv4 addresses, shared by the bridge and every VLAN
+  forceLocalDNSOption = mkOption {
+    type = types.bool;
+    default = false;
+    description = ''
+      Make clients on this interface that ignore the DNS server they got from DHCP use the
+      router anyway (needs enableDNS). Plain DNS (port 53) to any other server is redirected
+      to the router, over IPv4. DNS over TLS (port 853) is rejected, and so is plain DNS over
+      IPv6, which the router does not answer, so clients fall back to IPv4. DNS over HTTPS is
+      not affected. Clients that eznetns routes through a netns (route.interfaces,
+      route.macs) are left alone.
+    '';
+  };
+
   staticLeasesOption = mkOption {
     type = types.listOf (types.submodule {
       options = {
@@ -117,6 +130,21 @@ with lib; let
     ++ concatMap (vlan: vlan.staticLeases) (attrValues cfg.vlan);
 
   # Generate all VLAN netdevs and networks dynamically
+  # Clients eznetns routes through a netns, by interface or by MAC. forceLocalDNS leaves
+  # them alone: their DNS goes out through the netns, not to the resolver of the router.
+  netnsRoutes = optionals ((options.services ? eznetns) && config.services.eznetns.enable)
+    (map (i: i.route) (filter (i: i.enable) (attrValues config.services.eznetns.instances)));
+  netnsIfaces = concatMap (r: r.interfaces) netnsRoutes;
+  netnsMacs = unique (map toLower (concatMap (r: r.macs) netnsRoutes));
+
+  # Clients forceLocalDNS applies to, as an nftables match: those on the interfaces it
+  # is set on
+  dnsIfaces = subtractLists netnsIfaces (optional cfg.bridge.forceLocalDNS cfg.bridge.name
+    ++ attrNames (filterAttrs (_: vlan: vlan.forceLocalDNS) cfg.vlan));
+  dnsClients = "iifname { ${concatMapStringsSep ", " (x: ''"${x}"'') dnsIfaces} }"
+    + optionalString (netnsMacs != []) " ether saddr != { ${concatStringsSep ", " netnsMacs} }";
+  forceDNS = dnsIfaces != [];
+
   vlanNetdevs = concatMapAttrs mkVlanNetdev cfg.vlan;
   vlanNetworks = concatMapAttrs mkVlanNetwork cfg.vlan;
 
@@ -221,6 +249,7 @@ in {
         default = true;
         description = "Enable DNS server on the bridge interface";
       };
+      forceLocalDNS = forceLocalDNSOption;
       staticLeases = staticLeasesOption;
       dhcpOptions = dhcpOptionsOption;
     };
@@ -447,6 +476,7 @@ in {
             default = true;
             description = "Advertise this router as DNS server via DHCP";
           };
+          forceLocalDNS = forceLocalDNSOption;
 
           staticLeases = staticLeasesOption;
           dhcpOptions = dhcpOptionsOption;
@@ -582,14 +612,35 @@ in {
     );
 
     # Block inter-VLAN traffic (before NAT's accept rule)
-    networking.firewall.extraForwardRules = mkIf cfg.isolateVlans (
-      let
-        ifaceList = concatMapStringsSep ", " (x: ''"${x}"'') cfg.internalInterfaces;
-      in ''
-        # Drop forwarding between internal interfaces
-        iifname {${ifaceList}} oifname {${ifaceList}} drop
-      ''
-    );
+    networking.firewall.extraForwardRules = mkMerge [
+      (mkIf cfg.isolateVlans (
+        let
+          ifaceList = concatMapStringsSep ", " (x: ''"${x}"'') cfg.internalInterfaces;
+        in ''
+          # Drop forwarding between internal interfaces
+          iifname {${ifaceList}} oifname {${ifaceList}} drop
+        ''
+      ))
+      (mkIf forceDNS ''
+        # forceLocalDNS: no DNS over TLS, and no plain DNS over IPv6 (resolved only
+        # listens on IPv4, so it cannot be redirected and clients fall back to IPv4)
+        ${dnsClients} meta l4proto { tcp, udp } th dport 853 reject
+        ${dnsClients} meta nfproto ipv6 meta l4proto { tcp, udp } th dport 53 reject
+      '')
+    ];
+
+    # forceLocalDNS: plain DNS to any other server ends up on the address of the interface
+    # it came in on, where resolved listens. Plain dstnat, so that the eznetns chain
+    # (dstnat - 5) runs first, and never the same packets: that one takes DNS to the router.
+    networking.nftables.tables.ezrouter-dns = mkIf forceDNS {
+      family = "ip";
+      content = ''
+        chain prerouting {
+          type nat hook prerouting priority dstnat; policy accept;
+          ${dnsClients} fib daddr type != local meta l4proto { tcp, udp } th dport 53 redirect
+        }
+      '';
+    };
 
     systemd.network.netdevs = mkMerge [
       {
@@ -684,6 +735,10 @@ in {
       (filter (lease: lease.name != null) allStaticLeases));
 
     assertions = [
+      {
+        assertion = all (i: i.forceLocalDNS -> i.enableDNS) ([ cfg.bridge ] ++ attrValues cfg.vlan);
+        message = "services.ezrouter: forceLocalDNS needs enableDNS on the same interface";
+      }
       {
         assertion = all (lease: builtins.match "([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}" lease.mac != null) allStaticLeases;
         message = "services.ezrouter: staticLeases mac must look like \"aa:bb:cc:dd:ee:ff\"";

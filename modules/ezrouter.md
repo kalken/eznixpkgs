@@ -77,6 +77,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `bridge.enableDHCPv4` | bool | `true` | Enable DHCPv4 server on bridge |
 | `bridge.enableDHCPv6` | bool | `true` | Enable DHCPv6 Prefix Delegation on bridge |
 | `bridge.enableDNS` | bool | `true` | Advertise router as DNS server via DHCP on bridge |
+| `bridge.forceLocalDNS` | bool | `false` | Send DNS from bridge clients that use another server to the router anyway, see [DNS Configuration](#-dns-configuration) |
 | `bridge.staticLeases` | list of submodule | `[]` | Clients that always get the same DHCPv4 address. See [Static Leases](#-static-leases) below. |
 | `bridge.dhcpOptions` | list of str | `[]` | Further DHCPv4 options to send, each as `number:type:value` (systemd-networkd's `SendOption=`), e.g. `"44:ipv4address:192.168.1.1"` for a WINS server |
 
@@ -94,6 +95,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `vlan.<name>.enableDHCPv4` | bool | `true` | Enable DHCPv4 server on this VLAN. |
 | `vlan.<name>.enableDHCPv6` | bool | `true` | Enable DHCPv6 Prefix Delegation + RA on this VLAN. |
 | `vlan.<name>.enableDNS` | bool | `true` | Advertise router as DNS server via DHCP on this VLAN. |
+| `vlan.<name>.forceLocalDNS` | bool | `false` | Send DNS from clients on this VLAN that use another server to the router anyway, see [DNS Configuration](#-dns-configuration). |
 | `vlan.<name>.staticLeases` | list of submodule | `[]` | Clients that always get the same DHCPv4 address on this VLAN. See [Static Leases](#-static-leases) below. |
 | `vlan.<name>.dhcpOptions` | list of str | `[]` | Further DHCPv4 options to send on this VLAN, as for the bridge |
 | `vlan.<name>.allowedTCPPorts` | list of port | `[]` | TCP ports to open on this VLAN interface. Merged with `vlanFirewallPorts.allowedTCPPorts`. |
@@ -208,6 +210,12 @@ wan.forwardPorts = [
   - Bridge interface (if `bridge.enableDNS = true`)
   - Each VLAN with `enableDNS = true`
 - DHCP servers advertise the router's address as DNS when `enableDNS = true`
+- With `forceLocalDNS = true` on the bridge or a VLAN (needs `enableDNS = true` there), its clients that ignore the advertised DNS server still end up on the router:
+  - Plain DNS (port 53, IPv4) to any other server is redirected to the router
+  - DNS over TLS (port 853) is rejected
+  - Plain DNS over IPv6 to other servers is rejected, so clients fall back to IPv4 (the router only answers DNS on IPv4)
+  - DNS over HTTPS is not blocked
+  - Clients that [eznetns](eznetns.md) routes through a netns (`route.interfaces`, `route.macs`) are left alone, their DNS goes out through the netns
 
 ## 🛠️ Troubleshooting
 
