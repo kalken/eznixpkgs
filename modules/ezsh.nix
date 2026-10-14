@@ -1,10 +1,13 @@
 { config, options, pkgs, lib, ... }:
 let
   cfg = config.programs.ezsh;
-  ezshrc = pkgs.fetchurl {
-    url    = "https://raw.githubusercontent.com/kalken/ezsh/master/zshrc";
-    sha256 = "sha256-eVFwDItUojMQw+pzIuC8n+OEIpJF1UXJsJfs3iTYNAw=";
+  ezsh-src = pkgs.fetchFromGitHub {
+    owner = "kalken";
+    repo = "ezsh";
+    rev = "aa5debe401e54f721a55ce063a70b78ab6994424";
+    hash = "sha256-uAj1VJXHS8t9ZHxjZo+s0u0lU54J8+OUqPrrid7KmuY=";
   };
+  ezshrc = "${ezsh-src}/zshrc";
 in
 {
   options.programs.ezsh = {
