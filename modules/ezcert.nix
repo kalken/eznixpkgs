@@ -21,7 +21,7 @@ let
       restart="$restart ${escapeShellArgs c.restart}"
     fi
   '' + optionalString (c.keystore != null) ''
-    answer=$(${script} keystore ${escapeShellArgs [ "${cfg.dir}/${name}" c.keystore.path c.keystore.alias c.keystore.password c.keystore.user c.keystore.group ]})
+    answer=$(${script} keystore ${escapeShellArgs [ "${cfg.dir}/${name}" c.keystore.path c.keystore.alias c.keystore.password (toString c.keystore.passwordFile) c.keystore.user c.keystore.group ]})
     if [ "$answer" = changed ]; then
       restart="$restart ${escapeShellArgs c.restart}"
     fi
@@ -143,6 +143,12 @@ in {
                 path = mkOption { type = types.str; description = "The keystore file."; };
                 alias = mkOption { type = types.str; default = name; description = "The name the certificate has inside the keystore: the one the service looks for."; };
                 password = mkOption { type = types.str; default = "changeit"; description = "The keystore's password, as the service expects it. It ends up in the Nix store, readable by everyone, which is fine for the fixed ones such services use and for nothing else."; };
+                passwordFile = mkOption {
+                  type = types.nullOr types.path;
+                  default = null;
+                  example = "/run/secrets/keystore-pass";
+                  description = "A file holding the keystore's password, read as root when ezcert runs, so it stays out of the Nix store. Used instead of `password`. The keystore is written again when the file is newer than it.";
+                };
                 user = mkOption { type = types.str; default = "root"; description = "Owner of the keystore."; };
                 group = mkOption { type = types.str; default = "root"; description = "Group of the keystore."; };
               };

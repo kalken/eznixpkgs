@@ -114,7 +114,7 @@ years and is never replaced: everything that trusts it would have to be told aga
 | `services.ezcert.certs.<name>.days` | int | `365` | How long a certificate lasts (Apple's systems refuse more than 825) |
 | `services.ezcert.certs.<name>.renewDays` | int | `30` | Made anew when fewer days than this are left |
 | `services.ezcert.certs.<name>.restart` | list of str | `[]` | Units restarted when the certificate was made anew |
-| `services.ezcert.certs.<name>.keystore` | null or submodule | `null` | Also keep it as a Java keystore: `path`, `alias` (the certificate's name), `password` (`"changeit"`), `user`, `group` |
+| `services.ezcert.certs.<name>.keystore` | null or submodule | `null` | Also keep it as a Java keystore: `path`, `alias` (the certificate's name), `password` (`"changeit"`), `passwordFile` (`null`; read at run time instead of `password`, keeps it out of the Nix store), `user`, `group` |
 | `services.ezcert.certs.<name>.cert` / `.fullchain` / `.key` | str | *read-only* | Paths of the files |
 | `services.ezcert.keytoolPackage` | package | `pkgs.jre_headless` | Where `keytool` comes from, for keystores |
 

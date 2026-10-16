@@ -4,7 +4,7 @@
 #
 #   sh ezcert.sh ca       DIR NAME
 #   sh ezcert.sh cert     OUT CA_CERT CA_KEY DAYS RENEW_DAYS OWNER GROUP NAME...
-#   sh ezcert.sh keystore OUT PATH ALIAS PASSWORD OWNER GROUP        (needs keytool as well)
+#   sh ezcert.sh keystore OUT PATH ALIAS PASSWORD PASSWORD_FILE OWNER GROUP   (needs keytool as well)
 #
 # All do nothing when what they would make is already there and still good, so they are run
 # at every boot and by a timer. `cert` and `keystore` print "changed" when they wrote something.
@@ -105,7 +105,14 @@ EOF
 # the service itself may replace it, and what is declared is what should be there. What it
 # was made from is noted beside it, in PATH.ezcert.
 make_keystore() {
-  out=$1 path=$2 alias=$3 pass=$4 owner=$5 group=$6
+  out=$1 path=$2 alias=$3 pass=$4 passfile=$5 owner=$6 group=$7
+  # A password file is read by openssl and keytool themselves, so it is not on any command line.
+  if [ -n "$passfile" ]; then
+    [ -s "$passfile" ] || { echo "ezcert: the password file $passfile is not there" >&2; exit 1; }
+    ossl_pass="file:$passfile"
+  else
+    ossl_pass="pass:$pass"
+  fi
   # The folder is the service's own and is not made here: created by root it would lock the
   # service out of its own data. Until the service has made it there is nothing to do, and
   # the next run finds it.
@@ -115,16 +122,22 @@ make_keystore() {
   fi
   want=$(openssl x509 -in "$out/cert.pem" -noout -fingerprint -sha256)
   note="$path.ezcert"
-  if [ -s "$path" ] && [ "$(cat "$note" 2>/dev/null)" = "$want" ] && [ ! "$path" -nt "$note" ]; then
+  if [ -s "$path" ] && [ "$(cat "$note" 2>/dev/null)" = "$want" ] && [ ! "$path" -nt "$note" ] \
+     && { [ -z "$passfile" ] || [ ! "$passfile" -nt "$note" ]; }; then
     return 0
   fi
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
   ( umask 077
     openssl pkcs12 -export -in "$out/fullchain.pem" -inkey "$out/key.pem" -name "$alias" \
-      -password "pass:$pass" -out "$tmp/cert.p12"
-    keytool -importkeystore -noprompt -srckeystore "$tmp/cert.p12" -srcstoretype PKCS12 -srcstorepass "$pass" \
-      -destkeystore "$tmp/keystore" -deststorepass "$pass" -destkeypass "$pass" -alias "$alias" >/dev/null 2>&1 )
+      -password "$ossl_pass" -out "$tmp/cert.p12"
+    if [ -n "$passfile" ]; then
+      keytool -importkeystore -noprompt -srckeystore "$tmp/cert.p12" -srcstoretype PKCS12 -srcstorepass:file "$passfile" \
+        -destkeystore "$tmp/keystore" -deststorepass:file "$passfile" -destkeypass:file "$passfile" -alias "$alias" >/dev/null 2>&1
+    else
+      keytool -importkeystore -noprompt -srckeystore "$tmp/cert.p12" -srcstoretype PKCS12 -srcstorepass "$pass" \
+        -destkeystore "$tmp/keystore" -deststorepass "$pass" -destkeypass "$pass" -alias "$alias" >/dev/null 2>&1
+    fi )
   chown "$owner:$group" "$tmp/keystore"
   chmod 640 "$tmp/keystore"
   mv "$tmp/keystore" "$path"
@@ -137,5 +150,5 @@ case "${1:-}" in
   ca)       shift; make_ca "$@" ;;
   cert)     shift; make_cert "$@" ;;
   keystore) shift; make_keystore "$@" ;;
-  *)        echo "usage: ezcert.sh ca DIR NAME | cert OUT CA_CERT CA_KEY DAYS RENEW_DAYS OWNER GROUP NAME... | keystore OUT PATH ALIAS PASSWORD OWNER GROUP" >&2; exit 2 ;;
+  *)        echo "usage: ezcert.sh ca DIR NAME | cert OUT CA_CERT CA_KEY DAYS RENEW_DAYS OWNER GROUP NAME... | keystore OUT PATH ALIAS PASSWORD PASSWORD_FILE OWNER GROUP" >&2; exit 2 ;;
 esac
