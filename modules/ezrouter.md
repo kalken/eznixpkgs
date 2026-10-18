@@ -44,7 +44,7 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `services.ezrouter.debug` | bool | `false` | Enable debug logging (`SYSTEMD_LOG_LEVEL=debug`) for `systemd-networkd` |
 | `services.ezrouter.isolateVlans` | bool | `true` | Block traffic between VLANs (inter-VLAN isolation) |
 | `services.ezrouter.vlanFirewallPorts.allowedTCPPorts` | list of port | `[]` | TCP ports to open from all VLAN interfaces to router |
-| `services.ezrouter.vlanFirewallPorts.allowedUDPPorts` | list of port | `[53 67]` | UDP ports to open from all VLAN interfaces to router (DNS + DHCP) |
+| `services.ezrouter.vlanFirewallPorts.allowedUDPPorts` | list of port | `[]` | UDP ports to open from all VLAN interfaces to router, on top of DNS and DHCP |
 | `services.ezrouter.trustedInterfaces` | list of str | `[bridge.name]` | Interfaces with no firewall restrictions |
 | `services.ezrouter.domain` | null or str | `networking.domain` | Domain sent to DHCP clients (option 15), so a short name like `nas` finds `nas.lan`; `null` sends none |
 | `services.ezrouter.internalInterfaces` | list of str | *auto* | Internal interfaces for NAT/masquerading (default: bridge + all VLANs) |
@@ -66,10 +66,22 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 
 ### Bridge Settings (`services.ezrouter.bridge`)
 
+The bridge filters VLANs: each port carries only the VLANs listed for it, so a device on a port cannot tag its way into another VLAN.
+
+```nix
+bridge.devices = [ "enp2s0" ];                  # LAN only
+bridge.ports.enp3s0.untagged = "iot";           # plug anything in: it is on iot
+bridge.ports.enp4s0.tagged = [ "iot" "guest" ]; # trunk to an access point, LAN untagged
+bridge.ports.enp5s0.tagged = [ 4 ];             # VLAN 4 is carried through to another router, none here
+```
+
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `bridge.name` | str | `"lan"` | Name of the bridge interface |
-| `bridge.devices` | list of str | `[]` | Physical interfaces to attach to bridge |
+| `bridge.devices` | list of str | `[]` | Physical interfaces to attach to bridge, on the LAN only |
+| `bridge.ports.<dev>.untagged` | str, int or null | `null` | VLAN (name from `vlan`, or a bare ID) that whatever is plugged into this port lands on. `null` is the LAN |
+| `bridge.ports.<dev>.tagged` | list of str or int | `[]` | VLANs this port also carries tagged, e.g. towards an access point or switch: names from `vlan`, or bare IDs for a VLAN this router only carries across the bridge (another router is on it) |
+| `bridge.vlanId` | int | `1` | VLAN ID the bridge uses internally for the untagged LAN. Change it only if it clashes with a VLAN ID |
 | `bridge.address` | str | `"192.168.1.1"` | IPv4 address for the bridge |
 | `bridge.netmask` | str | `"24"` | Netmask/CIDR for bridge address |
 | `bridge.subnetId` | int | `1` | Subnet ID for DHCPv6 prefix delegation |
@@ -162,9 +174,9 @@ Opens ports on one or more specific interfaces. Each entry in `openPorts` suppor
 | `interfaces` | list of str | *required* | Interface names to open the port on |
 | `port` | port or str | *required* | Port number or service name (e.g. `22` or `"ssh"`) |
 | `protocol` | `"tcp"` or `"udp"` | `"tcp"` | Protocol |
-| `rateLimit` | str or null | `null` | Per-source-IP rate limit in nftables format (e.g. `"10/hour"`, `"5/minute"`) |
+| `rateLimit` | str or null | `null` | Per-source rate limit in nftables format (e.g. `"10/hour"`, `"5/minute"`) |
 
-When `rateLimit` is set, new connections are metered per source IP using an nftables `meter`. Connections within the limit are accepted; those exceeding it are dropped.
+When `rateLimit` is set, new connections are metered per source using an nftables `meter`: per IPv4 address, per IPv6 /64. Connections within the limit are accepted; those exceeding it are dropped.
 
 ```nix
 openPorts = [
@@ -200,7 +212,7 @@ wan.forwardPorts = [
 - **NAT**: Applied to all interfaces in `internalInterfaces` (default: bridge + all VLANs)
 - **Masquerading**: By default (`wan.masqueradeOnly = true`) only traffic leaving through `wan.device` is masqueraded, so whatever the router forwards to elsewhere (another VLAN, an [eznetns](eznetns.md) `nat` port forward) sees the real client address. With `wan.masqueradeOnly = false`, traffic from the internal interfaces is masqueraded on every outgoing interface. Using `wan.forwardPorts` always restricts masquerading to the WAN, since port forwards need the external interface to be set.
 - **Inter-VLAN isolation**: When `isolateVlans = true`, forwarding between internal interfaces is dropped *before* NAT rules
-- **VLAN firewall ports**: `vlanFirewallPorts.allowedTCPPorts` / `allowedUDPPorts` apply to **all VLAN interfaces**; per-VLAN `vlan.<name>.allowedTCPPorts` / `allowedUDPPorts` are merged on top for that interface only
+- **VLAN firewall ports**: `vlanFirewallPorts.allowedTCPPorts` / `allowedUDPPorts` apply to **all VLAN interfaces**; DNS (TCP and UDP 53) is opened on each VLAN with `enableDNS`, and DHCP (UDP 67) on each with `enableDHCPv4`; per-VLAN `vlan.<name>.allowedTCPPorts` / `allowedUDPPorts` are merged on top for that interface only
 - **Trusted interfaces**: Listed in `trustedInterfaces` bypass firewall restrictions (default: bridge only)
 
 ## 🌐 DNS Configuration
@@ -242,6 +254,9 @@ nft list ruleset  # inspect firewall/NAT rules
 - **`wan.keepConfiguration` default is now `null`**: If you previously relied on a default value, set it explicitly.
 - **`wan.keepConfiguration` is now an enum or null**: If you previously used `true`, replace with `"yes"` or `"static"` depending on desired behavior.
 - **`wan.masqueradeOnly` is now `true` by default**: Internal traffic is only masqueraded when it leaves through `wan.device`. Set it to `false` if you rely on masquerading towards another interface: a VPN tunnel on the router itself, a second uplink, PPPoE where traffic leaves through `ppp0` rather than `wan.device`, or devices on other VLANs that only answer the router's address (with `isolateVlans = false`).
+- **Bridge ports are filtered by VLAN**: a port in `bridge.devices` is now on the LAN only. Before, every port carried every VLAN, so a trunk to a switch or access point must now be listed in `bridge.ports.<dev>.tagged`.
+- **Strict reverse-path filtering and no LLMNR**: `networking.firewall.checkReversePath` is `true` (the NixOS default is `"loose"`) and `services.resolved` has LLMNR off. Both are `mkDefault`, so set them yourself to override, e.g. `checkReversePath = "loose"` if you route asymmetrically.
+- **`internalInterfaces` must list the bridge and every VLAN**: the build fails otherwise, since an interface left out is neither isolated nor NATed.
 - **Firewall ports apply to VLANs only**: `vlanFirewallPorts` now affects VLAN interfaces explicitly, not the bridge.
 
 ---

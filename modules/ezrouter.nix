@@ -61,6 +61,12 @@ with lib; let
     } // mkStaticLeases vlan.staticLeases;
   };
 
+  # These end up unquoted in nftables rules, so they are checked when the config is evaluated
+  portOrServiceType = types.either types.port (types.strMatching "[a-z][a-z0-9-]*|[0-9]+");
+  rateLimitType = types.strMatching "[0-9]+/(second|minute|hour|day|week)( burst [0-9]+ packets)?";
+  vlanRefType = types.either types.str (types.ints.between 1 4094);
+  ifaceNameType = types.strMatching "[A-Za-z0-9_.:-]{1,15}";
+
   # Extra DHCPv4 options, shared by the bridge and every VLAN
   dhcpOptionsOption = mkOption {
     type = types.listOf types.str;
@@ -145,6 +151,35 @@ with lib; let
     + optionalString (netnsMacs != []) " ether saddr != { ${concatStringsSep ", " netnsMacs} }";
   forceDNS = dnsIfaces != [];
 
+  # Bridge ports. The bridge filters VLANs: a port carries its untagged VLAN (the LAN, or one
+  # of the VLANs) plus the VLANs it is tagged for, and nothing else. bridge.devices are
+  # ports that are only on the LAN.
+  # A port refers to a VLAN by name, or by a bare ID for one this router only carries through
+  # on the bridge without being on it (another router further on is on it)
+  vlanIdOf = v: if isInt v then v else cfg.vlan.${v}.id;
+  bridgePorts = genAttrs cfg.bridge.devices (_: { untagged = null; tagged = []; }) // cfg.bridge.ports;
+  portVlanNames = port: filter isString (optional (port.untagged != null) port.untagged ++ port.tagged);
+  portVlanIds = port: filter isInt (optional (port.untagged != null) port.untagged ++ port.tagged);
+  mkPortNetwork = dev: port:
+    let
+      untaggedId = if port.untagged == null then cfg.bridge.vlanId else vlanIdOf port.untagged;
+      unitName = replaceStrings [ "*" "?" "[" "]" ] [ "_" "_" "_" "_" ] dev;
+    in {
+      "10-${cfg.bridge.name}-${unitName}" = {
+        matchConfig = {
+          Name = dev;
+        };
+        networkConfig = {
+          Bridge = cfg.bridge.name;
+        };
+        linkConfig = {
+          RequiredForOnline = "no";
+        };
+        bridgeVLANs = [{ VLAN = untaggedId; PVID = untaggedId; EgressUntagged = untaggedId; }]
+          ++ map (v: { VLAN = vlanIdOf v; }) port.tagged;
+      };
+    };
+
   vlanNetdevs = concatMapAttrs mkVlanNetdev cfg.vlan;
   vlanNetworks = concatMapAttrs mkVlanNetwork cfg.vlan;
 
@@ -174,8 +209,8 @@ in {
           };
           allowedUDPPorts = mkOption {
             type = types.listOf types.port;
-            default = [53 67];
-            description = "UDP ports to open on all VLAN interfaces (usually DNS + DHCP)";
+            default = [];
+            description = "UDP ports to open on all VLAN interfaces, on top of DNS and DHCP, which are opened per VLAN by enableDNS and enableDHCPv4";
           };
         };
       };
@@ -212,7 +247,7 @@ in {
       devices = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "List of network devices to attach to the bridge";
+        description = "Network devices to attach to the bridge, on the LAN only. For VLANs per port, use `ports`";
       };
       address = mkOption {
         type = types.str;
@@ -248,6 +283,51 @@ in {
         type = types.bool;
         default = true;
         description = "Enable DNS server on the bridge interface";
+      };
+      vlanId = mkOption {
+        type = types.ints.between 1 4094;
+        default = 1;
+        description = ''
+          VLAN ID the bridge uses internally for the untagged LAN. Never goes on the wire
+          tagged; only change it if 1 clashes with one of your VLAN IDs.
+        '';
+      };
+      ports = mkOption {
+        type = types.attrsOf (types.submodule {
+          options = {
+            untagged = mkOption {
+              type = types.nullOr vlanRefType;
+              default = null;
+              example = "iot";
+              description = ''
+                The VLAN that untagged traffic on this port belongs to, so that whatever is
+                plugged in lands on that VLAN: a name from `vlan`, or a bare VLAN ID. null is the LAN.
+              '';
+            };
+            tagged = mkOption {
+              type = types.listOf vlanRefType;
+              default = [];
+              example = [ "iot" "guest" 4 ];
+              description = ''
+                VLANs this port also carries tagged, e.g. towards an access point or a switch:
+                names from `vlan`, or bare VLAN IDs. A bare ID is carried across the bridge
+                only, with no interface on this router, for a VLAN that another router is on.
+              '';
+            };
+          };
+        });
+        default = {};
+        example = literalExpression ''
+          {
+            enp3s0 = { untagged = "iot"; };
+            enp4s0 = { tagged = [ "iot" "guest" ]; };
+          }
+        '';
+        description = ''
+          Which VLANs each bridge port is on, by interface name. The bridge filters VLANs, so a
+          port carries only what is listed here and cannot tag its way into another VLAN.
+          Ports in `devices` are on the LAN only; an entry here for the same interface replaces that.
+        '';
       };
       forceLocalDNS = forceLocalDNSOption;
       staticLeases = staticLeasesOption;
@@ -350,7 +430,7 @@ in {
         type = types.listOf (types.submodule {
           options = {
             port = mkOption {
-              type = types.either types.port types.str;
+              type = portOrServiceType;
               description = "Port number or service name (e.g. 22 or \"ssh\")";
             };
             protocol = mkOption {
@@ -359,9 +439,9 @@ in {
               description = "Protocol";
             };
             rateLimit = mkOption {
-              type = types.nullOr types.str;
+              type = types.nullOr rateLimitType;
               default = null;
-              description = "Per-source-IP rate limit in nftables format, e.g. \"10/hour\" or \"5/minute\"";
+              description = "Per-source rate limit in nftables format, e.g. \"10/hour\" or \"5/minute\". Per IPv4 address, per IPv6 /64";
             };
           };
         });
@@ -380,12 +460,12 @@ in {
       type = types.listOf (types.submodule {
         options = {
           interfaces = mkOption {
-            type = types.nonEmptyListOf types.str;
+            type = types.nonEmptyListOf ifaceNameType;
             description = "Interfaces to open this port on";
             example = [ "eth0" "eth1" ];
           };
           port = mkOption {
-            type = types.either types.port types.str;
+            type = portOrServiceType;
             description = "Port number or service name (e.g. 22 or \"ssh\")";
           };
           protocol = mkOption {
@@ -394,9 +474,9 @@ in {
             description = "Protocol";
           };
           rateLimit = mkOption {
-            type = types.nullOr types.str;
+            type = types.nullOr rateLimitType;
             default = null;
-            description = "Per-source-IP rate limit in nftables format, e.g. \"10/hour\" or \"5/minute\"";
+            description = "Per-source rate limit in nftables format, e.g. \"10/hour\" or \"5/minute\". Per IPv4 address, per IPv6 /64";
           };
         };
       });
@@ -539,6 +619,7 @@ in {
     networking.useDHCP = false;
     systemd.network.enable = true;
     services.nscd.enable = false;
+    # NixOS refuses NSS modules without nscd, and other modules (resolved, mymachines) add them
     system.nssModules = lib.mkForce [];
 
     # DNS server configuration (systemd-resolved)
@@ -548,6 +629,8 @@ in {
       if (hasAttr "settings" options.services.resolved) then {
         settings = {
           Resolve = {
+            # LLMNR answers on the LAN can be spoofed, and nothing here needs it
+            LLMNR = mkDefault "false";
             DNSStubListenerExtra =
               (optional cfg.bridge.enableDNS cfg.bridge.address) ++
               (builtins.filter (x: x != null)
@@ -557,6 +640,7 @@ in {
           };
         };
       } else {
+        llmnr = mkDefault "false";
         extraConfig =
           (optionalString cfg.bridge.enableDNS "DNSStubListenerExtra=${cfg.bridge.address}\n") +
           (concatMapStringsSep "\n" (vlan: "DNSStubListenerExtra=${vlan.address}")
@@ -577,6 +661,8 @@ in {
     networking.firewall.filterForward = true;
     networking.firewall.trustedInterfaces = cfg.trustedInterfaces;
     networking.firewall.logRefusedConnections = false;
+    # Strict: drop packets whose source could not be reached back through the interface they came in on
+    networking.firewall.checkReversePath = mkDefault true;
     networking.nat.enable = true;
     networking.nat.internalInterfaces = cfg.internalInterfaces;
     # Port forwards need the external interface to be set
@@ -602,10 +688,14 @@ in {
             if builtins.length rule.interfaces == 1
             then ''"${builtins.head rule.interfaces}"''
             else "{ ${concatMapStringsSep ", " (i: ''"${i}"'') rule.interfaces} }";
-          meterName = "${concatStringsSep "-" rule.interfaces}-${rule.protocol}-${port}";
+          # Short and unique per rule (set names are limited to 31 characters)
+          meterName = "rl-${substring 0 8 (builtins.hashString "sha256" (builtins.toJSON rule))}";
         in
         if rule.rateLimit != null then
-          ''iifname ${ifaceExpr} ${rule.protocol} dport ${port} ct state new meter ${meterName} { ip saddr limit rate ${rule.rateLimit} } accept''
+          # IPv4 per address, IPv6 per /64 (a host owns a whole /64, so per address would be no limit)
+          ''
+            iifname ${ifaceExpr} ${rule.protocol} dport ${port} ct state new meter ${meterName}-v4 { ip saddr limit rate ${rule.rateLimit} } accept
+            iifname ${ifaceExpr} ${rule.protocol} dport ${port} ct state new meter ${meterName}-v6 { ip6 saddr and ffff:ffff:ffff:ffff:: limit rate ${rule.rateLimit} } accept''
         else
           ''iifname ${ifaceExpr} ${rule.protocol} dport ${port} accept''
       ) allOpenPorts
@@ -650,6 +740,10 @@ in {
             Name = cfg.bridge.name;
             Kind = "bridge";
           };
+          bridgeConfig = {
+            VLANFiltering = true;
+            DefaultPVID = "none";
+          };
         };
       }
       # 40- VLAN netdevs
@@ -658,19 +752,6 @@ in {
 
     systemd.network.networks = mkMerge [
       {
-        # 10- physical members → bridge (enslaving)
-        "10-${cfg.bridge.name}" = {
-          matchConfig = {
-            Name = cfg.bridge.devices;
-          };
-          networkConfig = {
-            Bridge = cfg.bridge.name;
-          };
-          linkConfig = {
-            RequiredForOnline = "no";
-          };
-        };
-
         # 20- WAN uplink
         "20-wan" = {
           matchConfig = {
@@ -714,6 +795,10 @@ in {
           } // optionalAttrs cfg.bridge.enableDHCPv4 {
             DHCPServer = "yes";
           };
+          # The bridge itself is on the LAN untagged and on every VLAN tagged, which is
+          # what the VLAN interfaces on top of it receive
+          bridgeVLANs = [{ VLAN = cfg.bridge.vlanId; PVID = cfg.bridge.vlanId; EgressUntagged = cfg.bridge.vlanId; }]
+            ++ map (vlan: { VLAN = vlan.id; }) (attrValues cfg.vlan);
         } // optionalAttrs cfg.bridge.enableDHCPv6 {
           dhcpPrefixDelegationConfig = {
             UplinkInterface = cfg.wan.device;
@@ -726,6 +811,8 @@ in {
           } // dhcpSendOptions cfg.bridge.enableDNS cfg.bridge.dhcpOptions;
         } // mkStaticLeases cfg.bridge.staticLeases;
       }
+      # 10- physical members → bridge (enslaving), each with its VLANs
+      (concatMapAttrs mkPortNetwork bridgePorts)
       # 60- VLAN networks
       vlanNetworks
     ];
@@ -735,6 +822,22 @@ in {
       (filter (lease: lease.name != null) allStaticLeases));
 
     assertions = [
+      {
+        assertion = all (i: elem i cfg.internalInterfaces) ([ cfg.bridge.name ] ++ attrNames cfg.vlan);
+        message = "services.ezrouter: internalInterfaces must include the bridge and every VLAN, or the missing ones are neither isolated nor NATed (it is ${toString cfg.internalInterfaces})";
+      }
+      {
+        assertion = all (port: all (n: hasAttr n cfg.vlan) (portVlanNames port)) (attrValues cfg.bridge.ports);
+        message = "services.ezrouter: bridge.ports refers to a VLAN name that is not defined in services.ezrouter.vlan (use a number for a VLAN ID this router only carries)";
+      }
+      {
+        assertion = all (port: all (id: all (vlan: vlan.id != id) (attrValues cfg.vlan) && id != cfg.bridge.vlanId) (portVlanIds port)) (attrValues cfg.bridge.ports);
+        message = "services.ezrouter: bridge.ports uses a bare VLAN ID that is a VLAN of this router or bridge.vlanId, use its name instead";
+      }
+      {
+        assertion = all (vlan: vlan.id >= 1 && vlan.id <= 4094 && vlan.id != cfg.bridge.vlanId) (attrValues cfg.vlan);
+        message = "services.ezrouter: VLAN IDs must be 1-4094 and differ from bridge.vlanId (${toString cfg.bridge.vlanId}), set bridge.vlanId to a free ID";
+      }
       {
         assertion = all (i: i.forceLocalDNS -> i.enableDNS) ([ cfg.bridge ] ++ attrValues cfg.vlan);
         message = "services.ezrouter: forceLocalDNS needs enableDNS on the same interface";
@@ -755,8 +858,12 @@ in {
       map (vlanName: {
         name = vlanName;
         value = {
-          allowedTCPPorts = cfg.vlanFirewallPorts.allowedTCPPorts ++ cfg.vlan.${vlanName}.allowedTCPPorts;
-          allowedUDPPorts = cfg.vlanFirewallPorts.allowedUDPPorts ++ cfg.vlan.${vlanName}.allowedUDPPorts;
+          # DNS (TCP too, for truncated answers) where the router is the DNS server, DHCP where it serves leases
+          allowedTCPPorts = cfg.vlanFirewallPorts.allowedTCPPorts ++ cfg.vlan.${vlanName}.allowedTCPPorts
+            ++ optional cfg.vlan.${vlanName}.enableDNS 53;
+          allowedUDPPorts = cfg.vlanFirewallPorts.allowedUDPPorts ++ cfg.vlan.${vlanName}.allowedUDPPorts
+            ++ optional cfg.vlan.${vlanName}.enableDNS 53
+            ++ optional cfg.vlan.${vlanName}.enableDHCPv4 67;
         };
       }) (builtins.attrNames cfg.vlan)
     );
