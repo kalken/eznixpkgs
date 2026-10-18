@@ -66,9 +66,10 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 
 ### Bridge Settings (`services.ezrouter.bridge`)
 
-The bridge filters VLANs: each port carries only the VLANs listed for it, so a device on a port cannot tag its way into another VLAN.
+By default every port in `bridge.devices` carries every VLAN, so a trunk to a switch or access point just works. That also means anything plugged in can tag its way into any VLAN. With `bridge.vlanFiltering = true` the bridge filters VLANs: each port carries only the VLANs listed for it in `bridge.ports`, and ports in `devices` are on the LAN only. Reboot after the first switch to it, as a bridge that is already up may be left without the LAN until then.
 
 ```nix
+bridge.vlanFiltering = true;
 bridge.devices = [ "enp2s0" ];                  # LAN only
 bridge.ports.enp3s0.untagged = "iot";           # plug anything in: it is on iot
 bridge.ports.enp4s0.tagged = [ "iot" "guest" ]; # trunk to an access point, LAN untagged
@@ -78,10 +79,11 @@ bridge.ports.enp5s0.tagged = [ 4 ];             # VLAN 4 is carried through to a
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `bridge.name` | str | `"lan"` | Name of the bridge interface |
-| `bridge.devices` | list of str | `[]` | Physical interfaces to attach to bridge, on the LAN only |
-| `bridge.ports.<dev>.untagged` | str, int or null | `null` | VLAN (name from `vlan`, or a bare ID) that whatever is plugged into this port lands on. `null` is the LAN |
-| `bridge.ports.<dev>.tagged` | list of str or int | `[]` | VLANs this port also carries tagged, e.g. towards an access point or switch: names from `vlan`, or bare IDs for a VLAN this router only carries across the bridge (another router is on it) |
-| `bridge.vlanId` | int | `1` | VLAN ID the bridge uses internally for the untagged LAN. Change it only if it clashes with a VLAN ID |
+| `bridge.devices` | list of str | `[]` | Physical interfaces to attach to bridge. They carry every VLAN, or with `vlanFiltering` the LAN only |
+| `bridge.vlanFiltering` | bool | `false` | Let each port carry only the VLANs given for it in `bridge.ports` |
+| `bridge.ports.<dev>.untagged` | str, int or null | `null` | With `vlanFiltering`: the VLAN (name from `vlan`, or a bare ID) that whatever is plugged into this port lands on. `null` is the LAN |
+| `bridge.ports.<dev>.tagged` | list of str or int | `[]` | With `vlanFiltering`: the VLANs this port also carries tagged, e.g. towards an access point or switch: names from `vlan`, or bare IDs for a VLAN this router only carries across the bridge (another router is on it) |
+| `bridge.vlanId` | int | `1` | With `vlanFiltering`: the VLAN ID the bridge uses internally for the untagged LAN. Change it only if it clashes with a VLAN ID |
 | `bridge.address` | str | `"192.168.1.1"` | IPv4 address for the bridge |
 | `bridge.netmask` | str | `"24"` | Netmask/CIDR for bridge address |
 | `bridge.subnetId` | int | `1` | Subnet ID for DHCPv6 prefix delegation |
@@ -254,7 +256,7 @@ nft list ruleset  # inspect firewall/NAT rules
 - **`wan.keepConfiguration` default is now `null`**: If you previously relied on a default value, set it explicitly.
 - **`wan.keepConfiguration` is now an enum or null**: If you previously used `true`, replace with `"yes"` or `"static"` depending on desired behavior.
 - **`wan.masqueradeOnly` is now `true` by default**: Internal traffic is only masqueraded when it leaves through `wan.device`. Set it to `false` if you rely on masquerading towards another interface: a VPN tunnel on the router itself, a second uplink, PPPoE where traffic leaves through `ppp0` rather than `wan.device`, or devices on other VLANs that only answer the router's address (with `isolateVlans = false`).
-- **Bridge ports are filtered by VLAN**: a port in `bridge.devices` is now on the LAN only. Before, every port carried every VLAN, so a trunk to a switch or access point must now be listed in `bridge.ports.<dev>.tagged`.
+- **`bridge.vlanFiltering` is off by default**: ports carry every VLAN as before. Turn it on to give each port only the VLANs in `bridge.ports`. Ports in `devices` are then on the LAN only, so a trunk to a switch or access point must be listed in `bridge.ports.<dev>.tagged`, and the first switch needs a reboot.
 - **Strict reverse-path filtering and no LLMNR**: `networking.firewall.checkReversePath` is `true` (the NixOS default is `"loose"`) and `services.resolved` has LLMNR off. Both are `mkDefault`, so set them yourself to override, e.g. `checkReversePath = "loose"` if you route asymmetrically.
 - **`internalInterfaces` must list the bridge and every VLAN**: the build fails otherwise, since an interface left out is neither isolated nor NATed.
 - **Firewall ports apply to VLANs only**: `vlanFirewallPorts` now affects VLAN interfaces explicitly, not the bridge.

@@ -247,7 +247,7 @@ in {
       devices = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "Network devices to attach to the bridge, on the LAN only. For VLANs per port, use `ports`";
+        description = "Network devices to attach to the bridge. They carry every VLAN, or with `vlanFiltering` the LAN only (see `ports`)";
       };
       address = mkOption {
         type = types.str;
@@ -284,12 +284,22 @@ in {
         default = true;
         description = "Enable DNS server on the bridge interface";
       };
+      vlanFiltering = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Make the bridge filter VLANs, so that each port carries only the VLANs `ports` gives
+          it. Without it every port in `devices` carries every VLAN, and anything plugged in
+          can tag its way into any of them. Turning it on for a bridge that is already up can
+          leave it without the LAN until the next reboot, so reboot after the first switch.
+        '';
+      };
       vlanId = mkOption {
         type = types.ints.between 1 4094;
         default = 1;
         description = ''
-          VLAN ID the bridge uses internally for the untagged LAN. Never goes on the wire
-          tagged; only change it if 1 clashes with one of your VLAN IDs.
+          With `vlanFiltering`: the VLAN ID the bridge uses internally for the untagged LAN.
+          Never goes on the wire tagged; only change it if 1 clashes with one of your VLAN IDs.
         '';
       };
       ports = mkOption {
@@ -324,9 +334,9 @@ in {
           }
         '';
         description = ''
-          Which VLANs each bridge port is on, by interface name. The bridge filters VLANs, so a
-          port carries only what is listed here and cannot tag its way into another VLAN.
-          Ports in `devices` are on the LAN only; an entry here for the same interface replaces that.
+          Which VLANs each bridge port is on, by interface name. Needs `vlanFiltering`: the bridge
+          then lets a port carry only what is listed here, so it cannot tag its way into another
+          VLAN. Ports in `devices` are on the LAN only; an entry here for the same interface replaces that.
         '';
       };
       forceLocalDNS = forceLocalDNSOption;
@@ -740,6 +750,7 @@ in {
             Name = cfg.bridge.name;
             Kind = "bridge";
           };
+        } // optionalAttrs cfg.bridge.vlanFiltering {
           bridgeConfig = {
             VLANFiltering = true;
             DefaultPVID = "none";
@@ -797,6 +808,7 @@ in {
           };
           # The bridge itself is on the LAN untagged and on every VLAN tagged, which is
           # what the VLAN interfaces on top of it receive
+        } // optionalAttrs cfg.bridge.vlanFiltering {
           bridgeVLANs = [{ VLAN = cfg.bridge.vlanId; PVID = cfg.bridge.vlanId; EgressUntagged = cfg.bridge.vlanId; }]
             ++ map (vlan: { VLAN = vlan.id; }) (attrValues cfg.vlan);
         } // optionalAttrs cfg.bridge.enableDHCPv6 {
@@ -811,8 +823,23 @@ in {
           } // dhcpSendOptions cfg.bridge.enableDNS cfg.bridge.dhcpOptions;
         } // mkStaticLeases cfg.bridge.staticLeases;
       }
-      # 10- physical members → bridge (enslaving), each with its VLANs
-      (concatMapAttrs mkPortNetwork bridgePorts)
+      (if cfg.bridge.vlanFiltering
+        # 10- physical members → bridge (enslaving), each with its VLANs
+        then concatMapAttrs mkPortNetwork bridgePorts
+        # 10- physical members → bridge (enslaving), all VLANs
+        else {
+          "10-${cfg.bridge.name}" = {
+            matchConfig = {
+              Name = cfg.bridge.devices;
+            };
+            networkConfig = {
+              Bridge = cfg.bridge.name;
+            };
+            linkConfig = {
+              RequiredForOnline = "no";
+            };
+          };
+        })
       # 60- VLAN networks
       vlanNetworks
     ];
@@ -827,6 +854,10 @@ in {
         message = "services.ezrouter: internalInterfaces must include the bridge and every VLAN, or the missing ones are neither isolated nor NATed (it is ${toString cfg.internalInterfaces})";
       }
       {
+        assertion = cfg.bridge.ports != {} -> cfg.bridge.vlanFiltering;
+        message = "services.ezrouter: bridge.ports only does something with bridge.vlanFiltering = true";
+      }
+      {
         assertion = all (port: all (n: hasAttr n cfg.vlan) (portVlanNames port)) (attrValues cfg.bridge.ports);
         message = "services.ezrouter: bridge.ports refers to a VLAN name that is not defined in services.ezrouter.vlan (use a number for a VLAN ID this router only carries)";
       }
@@ -835,8 +866,8 @@ in {
         message = "services.ezrouter: bridge.ports uses a bare VLAN ID that is a VLAN of this router or bridge.vlanId, use its name instead";
       }
       {
-        assertion = all (vlan: vlan.id >= 1 && vlan.id <= 4094 && vlan.id != cfg.bridge.vlanId) (attrValues cfg.vlan);
-        message = "services.ezrouter: VLAN IDs must be 1-4094 and differ from bridge.vlanId (${toString cfg.bridge.vlanId}), set bridge.vlanId to a free ID";
+        assertion = all (vlan: vlan.id >= 1 && vlan.id <= 4094 && (!cfg.bridge.vlanFiltering || vlan.id != cfg.bridge.vlanId)) (attrValues cfg.vlan);
+        message = "services.ezrouter: VLAN IDs must be 1-4094 and, with vlanFiltering, differ from bridge.vlanId (${toString cfg.bridge.vlanId}), set bridge.vlanId to a free ID";
       }
       {
         assertion = all (i: i.forceLocalDNS -> i.enableDNS) ([ cfg.bridge ] ++ attrValues cfg.vlan);
