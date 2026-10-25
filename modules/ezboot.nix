@@ -7,9 +7,9 @@ let
 
   targetLuksName = cfg.luksName;
 
-  # Safe to read: this module only ever writes keyFile/preOpenCommands/
-  # fallbackToPassword for this entry, never device, so there's no cycle -
-  # just a plain read of the value the user already declared themselves.
+  # Safe to read: this module only ever writes keyFile for this entry,
+  # never device, so there's no cycle - just a plain read of the value the
+  # user already declared themselves.
   luksDevice = config.boot.initrd.luks.devices.${targetLuksName}.device;
 
   bootFs = config.fileSystems.${cfg.bootPath} or null;
@@ -17,23 +17,10 @@ let
   keyFilePath = "${cfg.bootPath}/${cfg.keyFileName}";
 
   # Mounts the boot partition and stages the temp key for the LUKS unlock
-  # step (keyFile = "/ezboot.key"). Used by the classic stage-1 path below.
-  # Full store paths so Nix's closure scanner picks these up.
-  stageKeyCommands = ''
-    ${pkgs.coreutils}/bin/mkdir -p /ezboot-boot
-    if ${pkgs.util-linux}/bin/mount -t ${bootFs.fsType} -o ro ${bootFs.device} /ezboot-boot 2>/dev/null; then
-      if [ -f /ezboot-boot/${cfg.keyFileName} ]; then
-        ${pkgs.coreutils}/bin/cp /ezboot-boot/${cfg.keyFileName} /ezboot.key
-        ${pkgs.coreutils}/bin/chmod 600 /ezboot.key
-      fi
-      ${pkgs.util-linux}/bin/umount /ezboot-boot
-    fi
-  '';
-
-  # Same as stageKeyCommands, for the systemd stage-1 unit below. Bare
-  # command names (script= supplies the closure/PATH, matching nixpkgs's
-  # own cryptsetup-clevis pattern) and unguarded, since this unit runs
-  # independently and can fail loudly.
+  # step (keyFile = "/ezboot.key"), run by the systemd stage-1 unit below.
+  # Bare command names (script= supplies the closure/PATH, matching
+  # nixpkgs's own cryptsetup-clevis pattern) and unguarded, since this unit
+  # runs independently and can fail loudly.
   stageKeyScriptText = ''
     set -x
     mkdir -p /ezboot-boot
@@ -173,16 +160,15 @@ in {
       boot.initrd.kernelModules = [ bootFs.fsType ]
         ++ optionals (bootFs.fsType == "vfat") [ "nls_cp437" "nls_iso8859-1" ];
 
-      # Fields are always present, only their values are conditional -
-      # making presence itself conditional causes infinite recursion via
-      # nixpkgs's own systemd-stage-1 assertion on preOpenCommands.
+      # Only keyFile: nixpkgs 3ec636362e18 (2026-10-23) removed scripted
+      # stage 1, and with it fallbackToPassword, preOpenCommands and
+      # the switch between them (reading it now throws). Under systemd
+      # stage 1 those two were their defaults anyway, so older nixpkgs
+      # behaves as before; scripted stage 1 there is no longer supported.
       boot.initrd.luks.devices.${targetLuksName} = {
         keyFile = "/ezboot.key";
-        fallbackToPassword = !config.boot.initrd.systemd.enable;
-        preOpenCommands = if config.boot.initrd.systemd.enable then "" else stageKeyCommands;
       };
 
-      # Ignored under classic stage 1, so safe to declare unconditionally.
       # Ordered against the specific systemd-cryptsetup instance (always
       # runs) rather than cryptsetup-pre.target (not guaranteed activated).
       boot.initrd.systemd.services.ezboot-stage-key = {

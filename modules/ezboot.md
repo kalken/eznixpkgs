@@ -136,26 +136,22 @@ before attempting to unlock the target LUKS device, stages the key file
 into the initrd's own tmpfs, and uses it to unlock root automatically. If
 the key file isn't present or doesn't work, it falls back to the normal
 passphrase prompt — `ezboot` never removes your ability to unlock the
-disk manually. The exact mechanism differs depending on your initrd:
+disk manually.
 
-* **Classic (non-systemd) stage 1** (`boot.initrd.systemd.enable = false`):
-  the key is staged via `boot.initrd.luks.devices.<name>.preOpenCommands`,
-  with `fallbackToPassword = true` providing the passphrase fallback.
-* **systemd stage 1** (`boot.initrd.systemd.enable = true`):
-  `preOpenCommands` isn't supported there, so the key is staged by a
-  dedicated unit (`ezboot-stage-key.service`) ordered directly before the
-  `systemd-cryptsetup@<name>.service` instance for the target device.
-  Password fallback is automatic on this path — no equivalent option is
-  needed.
+The key is staged by a dedicated unit in the systemd stage 1
+(`ezboot-stage-key.service`), ordered directly before the
+`systemd-cryptsetup@<name>.service` instance for the target device, and
+`boot.initrd.luks.devices.<name>.keyFile` points at it. Password fallback
+is automatic. This has been verified end-to-end on real hardware
+(including several rounds of live initrd debugging to get unit ordering,
+kernel module loading, and device-availability timing right — see the
+module source comments for the specifics).
 
-Both paths use `boot.initrd.luks.devices.<name>.keyFile` the same way.
-Only the systemd stage 1 path has actually been verified end-to-end on
-real hardware (including several rounds of live initrd debugging to get
-unit ordering, kernel module loading, and device-availability timing
-right — see the module source comments for the specifics). The classic
-path uses an older, more established NixOS mechanism that predates all of
-that, so it's expected to be less fragile, but it hasn't been exercised
-in practice — treat it as unverified if you're relying on it.
+ezboot needs the systemd stage 1. nixpkgs removed the older scripted
+stage 1 on 2026-10-23 (3ec636362e18), so on current nixpkgs it is the only
+one. On an older nixpkgs that still has it, `boot.initrd.systemd.enable`
+must be `true`: ezboot used to support the scripted one through
+`preOpenCommands` and `fallbackToPassword`, which no longer exist.
 
 Once the system reaches `multi-user.target`, a cleanup service runs
 `ezboot remove-key`, which removes the temporary LUKS slot and deletes
