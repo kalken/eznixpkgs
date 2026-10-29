@@ -70,6 +70,6 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [eznetns](https://github.com/kalken/eznetns) | A command line helper to configure separated network environments (namespaces), and control which processes make use of them. |
 | [ezsensors](pkgs/ezsensors/ezsensors.sh) | Simple script to get temperature readings from `/sys`. |
 | [ezproton](pkgs/ezproton/ezproton.py) | Automatically installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d. |
-| [ezsocks](https://github.com/kalken/ezsocks) | A proxy server that makes your eyeballs happy, forked from [prettysocks](https://github.com/twisteroidambassador/prettysocks). |
+| [ezsocks](https://github.com/kalken/ezsocks) | A proxy server that makes your eyeballs happy, based on [prettysocks](https://github.com/twisteroidambassador/prettysocks). |
 | [wg-tools](https://github.com/mullvad/wg-tools) | Generates WireGuard® configuration files for Mullvad. |
 | [ezqbit](pkgs/ezqbit/ezqbit.md) | Flat alternative WebUI for qBittorrent, in dark and light, for use with `services.qbittorrent`. |

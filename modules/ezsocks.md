@@ -2,7 +2,7 @@
 
 A simple NixOS module for running EzSocks as a systemd service, either in the default network namespace or inside isolated named network namespaces via `eznetns`.
 
-Built from [`kalken/ezsocks`](https://github.com/kalken/ezsocks), branch `develop` — a fork of [`twisteroidambassador/prettysocks`](https://github.com/twisteroidambassador/prettysocks) with worker-process support and a TOML config file.
+Built from [`kalken/ezsocks`](https://github.com/kalken/ezsocks), branch `develop` — based on [`twisteroidambassador/prettysocks`](https://github.com/twisteroidambassador/prettysocks) with worker-process support and a TOML config file.
 
 ## ✨ Features
 
