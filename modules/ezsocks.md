@@ -12,7 +12,7 @@ Built from [`kalken/ezsocks`](https://github.com/kalken/ezsocks), branch `develo
 - Namespace-scoped DNS and NSS via bind-mounted `resolv.conf` / `nsswitch.conf`
 - Multi-process worker support (`SO_REUSEPORT`) for spreading load across CPU cores
 - Relays data straight between sockets from event loop callbacks, and caches DNS lookups for a short time
-- Full proxy tuning (Happy Eyeballs parameters, relay buffer size, DNS cache lifetime, listen backlog, log level) exposed as Nix options, written to a generated TOML config file per service
+- Full proxy tuning (Happy Eyeballs parameters, relay buffer size, DNS cache lifetime, handshake timeout, listen backlog, log level) exposed as Nix options, written to a generated TOML config file per service
 - Listens on `127.0.0.1:1080` and `[::1]:1080` (SOCKS5) by default
 
 ## 🚀 Quick Start
@@ -86,6 +86,7 @@ With custom settings, e.g. running 4 worker processes and listening on all inter
 | `relayBufferSize` | int | `262144` | `relay_buffer_size` | Bytes that may be waiting to be sent to one side of a relayed connection before reading from the other side is paused |
 | `keepaliveIdle` | int | `300` | `keepalive_idle` | Seconds of silence before TCP keepalive probes are sent to the client and the upstream server, so connections to peers that have disappeared are dropped; `0` disables keepalive |
 | `dnsCacheTtl` | int | `60` | `dns_cache_ttl` | (async-stagger only) Seconds to cache address resolution results; failed lookups are not cached; `0` disables the cache. Instances in a network namespace have nscd disabled, so this is their only DNS cache |
+| `handshakeTimeout` | int or float | `30` | `handshake_timeout` | Seconds a client gets to complete the SOCKS5 negotiation before it is disconnected; connecting upstream is not counted; `0` disables the timeout |
 
 ## 📝 Notes
 

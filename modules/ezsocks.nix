@@ -98,6 +98,16 @@ let
           to disable the cache.
         '';
       };
+      handshakeTimeout = mkOption {
+        type = types.either types.ints.unsigned types.float;
+        default = 30;
+        description = ''
+          Seconds a client gets to complete the SOCKS5 negotiation before it
+          is disconnected, so clients that connect and send nothing can't
+          hold connections open. Connecting to the upstream server is not
+          counted. Set to 0 to disable.
+        '';
+      };
     };
   };
 
@@ -114,6 +124,7 @@ let
     relay_buffer_size = settings.relayBufferSize;
     keepalive_idle = settings.keepaliveIdle;
     dns_cache_ttl = settings.dnsCacheTtl;
+    handshake_timeout = settings.handshakeTimeout;
   };
 in {
   options.services.ezsocks = {
