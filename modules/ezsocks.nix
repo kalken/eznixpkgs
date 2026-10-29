@@ -72,10 +72,11 @@ let
       };
       relayBufferSize = mkOption {
         type = types.int;
-        default = 131072;
+        default = 262144;
         description = ''
-          Buffer size, in bytes, used to relay data between downstream and
-          upstream connections.
+          Amount of data, in bytes, that may be waiting to be sent to one
+          side of a relayed connection before reading from the other side
+          is paused.
         '';
       };
       keepaliveIdle = mkOption {
@@ -86,6 +87,15 @@ let
           sent to the client and the upstream server. Connections whose peer
           has disappeared without closing are dropped after about two more
           minutes. Set to 0 to disable keepalive.
+        '';
+      };
+      dnsCacheTtl = mkOption {
+        type = types.ints.unsigned;
+        default = 60;
+        description = ''
+          (async-stagger implementation only) Seconds to cache address
+          resolution results for. Failed lookups are not cached. Set to 0
+          to disable the cache.
         '';
       };
     };
@@ -103,6 +113,7 @@ let
     worker_processes = settings.workerProcesses;
     relay_buffer_size = settings.relayBufferSize;
     keepalive_idle = settings.keepaliveIdle;
+    dns_cache_ttl = settings.dnsCacheTtl;
   };
 in {
   options.services.ezsocks = {

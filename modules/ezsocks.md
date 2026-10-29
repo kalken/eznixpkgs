@@ -2,7 +2,7 @@
 
 A simple NixOS module for running EzSocks as a systemd service, either in the default network namespace or inside isolated named network namespaces via `eznetns`.
 
-Built from [`kalken/ezsocks`](https://github.com/kalken/ezsocks), branch `master` — a fork of [`twisteroidambassador/prettysocks`](https://github.com/twisteroidambassador/prettysocks) with worker-process support and a TOML config file.
+Built from [`kalken/ezsocks`](https://github.com/kalken/ezsocks), branch `develop` — a fork of [`twisteroidambassador/prettysocks`](https://github.com/twisteroidambassador/prettysocks) with worker-process support and a TOML config file.
 
 ## ✨ Features
 
@@ -11,8 +11,8 @@ Built from [`kalken/ezsocks`](https://github.com/kalken/ezsocks), branch `master
 - Automatic system user and group provisioning
 - Namespace-scoped DNS and NSS via bind-mounted `resolv.conf` / `nsswitch.conf`
 - Multi-process worker support (`SO_REUSEPORT`) for spreading load across CPU cores
-- Runs on `uvloop` for a faster event loop (falls back to stdlib `asyncio` if unavailable, but the package always includes it)
-- Full proxy tuning (Happy Eyeballs parameters, relay buffer size, listen backlog, log level) exposed as Nix options, written to a generated TOML config file per service
+- Relays data straight between sockets from event loop callbacks, and caches DNS lookups for a short time
+- Full proxy tuning (Happy Eyeballs parameters, relay buffer size, DNS cache lifetime, listen backlog, log level) exposed as Nix options, written to a generated TOML config file per service
 - Listens on `127.0.0.1:1080` and `[::1]:1080` (SOCKS5) by default
 
 ## 🚀 Quick Start
@@ -83,8 +83,9 @@ With custom settings, e.g. running 4 worker processes and listening on all inter
 | `firstAddressFamilyCount` | int | `1` | `first_address_family_count` | Addresses of the first resolved family to try before interleaving (RFC 8305 §8) |
 | `connectionAttemptDelay` | float | `0.25` | `connection_attempt_delay` | Delay in seconds between successive connection attempts (RFC 8305 §8) |
 | `workerProcesses` | int or `"auto"` | `"auto"` | `worker_processes` | Number of worker processes sharing the listen port via `SO_REUSEPORT`; `"auto"` uses one per CPU core |
-| `relayBufferSize` | int | `131072` | `relay_buffer_size` | Buffer size, in bytes, used to relay data between downstream and upstream connections |
+| `relayBufferSize` | int | `262144` | `relay_buffer_size` | Bytes that may be waiting to be sent to one side of a relayed connection before reading from the other side is paused |
 | `keepaliveIdle` | int | `300` | `keepalive_idle` | Seconds of silence before TCP keepalive probes are sent to the client and the upstream server, so connections to peers that have disappeared are dropped; `0` disables keepalive |
+| `dnsCacheTtl` | int | `60` | `dns_cache_ttl` | (async-stagger only) Seconds to cache address resolution results; failed lookups are not cached; `0` disables the cache. Instances in a network namespace have nscd disabled, so this is their only DNS cache |
 
 ## 📝 Notes
 
