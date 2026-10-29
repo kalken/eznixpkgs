@@ -4,8 +4,6 @@ A simple NixOS module for running EzSocks as a systemd service, either in the de
 
 Built from [`kalken/ezsocks`](https://github.com/kalken/ezsocks), branch `master` — a fork of [`twisteroidambassador/prettysocks`](https://github.com/twisteroidambassador/prettysocks) with worker-process support and a TOML config file.
 
-> **Renamed from `prettysocks`**: the package and module used to be called `prettysocks`. `services.prettysocks.*` options still work and are forwarded to `services.ezsocks.*` with a deprecation warning; update your config when convenient.
-
 ## ✨ Features
 
 - Default-namespace service with configurable user/group

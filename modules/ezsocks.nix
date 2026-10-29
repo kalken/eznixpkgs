@@ -1,13 +1,7 @@
-{ config, lib, pkgs, options, ... }:
+{ config, lib, pkgs, ... }:
 let
   cfg = config.services.ezsocks;
-  inherit (lib) mkEnableOption mkIf mkOption types mkMerge nameValuePair mkAliasOptionModule mkDefault;
-
-  legacyOptionNames = [ "enable" "user" "group" "settings" "instances" ];
-  legacyOptionWarnings = lib.concatMap (name:
-    lib.optional options.services.prettysocks.${name}.isDefined
-      "`services.prettysocks.${name}` is deprecated and has been renamed to `services.ezsocks.${name}`. Please change your configuration."
-  ) legacyOptionNames;
+  inherit (lib) mkEnableOption mkIf mkOption types mkMerge nameValuePair mkDefault;
 
   tomlFormat = pkgs.formats.toml { };
 
@@ -111,10 +105,6 @@ let
     keepalive_idle = settings.keepaliveIdle;
   };
 in {
-  imports = map (name:
-    mkAliasOptionModule [ "services" "prettysocks" name ] [ "services" "ezsocks" name ]
-  ) legacyOptionNames;
-
   options.services.ezsocks = {
     enable = mkEnableOption "EzSocks service in default namespace";
     user = mkOption {
@@ -157,86 +147,83 @@ in {
       description = "Per-network-namespace EzSocks instances";
     };
   };
-  config = mkMerge [
-    { warnings = legacyOptionWarnings; }
-    (mkIf (cfg.enable || (cfg.instances != {})) {
-      # Define users and groups for both default service and instances
-      users.users = mkMerge ([
-        (mkIf cfg.enable {
-          "${cfg.user}" = {
-            isSystemUser = true;
-            group = cfg.group;
-            description = "EzSocks service user";
+  config = mkIf (cfg.enable || (cfg.instances != {})) {
+    # Define users and groups for both default service and instances
+    users.users = mkMerge ([
+      (mkIf cfg.enable {
+        "${cfg.user}" = {
+          isSystemUser = true;
+          group = cfg.group;
+          description = "EzSocks service user";
+        };
+      })
+    ] ++ (lib.mapAttrsToList (name: instanceCfg:
+      mkIf instanceCfg.enable {
+        "ezsocks-${name}" = {
+          isSystemUser = true;
+          group = instanceCfg.group;
+          description = "EzSocks instance user for ${name}";
+        };
+      }
+    ) cfg.instances));
+    users.groups = mkMerge ([
+      (mkIf cfg.enable {
+        "${cfg.group}" = {};
+      })
+    ] ++ (lib.mapAttrsToList (name: instanceCfg:
+      mkIf instanceCfg.enable {
+        "${instanceCfg.group}" = {};
+      }
+    ) cfg.instances));
+    # Define all systemd services (default and instances)
+    systemd.services = mkMerge ([
+      # Default EzSocks service
+      (mkIf cfg.enable {
+        ezsocks = {
+          enable = true;
+          description = "EzSocks service";
+          serviceConfig = {
+            User = cfg.user;
+            Group = cfg.group;
+            ExecStart = "${pkgs.ezsocks}/bin/ezsocks --config ${mkConfigFile "default" cfg.settings}";
+            Restart = "always";
+            # Every proxied connection uses two file descriptors, the systemd
+            # default of 1024 caps a worker at about 500 connections
+            LimitNOFILE = mkDefault 65536;
           };
-        })
-      ] ++ (lib.mapAttrsToList (name: instanceCfg:
-        mkIf instanceCfg.enable {
-          "ezsocks-${name}" = {
-            isSystemUser = true;
-            group = instanceCfg.group;
-            description = "EzSocks instance user for ${name}";
-          };
-        }
-      ) cfg.instances));
-      users.groups = mkMerge ([
-        (mkIf cfg.enable {
-          "${cfg.group}" = {};
-        })
-      ] ++ (lib.mapAttrsToList (name: instanceCfg:
-        mkIf instanceCfg.enable {
-          "${instanceCfg.group}" = {};
-        }
-      ) cfg.instances));
-      # Define all systemd services (default and instances)
-      systemd.services = mkMerge ([
-        # Default EzSocks service
-        (mkIf cfg.enable {
-          ezsocks = {
+          wantedBy = [ "multi-user.target" ];
+        };
+      })
+      # Instance-specific services
+      (lib.mapAttrs' (name: instanceCfg:
+        nameValuePair "ezsocks-${name}" (
+          mkIf instanceCfg.enable {
             enable = true;
-            description = "EzSocks service";
+            description = "EzSocks VPN for ${name}";
+            unitConfig = {
+              Requires = "eznetns-${name}.service";
+              After = "eznetns-${name}.service";
+              BindsTo = "eznetns-${name}.service";
+            };
             serviceConfig = {
-              User = cfg.user;
-              Group = cfg.group;
-              ExecStart = "${pkgs.ezsocks}/bin/ezsocks --config ${mkConfigFile "default" cfg.settings}";
+              User = "ezsocks-${name}";
+              Group = instanceCfg.group;
+              ExecStart = "${pkgs.ezsocks}/bin/ezsocks --config ${mkConfigFile name instanceCfg.settings}";
+              NetworkNamespacePath = "/run/netns/${name}";
+              BindReadOnlyPaths = [
+                "/etc/eznetns/${name}/resolv.conf:/etc/resolv.conf"
+                "/etc/eznetns/${name}/nsswitch.conf:/etc/nsswitch.conf"
+                "/var/empty:/var/run/nscd"
+              ];
               Restart = "always";
               # Every proxied connection uses two file descriptors, the systemd
               # default of 1024 caps a worker at about 500 connections
               LimitNOFILE = mkDefault 65536;
             };
             wantedBy = [ "multi-user.target" ];
-          };
-        })
-        # Instance-specific services
-        (lib.mapAttrs' (name: instanceCfg:
-          nameValuePair "ezsocks-${name}" (
-            mkIf instanceCfg.enable {
-              enable = true;
-              description = "EzSocks VPN for ${name}";
-              unitConfig = {
-                Requires = "eznetns-${name}.service";
-                After = "eznetns-${name}.service";
-                BindsTo = "eznetns-${name}.service";
-              };
-              serviceConfig = {
-                User = "ezsocks-${name}";
-                Group = instanceCfg.group;
-                ExecStart = "${pkgs.ezsocks}/bin/ezsocks --config ${mkConfigFile name instanceCfg.settings}";
-                NetworkNamespacePath = "/run/netns/${name}";
-                BindReadOnlyPaths = [
-                  "/etc/eznetns/${name}/resolv.conf:/etc/resolv.conf"
-                  "/etc/eznetns/${name}/nsswitch.conf:/etc/nsswitch.conf"
-                  "/var/empty:/var/run/nscd"
-                ];
-                Restart = "always";
-                # Every proxied connection uses two file descriptors, the systemd
-                # default of 1024 caps a worker at about 500 connections
-                LimitNOFILE = mkDefault 65536;
-              };
-              wantedBy = [ "multi-user.target" ];
-            }
-          )
-        ) cfg.instances)
-      ]);
-    })
-  ];
+          }
+        )
+      ) cfg.instances)
+    ]);
+  };
 }
