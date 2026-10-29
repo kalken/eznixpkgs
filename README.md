@@ -46,6 +46,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 | --- | --- |
 | [ezconf-cli](modules/ezconf-cli.md) | A configuration tool wrapped in nvim to make it easier to edit nix files. |
 | [ezsh](modules/ezsh.md) | Sensible zsh configuration for all users. Also works on macOS via `darwinModules.default`. |
+| [ezhandy](modules/ezhandy.md) | Handy offline speech-to-text, ready on Plasma Wayland: talk key (Right Ctrl works too), paste method and app settings from the config. |
 
 ## 📦 Packages
 
