@@ -16,7 +16,7 @@ Sets up [Handy](https://handy.computer), the offline speech-to-text app, so it w
 ```nix
 programs.ezhandy = {
   enable      = true;
-  user        = "alice";
+  users       = [ "alice" ];
   talkKey     = "ctrl_right";
   pasteMethod = "ctrl_shift_v";
 };
@@ -81,7 +81,7 @@ Anything in Handy's `settings_store.json` can go in `settings`, by the same name
 ```nix
 programs.ezhandy = {
   enable  = true;
-  user    = "alice";
+  users   = [ "alice" ];
   talkKey = "ctrl_right";
   settings = {
     selected_model        = "handy-computer/parakeet-unified-en-0.6b-gguf/parakeet-unified-en-0.6b-Q8_0.gguf";
@@ -98,7 +98,7 @@ Settings listed here go back to these values each time Handy starts; change them
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `enable` | bool | `false` | Enable ezhandy |
-| `user` | str | — | User account Handy is for (gets the package and the groups) |
+| `users` | list of str | — | User accounts Handy is for: each gets the package and the groups, and Handy starts at their login (the old `user = "name"` still works) |
 | `package` | package | `pkgs.handy` | The Handy package |
 | `talkKey` | null or str | `null` | Transcribe shortcut; `null` leaves it to the app |
 | `keyboardImplementation` | `"auto"`, `"tauri"`, `"handy_keys"` | `"auto"` | Shortcut backend; `auto` picks `handy_keys` when `talkKey` needs it |

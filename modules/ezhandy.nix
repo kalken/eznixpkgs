@@ -81,15 +81,30 @@ let
       ln -s ${launcher}/bin/handy $out/bin/handy
     '';
   };
+  # The login entry is system-wide; it starts Handy only for the configured users, the ones
+  # with the package and the groups.
+  autostartScript = pkgs.writeShellScript "ezhandy-autostart" ''
+    case " ${lib.concatStringsSep " " cfg.users} " in
+      *" $(${pkgs.coreutils}/bin/id -un) "*) exec ${package}/bin/handy --start-hidden ;;
+    esac
+  '';
 in
 {
+  imports = [
+    (lib.mkChangedOptionModule [ "programs" "ezhandy" "user" ] [ "programs" "ezhandy" "users" ]
+      (config: [ config.programs.ezhandy.user ]))
+  ];
+
   options.programs.ezhandy = {
     enable = lib.mkEnableOption "ezhandy - Handy offline speech-to-text, set up for Plasma Wayland";
 
-    user = lib.mkOption {
-      type        = lib.types.str;
-      description = "User account Handy is for (gets the package and the groups it needs).";
-      example     = "alice";
+    users = lib.mkOption {
+      type        = lib.types.listOf lib.types.str;
+      description = ''
+        User accounts Handy is for: each gets the package and the groups it needs, and Handy
+        starts at their login. Other users get neither.
+      '';
+      example     = [ "alice" "bob" ];
     };
 
     package = lib.mkPackageOption pkgs "handy" { };
@@ -200,6 +215,10 @@ in
   config = lib.mkIf cfg.enable {
     assertions = [
       {
+        assertion = cfg.users != [ ];
+        message = "programs.ezhandy.users is empty: list the user accounts Handy is for.";
+      }
+      {
         assertion = cfg.talkKey == null || builtins.match ".*[[:space:]].*" cfg.talkKey == null;
         message = ''
           programs.ezhandy.talkKey "${toString cfg.talkKey}" contains a space. Handy's key names
@@ -226,12 +245,12 @@ in
       }
     ];
 
-    users.users.${cfg.user} = {
+    users.users = lib.genAttrs cfg.users (_: {
       packages    = [ package ];
       # ydotool: Handy types and pastes through it on Wayland (wtype needs a protocol KWin
       # doesn't offer). input: HandyKeys reads /dev/input. Both take effect at the next login.
       extraGroups = [ "ydotool" ] ++ lib.optional useHandyKeys "input";
-    };
+    });
 
     programs.ydotool.enable = true;
 
@@ -295,7 +314,7 @@ in
         Type=Application
         Name=Handy
         Icon=handy
-        Exec=${package}/bin/handy --start-hidden
+        Exec=${autostartScript}
         StartupNotify=false
         Terminal=false
       '';
