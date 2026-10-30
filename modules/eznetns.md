@@ -213,7 +213,7 @@ Things to know:
 - Proxy port forwards use eznetns-<name>-forward-*.socket + .service pairs with systemd-socket-proxyd
 - Nat port forwards and client routing are set up by eznetns-<name>.service itself; the veth pair only exists for instances that use one of them
 - Config files stored in /etc/eznetns/<name>/ (nftables.conf, nsswitch.conf, etc.)
-- Services mapped via netnsService or listed in instances.<name>.services get NetworkNamespacePath=/run/netns/<name> and bind mounts
+- Services mapped via netnsService or listed in instances.<name>.services get NetworkNamespacePath=/run/netns/<name> and bind mounts, and are bound to `eznetns-<name>.service` (they stop when the netns is removed)
 - Default firewall drops input/forward except established connections, ICMP, and loopback
 - Set nftables = "..."; to provide complete custom firewall and bypass defaults
 - Config changes trigger reloads via CONFIG_HASH environment variable

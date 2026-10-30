@@ -7,9 +7,8 @@ Built from [`kalken/ezsocks`](https://github.com/kalken/ezsocks), branch `develo
 ## ✨ Features
 
 - Default-namespace service with configurable user/group
-- Per-namespace instances bound to `eznetns-<name>.service`
+- Named instances, each run inside an `eznetns` netns (joined by eznetns through `netnsService`)
 - Automatic system user and group provisioning
-- Namespace-scoped DNS and NSS via bind-mounted `resolv.conf` / `nsswitch.conf`
 - Multi-process worker support (`SO_REUSEPORT`) for spreading load across CPU cores
 - Relays data straight between sockets from event loop callbacks, and caches DNS lookups for a short time
 - Full proxy tuning (Happy Eyeballs parameters, relay buffer size, DNS cache lifetime, handshake timeout, listen backlog, log level) exposed as Nix options, written to a generated TOML config file per service
@@ -25,12 +24,14 @@ Built from [`kalken/ezsocks`](https://github.com/kalken/ezsocks), branch `develo
 }
 ```
 
-Or with a named network namespace instance:
+Or with named instances, in the `myns` eznetns netns by default:
 
 ```nix
 {
-  services.ezsocks.instances.myns = {
-    enable = true;
+  services.ezsocks.instances = {
+    myns.enable = true;
+    # a second one in the same netns
+    myns-alt = { enable = true; netns = "myns"; settings.listenPort = 1081; };
   };
 }
 ```
@@ -59,13 +60,14 @@ With custom settings, e.g. running 4 worker processes and listening on all inter
 | `services.ezsocks.user` | str | `"ezsocks"` | User under which to run the default-namespace service |
 | `services.ezsocks.group` | str | `"proxy"` | Group under which to run the default-namespace service |
 | `services.ezsocks.settings` | attrs | `{}` | EzSocks proxy settings for the default-namespace service (see below) |
-| `services.ezsocks.instances` | attrs | `{}` | Per-network-namespace EzSocks instances |
+| `services.ezsocks.instances` | attrs | `{}` | Named EzSocks instances, each in its own eznetns netns by default |
 
 ### Instance Settings (`services.ezsocks.instances.<name>`)
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `instances.<name>.enable` | bool | `false` | Enable this EzSocks instance in its network namespace |
+| `instances.<name>.enable` | bool | `false` | Enable this EzSocks instance |
+| `instances.<name>.netns` | null or str | `<name>` | eznetns instance to run in; `null` runs it in the default network namespace |
 | `instances.<name>.user` | str | `"ezsocks"` | User under which to run this instance (a dedicated `ezsocks-<name>` system user is created) |
 | `instances.<name>.group` | str | `"nogroup"` | Group under which to run this instance |
 | `instances.<name>.settings` | attrs | `{}` | EzSocks proxy settings for this instance (see below) |
@@ -92,8 +94,7 @@ With custom settings, e.g. running 4 worker processes and listening on all inter
 
 - Enabling `services.ezsocks.enable` creates an `ezsocks.service` unit and provisions the configured user and group automatically.
 - Each entry in `instances` creates an `ezsocks-<name>.service` unit with a dedicated `ezsocks-<name>` system user.
-- Instance services run inside `/run/netns/<name>` and are bound to `eznetns-<name>.service`; if the namespace goes down, the instance stops with it. The namespace can be of any kind.
-- Namespace-local DNS resolution is provided by bind-mounting `/etc/eznetns/<name>/resolv.conf` and `/etc/eznetns/<name>/nsswitch.conf` into the service, with nscd disabled via `/var/empty:/var/run/nscd`.
+- An instance with `netns` set is added to `services.eznetns.netnsService`, so eznetns puts it in the netns: it runs inside `/run/netns/<netns>`, gets that netns's `resolv.conf` / `nsswitch.conf` with nscd disabled, and stops and starts with `eznetns-<netns>.service`. This needs `services.eznetns.enable`.
 - Each service (default and every instance) gets its own generated TOML config file passed via `--config`, built from the `settings` submodule — the underlying `ezsocks` binary defaults are not used.
 - Services run with `LimitNOFILE=65536`. Each proxied connection uses two file descriptors per worker, so the systemd default of 1024 would cap a worker at about 500 connections. Override with `systemd.services.ezsocks-<name>.serviceConfig.LimitNOFILE` (`ezsocks` for the default-namespace service).
 - `workerProcesses` > 1 requires `SO_REUSEPORT` support (Linux, *BSD, macOS; not Windows) — fine for NixOS.

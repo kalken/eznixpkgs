@@ -673,12 +673,14 @@ in
           }
         ) cfg.instances;
 
-        # Apply netns configuration to specified services
+        # Apply netns configuration to specified services. BindsTo stops a
+        # service with its netns, so it is never left in a removed one.
         netnsServices = mapAttrs' (serviceName: netnsName:
           nameValuePair serviceName {
             unitConfig = {
               Requires = [ "eznetns-${netnsName}.service" ];
               After = [ "eznetns-${netnsName}.service" ];
+              BindsTo = [ "eznetns-${netnsName}.service" ];
             };
             serviceConfig = {
               NetworkNamespacePath = "/run/netns/${netnsName}";

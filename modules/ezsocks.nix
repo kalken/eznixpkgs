@@ -1,7 +1,11 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.services.ezsocks;
-  inherit (lib) mkEnableOption mkIf mkOption types mkMerge nameValuePair mkDefault;
+  inherit (lib) mkEnableOption mkIf mkOption types mkMerge nameValuePair mkDefault
+    filterAttrs mapAttrs' mapAttrsToList;
+
+  # Enabled instances that run inside an eznetns netns
+  netnsInstances = filterAttrs (_: i: i.enable && i.netns != null) cfg.instances;
 
   tomlFormat = pkgs.formats.toml { };
 
@@ -145,9 +149,19 @@ in {
       description = "EzSocks settings for the default-namespace service, written to a TOML config file.";
     };
     instances = mkOption {
-      type = types.attrsOf (types.submodule {
+      type = types.attrsOf (types.submodule ({ name, ... }: {
         options = {
-          enable = mkEnableOption "EzSocks instance in network namespace";
+          enable = mkEnableOption "EzSocks instance";
+          netns = mkOption {
+            type = types.nullOr types.str;
+            default = name;
+            defaultText = lib.literalExpression "<name>";
+            description = ''
+              eznetns instance to run this instance in, joined through
+              `services.eznetns.netnsService`. Defaults to the instance name,
+              `null` runs it in the default network namespace.
+            '';
+          };
           user = mkOption {
             type = types.str;
             default = "ezsocks";
@@ -164,9 +178,9 @@ in {
             description = "EzSocks settings for this instance, written to a TOML config file.";
           };
         };
-      });
+      }));
       default = {};
-      description = "Per-network-namespace EzSocks instances";
+      description = "Named EzSocks instances, each running in its own eznetns netns by default";
     };
   };
   config = mkIf (cfg.enable || (cfg.instances != {})) {
@@ -221,22 +235,11 @@ in {
         nameValuePair "ezsocks-${name}" (
           mkIf instanceCfg.enable {
             enable = true;
-            description = "EzSocks VPN for ${name}";
-            unitConfig = {
-              Requires = "eznetns-${name}.service";
-              After = "eznetns-${name}.service";
-              BindsTo = "eznetns-${name}.service";
-            };
+            description = "EzSocks instance ${name}";
             serviceConfig = {
               User = "ezsocks-${name}";
               Group = instanceCfg.group;
               ExecStart = "${pkgs.ezsocks}/bin/ezsocks --config ${mkConfigFile name instanceCfg.settings}";
-              NetworkNamespacePath = "/run/netns/${name}";
-              BindReadOnlyPaths = [
-                "/etc/eznetns/${name}/resolv.conf:/etc/resolv.conf"
-                "/etc/eznetns/${name}/nsswitch.conf:/etc/nsswitch.conf"
-                "/var/empty:/var/run/nscd"
-              ];
               Restart = "always";
               # Every proxied connection uses two file descriptors, the systemd
               # default of 1024 caps a worker at about 500 connections
@@ -247,5 +250,13 @@ in {
         )
       ) cfg.instances)
     ]);
+    # eznetns puts the instance in its netns
+    services.eznetns.netnsService = mapAttrs' (name: instanceCfg:
+      nameValuePair "ezsocks-${name}.service" instanceCfg.netns
+    ) netnsInstances;
+    assertions = mapAttrsToList (name: instanceCfg: {
+      assertion = config.services.eznetns.enable;
+      message = "services.ezsocks.instances.${name}: netns = \"${instanceCfg.netns}\" needs services.eznetns.enable";
+    }) netnsInstances;
   };
 }
