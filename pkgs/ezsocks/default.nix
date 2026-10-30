@@ -4,8 +4,8 @@ let
   ezsocks-src = pkgs.fetchFromGitHub {
     owner = "kalken";
     repo = "ezsocks";
-    rev = "c575114539f74d4b705728f651a074307a303318";          # develop branch
-    hash = "sha256-8M1V+9QxjlIxzrLnJwE+RRbDcCmZtM5cikyPO/zHWas=";
+    rev = "58f65bbf2cae89c65de242d1161f611f1455350b";          # develop branch
+    hash = "sha256-AuyfILTbnAbAKbsd5xk1Ti9foZakloRCfqxvSXmnpM8=";
   };
 in
 pkgs.stdenv.mkDerivation rec {
