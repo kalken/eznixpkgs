@@ -36,6 +36,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [ezrouter](modules/ezrouter.md) | Router setup with VLANs, DHCP, DNS, and firewall |
 | [eznetns](modules/eznetns.md) | Named Linux network namespace management |
 | [ezsocks](modules/ezsocks.md) | SOCKS5 proxy on `127.0.0.1:1080`, with optional per-namespace instances |
+| [ezsocks-rs](modules/ezsocks-rs.md) | Smaller, faster SOCKS5 proxy in Rust, with optional per-namespace instances |
 | [ezproton](modules/ezproton.md) | Automatically installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d |
 | [ezboot](modules/ezboot.md) | One-time LUKS boot-key unlock for unattended reboots of encrypted systems |
 | [ezcert](modules/ezcert.md) | Certificates for a machine's services, signed by an authority of your own or an existing one |
@@ -59,6 +60,7 @@ Then enable whichever modules you need in your `configuration.nix`:
     ezsensors
     ezproton
     ezsocks
+    ezsocks-rs
     wg-tools
   ];
 }
@@ -71,5 +73,6 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [ezsensors](pkgs/ezsensors/ezsensors.sh) | Simple script to get temperature readings from `/sys`. |
 | [ezproton](pkgs/ezproton/ezproton.py) | Automatically installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d. |
 | [ezsocks](https://github.com/kalken/ezsocks) | A proxy server that makes your eyeballs happy, based on [prettysocks](https://github.com/twisteroidambassador/prettysocks). |
+| [ezsocks-rs](https://github.com/kalken/ezsocks-rs) | Small SOCKS5 proxy in Rust with Happy Eyeballs, for network namespaces on low-powered routers. |
 | [wg-tools](https://github.com/mullvad/wg-tools) | Generates WireGuard® configuration files for Mullvad. |
 | [ezqbit](pkgs/ezqbit/ezqbit.md) | Flat alternative WebUI for qBittorrent, in dark and light, for use with `services.qbittorrent`. |
