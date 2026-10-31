@@ -10,7 +10,7 @@ Built from [`kalken/ezsocks-rs`](https://github.com/kalken/ezsocks-rs), branch `
 - Happy Eyeballs (RFC 8305): IPv6 and IPv4 looked up in parallel and connection attempts raced, preferring IPv6; `family = "ipv4"` skips IPv6 completely
 - Host name lookups cached for 60 seconds
 - Data passed with `splice()`, never copied into the process; about 2 MB of memory per instance
-- Runs with `DynamicUser`, no system users to manage
+- Runs with `DynamicUser` and systemd hardening (no capabilities, system call filter, read-only system), no system users to manage
 
 ## 🚀 Quick Start
 

@@ -102,6 +102,31 @@ let
       # Each proxied connection uses two sockets and two pipes, six file
       # descriptors; the systemd default of 1024 would cap it at about 170
       LimitNOFILE = mkDefault 65536;
+
+      # Hardening. DynamicUser already makes the system read-only, hides home
+      # directories and gives the service its own /tmp.
+      CapabilityBoundingSet = "";
+      AmbientCapabilities = "";
+      NoNewPrivileges = true;
+      PrivateDevices = true;
+      ProtectClock = true;
+      ProtectControlGroups = true;
+      ProtectHostname = true;
+      ProtectKernelLogs = true;
+      ProtectKernelModules = true;
+      ProtectKernelTunables = true;
+      ProtectProc = "invisible";
+      ProcSubset = "pid";
+      # AF_UNIX and AF_NETLINK for host name lookups through glibc
+      RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
+      RestrictNamespaces = true;
+      RestrictRealtime = true;
+      LockPersonality = true;
+      MemoryDenyWriteExecute = true;
+      SystemCallArchitectures = "native";
+      # @system-service includes splice(), which the relay uses
+      SystemCallFilter = [ "@system-service" "~@privileged" ];
+      SystemCallErrorNumber = "EPERM";
     };
     wantedBy = [ "multi-user.target" ];
   };
