@@ -2,7 +2,7 @@
 
 A NixOS module for running ezsocks-rs, a small SOCKS5 proxy written in Rust, either in the default network namespace or inside `eznetns` network namespaces. Point browsers on other machines at an instance to send their traffic, DNS lookups included, through that namespace's VPN.
 
-Built from [`kalken/ezsocks-rs`](https://github.com/kalken/ezsocks-rs), branch `develop`. It lives next to the Python [`ezsocks`](ezsocks.md) module, so instances can be moved over one at a time.
+Built from [`kalken/ezsocks-rs`](https://github.com/kalken/ezsocks-rs), branch `master`, using that flake's own pinned nixpkgs. It lives next to the Python [`ezsocks`](ezsocks.md) module, so instances can be moved over one at a time.
 
 ## ✨ Features
 

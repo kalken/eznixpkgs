@@ -39,6 +39,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [ezsocks-rs](modules/ezsocks-rs.md) | Smaller, faster SOCKS5 proxy in Rust, with optional per-namespace instances |
 | [ezproton](modules/ezproton.md) | Automatically installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d |
 | [ezboot](modules/ezboot.md) | One-time LUKS boot-key unlock for unattended reboots of encrypted systems |
+| [ezcache](modules/ezcache.md) | Binary cache for eznixpkgs packages built on GitHub, on by default |
 | [ezcert](modules/ezcert.md) | Certificates for a machine's services, signed by an authority of your own or an existing one |
 
 ## 🛠 Programs

@@ -4,7 +4,7 @@
 
   # No nixpkgs.follows: ezsocks-rs is built with its own pinned nixpkgs, so its
   # build is the same on every machine and can come from the binary cache.
-  inputs.ezsocks-rs.url = "github:kalken/ezsocks-rs/develop";
+  inputs.ezsocks-rs.url = "github:kalken/ezsocks-rs/master";
 
   outputs = { self, nixpkgs, ezsocks-rs }: {
     nixosModules = {
