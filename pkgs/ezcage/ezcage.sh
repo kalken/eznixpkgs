@@ -140,6 +140,15 @@ if [ "$EUID" -ne 0 ]; then
     trap 'kill "$relay" 2>/dev/null; rm -rf "$relaydir"' EXIT
     for _ in $(seq 50); do [ -S "$relaydir/agent" ] && break; sleep 0.1; done
     [ -S "$relaydir/agent" ] || die "--ssh-agent: relay did not start"
+    # The cage's ssh has its own empty home: give it copies of your host keys
+    # and config, so it can check the servers you know. The private directory
+    # keeps them from other users; the bind mount makes them readable inside.
+    for f in known_hosts config; do
+      if [ -f "$HOME/.ssh/$f" ]; then
+        cp -- "$HOME/.ssh/$f" "$relaydir/$f"
+        chmod 0644 "$relaydir/$f"
+      fi
+    done
     args+=(--ssh-agent-socket "$relaydir/agent")
     rc=0
     sudo "$0" "${args[@]}" -- "$exe" "${cmd[@]:1}" || rc=$?
@@ -262,6 +271,10 @@ fi
 if [ -n "$agentsock" ]; then
   [ -S "$agentsock" ] || die "--ssh-agent: relay socket not found: $agentsock"
   props+=(-p BindPaths="$agentsock:/run/ssh-agent.sock")
+  # Read as the system-wide files, which the empty root lacks otherwise
+  relaydir=$(dirname "$agentsock")
+  [ -f "$relaydir/known_hosts" ] && props+=(-p BindReadOnlyPaths="$relaydir/known_hosts:/etc/ssh/ssh_known_hosts")
+  [ -f "$relaydir/config" ] && props+=(-p BindReadOnlyPaths="$relaydir/config:/etc/ssh/ssh_config")
 elif [ "$ssh_agent" = 1 ]; then
   die "--ssh-agent: run ezcage as your own user, not as root"
 fi

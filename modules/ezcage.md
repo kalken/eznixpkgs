@@ -209,6 +209,11 @@ it still can't read the keys.
   another one. So `ezcage` runs a `socat` relay as you for the length of the
   run, with its socket in a private `mktemp -d` directory, and mounts only that
   socket into the cage as `/run/ssh-agent.sock`.
+  The cage's ssh has its own empty home, so copies of your
+  `~/.ssh/known_hosts` and `~/.ssh/config` go into that private directory too,
+  mounted read-only as `/etc/ssh/ssh_known_hosts` and `/etc/ssh/ssh_config`.
+  Tested 2026-11-01 on ezberry: without them `Host key verification failed`,
+  with them the host check passes.
 - **macOS**: the sandbox allows connecting to the agent's socket, and reading
   `~/.ssh/known_hosts` and `~/.ssh/config` (ssh reads your real home, not
   `HOME`, so it could not check host keys otherwise). The keys stay blocked.
