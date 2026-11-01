@@ -27,7 +27,7 @@ let
         type = types.listOf types.str;
         default = [ ];
         example = [ "/etc/nixos" ];
-        description = "Paths the cage can read and write. A `.git` inside them stays read-only.";
+        description = "Paths the cage can read and write. Every `.git` inside them stays read-only, unless `git` is set.";
       };
       readOnly = mkOption {
         type = types.listOf types.str;
@@ -78,6 +78,15 @@ let
           network.
         '';
       };
+      git = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Let the cage write `.git` folders, so it can commit (and push, with
+          `sshAgent`). It can then run commands as you, outside the cage,
+          through git hooks or `.git/config`.
+        '';
+      };
       sshAgent = mkOption {
         type = types.bool;
         default = false;
@@ -117,6 +126,7 @@ let
     ++ optional (p.nix == true) "--nix"
     ++ optional (p.nix == false) "--no-nix"
     ++ optional p.sshAgent "--ssh-agent"
+    ++ optional p.git "--git"
     ++ optionals (p.workDir != null) [ "--workdir" p.workDir ]
     ++ optionals (p.packages != [ ]) [
       "--path"

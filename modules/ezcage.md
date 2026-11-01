@@ -145,8 +145,18 @@ ACL with `systemd.tmpfiles`.
 
 - New files are owned by the cage user; the default ACL keeps you and the
   group in control.
-- **`.git` is mounted read-only and left out of the ACL.** Otherwise git hooks
-  written in the cage would run as you outside it. Claude edits, you commit.
+- **Every `.git` below a `--rw` path is read-only** (and left out of the ACL),
+  nested repos included, so a parent folder of many projects is safe too.
+  Otherwise hooks or `.git/config` (`core.fsmonitor`, `core.sshCommand`,
+  aliases) written in the cage would run as you the next time you use git
+  outside it. Claude edits, you commit. Linux mounts each `.git` found at
+  start read-only; macOS denies writes to any path named `.git` below the
+  granted folder, so `git init` and `git clone` fail there too.
+- **`--git`** (profile option `git = true`) drops that, so the cage can commit,
+  and push with `--ssh-agent`. The price: it can then run commands as you
+  outside the cage, through git. Tested 2026-11-01 on this Mac and ezberry:
+  without it hooks in a repo and a nested repo can't be written, with it
+  commit works.
 - `ezcage` writes `safe.directory` into the cage home's `.gitconfig`, because git
   refuses repos owned by another user.
 - `--ro` paths are read as "other": files must be world-readable or carry the

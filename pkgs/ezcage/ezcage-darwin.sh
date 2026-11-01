@@ -23,6 +23,10 @@ Usage: ezcage [options] -- COMMAND [ARGS]...
   --ssh-agent       let the cage use your SSH agent (from SSH_AUTH_SOCK): it can
                     sign as you, e.g. git push, but still can't read the keys.
                     It may also read ~/.ssh/known_hosts and ~/.ssh/config
+  --git             let the cage write .git folders, so it can commit (and push,
+                    with --ssh-agent). It can then run commands as you, outside
+                    the cage, through hooks or .git/config. Default: every .git
+                    below a --rw path is read-only, and none can be created
   --claude-token    with --name: ask for a token from `claude setup-token` and
                     keep it in the cage's home, so Claude stays logged in
                     (the cage can't use the Keychain)
@@ -41,7 +45,7 @@ if [ $# -gt 0 ] && [[ "$1" != -* ]]; then
   set -- "${pargs[@]}" "${@:2}"
 fi
 
-rw=() ro=() paths=() name="" workdir="" umask="" offline=0 nix="" ssh_agent=0 claude_token=0 cmd=()
+rw=() ro=() paths=() name="" workdir="" umask="" offline=0 nix="" ssh_agent=0 claude_token=0 git=0 cmd=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -54,6 +58,7 @@ while [ $# -gt 0 ]; do
     --no-nix) nix=0; shift ;;
     --ssh-agent) ssh_agent=1; shift ;;
     --claude-token) claude_token=1; shift ;;
+    --git) git=1; shift ;;
     --umask) umask="${2:?--umask needs a mask}"; shift 2 ;;
     --path) paths+=("${2:?--path needs a directory}"); shift 2 ;;
     --netns|--user|--group|--main-group) die "$1 is not supported on macOS" ;;
@@ -140,6 +145,8 @@ if [ -n "$agent" ]; then
 fi
 
 q() { printf '"%s"' "$1"; }
+# A path as a regex that matches it literally
+rx() { printf '%s' "$1" | sed 's/[][\\.*^$+?(){}|]/\\&/g'; }
 
 # Nix opens every directory on the way to its home and /etc, so those
 # parents may be listed: names only, not their contents.
@@ -202,8 +209,9 @@ EOF
   done
   for p in "${rw[@]+"${rw[@]}"}"; do
     echo "(allow file-read* file-write* (subpath $(q "$p")))"
-    # git hooks written in the cage would run as you outside it
-    [ -d "$p/.git" ] && echo "(deny file-write* (subpath $(q "$p/.git")))"
+    # git hooks or .git/config written in the cage would run as you outside
+    # it: every .git below the path, also nested repos and new ones
+    [ "$git" = 1 ] || echo "(deny file-write* (regex #\"^$(rx "$p")/(.*/)?\\.git(/|$)\"))"
   done
   for p in "${paths[@]+"${paths[@]}"}"; do
     echo "(allow file-read* (subpath $(q "$p")))"

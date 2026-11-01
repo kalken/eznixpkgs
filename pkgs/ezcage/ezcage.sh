@@ -26,6 +26,10 @@ Usage: ezcage [options] -- COMMAND [ARGS]...
   --main-group GROUP
                     run with GROUP as main group: new files get this group
   --umask MASK      umask for the cage, e.g. 0002 for group-writable files
+  --git             let the cage write .git folders, so it can commit (and push,
+                    with --ssh-agent). It can then run commands as you, outside
+                    the cage, through hooks or .git/config. Default: every .git
+                    below a --rw path is read-only
   --path DIR        put DIR (in /nix/store) on the cage's PATH (repeatable)
   --ssh-agent       let the cage use your SSH agent (from SSH_AUTH_SOCK): it can
                     sign as you, e.g. git push, but still can't read the keys
@@ -44,7 +48,7 @@ if [ $# -gt 0 ] && [[ "$1" != -* ]]; then
   set -- "${pargs[@]}" "${@:2}"
 fi
 
-rw=() ro=() groups=() paths=() name="" workdir="" netns="" maingroup="" umask="" offline=0 nix="" ssh_agent=0 agentsock="" user="ezcage" cmd=()
+rw=() ro=() groups=() paths=() name="" workdir="" netns="" maingroup="" umask="" offline=0 git=0 nix="" ssh_agent=0 agentsock="" user="ezcage" cmd=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -60,6 +64,7 @@ while [ $# -gt 0 ]; do
     --group) groups+=("${2:?--group needs a group}"); shift 2 ;;
     --main-group) maingroup="${2:?--main-group needs a group}"; shift 2 ;;
     --umask) umask="${2:?--umask needs a mask}"; shift 2 ;;
+    --git) git=1; shift ;;
     --path) paths+=("${2:?--path needs a directory}"); shift 2 ;;
     --ssh-agent) ssh_agent=1; shift ;;
     # Internal: the relay socket set up before sudo
@@ -101,6 +106,7 @@ if [ "$EUID" -ne 0 ]; then
   [ "$offline" = 1 ] && args+=(--offline)
   [ "$nix" = 1 ] && args+=(--nix)
   [ "$nix" = 0 ] && args+=(--no-nix)
+  [ "$git" = 1 ] && args+=(--git)
   args+=(--user "$user")
   for g in "${groups[@]+"${groups[@]}"}"; do args+=(--group "$g"); done
   [ -n "$maingroup" ] && args+=(--main-group "$maingroup")
@@ -208,8 +214,13 @@ props=(
 
 for p in "${rw[@]+"${rw[@]}"}"; do
   props+=(-p BindPaths="$p")
-  # git hooks written in the cage would run as you outside it
-  [ -d "$p/.git" ] && props+=(-p BindReadOnlyPaths="$p/.git")
+  # git hooks or .git/config written in the cage would run as you outside
+  # it: every .git below the path, also nested repos
+  if [ "$git" = 0 ]; then
+    while IFS= read -r -d '' g; do
+      props+=(-p BindReadOnlyPaths="$g")
+    done < <(find "$p" -xdev -name .git -prune -print0 2>/dev/null)
+  fi
 done
 for p in "${ro[@]+"${ro[@]}"}"; do
   props+=(-p BindReadOnlyPaths="$p")
