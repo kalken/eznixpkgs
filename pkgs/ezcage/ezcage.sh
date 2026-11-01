@@ -48,7 +48,7 @@ if [ $# -gt 0 ] && [[ "$1" != -* ]]; then
   set -- "${pargs[@]}" "${@:2}"
 fi
 
-rw=() ro=() groups=() paths=() name="" workdir="" netns="" maingroup="" umask="" offline=0 git=0 nix="" ssh_agent=0 agentsock="" user="ezcage" cmd=()
+rw=() ro=() groups=() paths=() name="" workdir="" netns="" maingroup="" umask="" offline=0 git=0 gitname="" gitemail="" nix="" ssh_agent=0 agentsock="" user="ezcage" cmd=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -65,6 +65,9 @@ while [ $# -gt 0 ]; do
     --main-group) maingroup="${2:?--main-group needs a group}"; shift 2 ;;
     --umask) umask="${2:?--umask needs a mask}"; shift 2 ;;
     --git) git=1; shift ;;
+    # Internal: your git identity, read before sudo
+    --git-name) gitname="${2:?}"; shift 2 ;;
+    --git-email) gitemail="${2:?}"; shift 2 ;;
     --path) paths+=("${2:?--path needs a directory}"); shift 2 ;;
     --ssh-agent) ssh_agent=1; shift ;;
     # Internal: the relay socket set up before sudo
@@ -106,7 +109,12 @@ if [ "$EUID" -ne 0 ]; then
   [ "$offline" = 1 ] && args+=(--offline)
   [ "$nix" = 1 ] && args+=(--nix)
   [ "$nix" = 0 ] && args+=(--no-nix)
-  [ "$git" = 1 ] && args+=(--git)
+  if [ "$git" = 1 ]; then
+    args+=(--git)
+    # The cage can't read your git config: commit as you
+    n=$(git config user.name 2>/dev/null) && args+=(--git-name "$n")
+    e=$(git config user.email 2>/dev/null) && args+=(--git-email "$e")
+  fi
   args+=(--user "$user")
   for g in "${groups[@]+"${groups[@]}"}"; do args+=(--group "$g"); done
   [ -n "$maingroup" ] && args+=(--main-group "$maingroup")
@@ -272,6 +280,8 @@ env=(
 [ -n "${COLORTERM:-}" ] && env+=(-E COLORTERM="$COLORTERM")
 [ -n "${LOCALE_ARCHIVE:-}" ] && env+=(-E LOCALE_ARCHIVE="$LOCALE_ARCHIVE")
 [ -n "$agentsock" ] && env+=(-E SSH_AUTH_SOCK=/run/ssh-agent.sock)
+[ -n "$gitname" ] && env+=(-E GIT_AUTHOR_NAME="$gitname" -E GIT_COMMITTER_NAME="$gitname")
+[ -n "$gitemail" ] && env+=(-E GIT_AUTHOR_EMAIL="$gitemail" -E GIT_COMMITTER_EMAIL="$gitemail")
 
 # No name: the home is created in the private /tmp before the command runs
 if [ -z "$name" ]; then

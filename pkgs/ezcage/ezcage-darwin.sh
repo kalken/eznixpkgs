@@ -260,6 +260,11 @@ env=(
 )
 [ -n "${COLORTERM:-}" ] && env+=(COLORTERM="$COLORTERM")
 [ -n "$agent" ] && env+=(SSH_AUTH_SOCK="$agent")
+# The cage can't read your git config: commit as you
+if [ "$git" = 1 ]; then
+  n=$(git config user.name 2>/dev/null) && env+=(GIT_AUTHOR_NAME="$n" GIT_COMMITTER_NAME="$n")
+  e=$(git config user.email 2>/dev/null) && env+=(GIT_AUTHOR_EMAIL="$e" GIT_COMMITTER_EMAIL="$e")
+fi
 [ -s "$tokenfile" ] && env+=(CLAUDE_CODE_OAUTH_TOKEN="$(cat "$tokenfile")")
 
 cd "$workdir"
