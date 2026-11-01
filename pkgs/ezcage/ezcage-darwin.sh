@@ -18,12 +18,13 @@ Usage: ezcage [options] -- COMMAND [ARGS]...
   --offline         no network, loopback only (default: network)
   --nix, --no-nix   allow or deny Nix commands such as nix shell (default:
                     allowed, except with --offline)
+  --umask MASK      umask for the cage, e.g. 0002 for group-writable files
   --path DIR        put DIR on the cage's PATH (repeatable)
   --ssh-agent       let the cage use your SSH agent (from SSH_AUTH_SOCK): it can
                     sign as you, e.g. git push, but still can't read the keys
   -h, --help        show this help
 
-  Not on macOS: --netns, --user, --group.
+  Not on macOS: --netns, --user, --group, --main-group.
 EOF
 }
 
@@ -36,7 +37,7 @@ if [ $# -gt 0 ] && [[ "$1" != -* ]]; then
   set -- "${pargs[@]}" "${@:2}"
 fi
 
-rw=() ro=() paths=() name="" workdir="" offline=0 nix="" ssh_agent=0 cmd=()
+rw=() ro=() paths=() name="" workdir="" umask="" offline=0 nix="" ssh_agent=0 cmd=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -48,8 +49,9 @@ while [ $# -gt 0 ]; do
     --nix) nix=1; shift ;;
     --no-nix) nix=0; shift ;;
     --ssh-agent) ssh_agent=1; shift ;;
+    --umask) umask="${2:?--umask needs a mask}"; shift 2 ;;
     --path) paths+=("${2:?--path needs a directory}"); shift 2 ;;
-    --netns|--user|--group) die "$1 is not supported on macOS" ;;
+    --netns|--user|--group|--main-group) die "$1 is not supported on macOS" ;;
     -h|--help) usage; exit 0 ;;
     --) shift; cmd=("$@"); break ;;
     *) die "unknown option: $1 (see --help)" ;;
@@ -58,6 +60,7 @@ done
 
 [ ${#cmd[@]} -gt 0 ] || { usage >&2; exit 1; }
 [ -z "$name" ] || [[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || die "invalid name: $name"
+[ -z "$umask" ] || [[ "$umask" =~ ^[0-7]{3,4}$ ]] || die "invalid umask: $umask"
 
 # The sandbox matches real paths (/tmp is /private/tmp), so resolve symlinks.
 # Quotes and backslashes would break the sandbox profile.
@@ -220,5 +223,6 @@ env=(
 
 cd "$workdir"
 rc=0
+[ -n "$umask" ] && umask "$umask"
 env -i "${env[@]}" sandbox-exec -f "$profile" "$exe" "${cmd[@]:1}" || rc=$?
 exit "$rc"

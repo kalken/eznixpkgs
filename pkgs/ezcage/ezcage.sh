@@ -23,6 +23,9 @@ Usage: ezcage [options] -- COMMAND [ARGS]...
   --user USER       run as USER, ezcage or ezcage-* (default: ezcage)
   --group GROUP     also run with GROUP, e.g. the group that owns a --rw path
                     (repeatable)
+  --main-group GROUP
+                    run with GROUP as main group: new files get this group
+  --umask MASK      umask for the cage, e.g. 0002 for group-writable files
   --path DIR        put DIR (in /nix/store) on the cage's PATH (repeatable)
   --ssh-agent       let the cage use your SSH agent (from SSH_AUTH_SOCK): it can
                     sign as you, e.g. git push, but still can't read the keys
@@ -41,7 +44,7 @@ if [ $# -gt 0 ] && [[ "$1" != -* ]]; then
   set -- "${pargs[@]}" "${@:2}"
 fi
 
-rw=() ro=() groups=() paths=() name="" workdir="" netns="" offline=0 nix="" ssh_agent=0 agentsock="" user="ezcage" cmd=()
+rw=() ro=() groups=() paths=() name="" workdir="" netns="" maingroup="" umask="" offline=0 nix="" ssh_agent=0 agentsock="" user="ezcage" cmd=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -55,6 +58,8 @@ while [ $# -gt 0 ]; do
     --no-nix) nix=0; shift ;;
     --user) user="${2:?--user needs a user}"; shift 2 ;;
     --group) groups+=("${2:?--group needs a group}"); shift 2 ;;
+    --main-group) maingroup="${2:?--main-group needs a group}"; shift 2 ;;
+    --umask) umask="${2:?--umask needs a mask}"; shift 2 ;;
     --path) paths+=("${2:?--path needs a directory}"); shift 2 ;;
     --ssh-agent) ssh_agent=1; shift ;;
     # Internal: the relay socket set up before sudo
@@ -68,6 +73,7 @@ done
 [ ${#cmd[@]} -gt 0 ] || { usage >&2; exit 1; }
 [ -z "$netns" ] || [ "$offline" = 0 ] || die "--netns and --offline exclude each other"
 [ -z "$name" ] || [[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || die "invalid name: $name"
+[ -z "$umask" ] || [[ "$umask" =~ ^[0-7]{3,4}$ ]] || die "invalid umask: $umask"
 
 # Absolute, symlink-free path. Whitespace and ':' would break the unit settings.
 resolve() {
@@ -97,6 +103,8 @@ if [ "$EUID" -ne 0 ]; then
   [ "$nix" = 0 ] && args+=(--no-nix)
   args+=(--user "$user")
   for g in "${groups[@]+"${groups[@]}"}"; do args+=(--group "$g"); done
+  [ -n "$maingroup" ] && args+=(--main-group "$maingroup")
+  [ -n "$umask" ] && args+=(--umask "$umask")
   for d in "${paths[@]+"${paths[@]}"}"; do args+=(--path "$d"); done
   if [ -n "$workdir" ]; then
     args+=(--workdir "$(resolve "$workdir")")
@@ -132,7 +140,7 @@ getent passwd "$user" >/dev/null || die "user '$user' does not exist (enable pro
 for d in "${paths[@]+"${paths[@]}"}"; do
   [[ "$d" == /nix/store/* ]] || die "--path must be in /nix/store: $d"
 done
-for g in "${groups[@]+"${groups[@]}"}"; do
+for g in "${groups[@]+"${groups[@]}"}" ${maingroup:+"$maingroup"}; do
   getent group "$g" >/dev/null || die "group not found: $g"
 done
 
@@ -195,6 +203,8 @@ props=(
 )
 
 [ -n "$name" ] && props+=(-p StateDirectory="ezcage/$name")
+[ -n "$maingroup" ] && props+=(-p Group="$maingroup")
+[ -n "$umask" ] && props+=(-p UMask="$umask")
 
 for p in "${rw[@]+"${rw[@]}"}"; do
   props+=(-p BindPaths="$p")

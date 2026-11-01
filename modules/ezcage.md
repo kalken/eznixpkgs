@@ -126,6 +126,12 @@ The cage user has no rights on granted paths. Two ways to give them:
   Tested on ezberry: `ezcage --group eznix --rw /etc/nixos -- claude` can
   write `/etc/nixos` (new files get group `eznix` from the setgid bit), `.git`
   stays read-only.
+- **`--main-group GROUP` and `--umask 0002`** (profile options `mainGroup`,
+  `umask`): the cage runs with GROUP as its main group (`Group=`) and umask
+  `0002` (`UMask=`), so new files are `ezcage-<name>:GROUP` and group-writable
+  (`0664`, directories `0775`), without a setgid bit or ACL. Running as your
+  own user instead is not an option: without a PID namespace the cage could
+  reach the whole disk through `/proc/<pid>/root` of your other processes.
 - **An ACL** for the static group `ezcage`, which every cage runs with (profiles
   can grant their own `ezcage-<name>` user instead, which is tighter):
 
@@ -154,6 +160,7 @@ programs.ezcage = {
   profiles.nixos = {                   # run with: ezcage nixos
     command = "claude";
     groups = [ "eznix" ];              # may write /etc/nixos
+    # mainGroup = "eznix";  umask = "0002";   # new files: group eznix, group-writable
     readWrite = [ "/etc/nixos" ];
     workDir = "/etc/nixos";
     # netns = "claude";  offline = true;  nix = false;  readOnly = [ ];  args = [ ];
@@ -205,9 +212,9 @@ user's choice), so it uses the built-in sandbox, `sandbox-exec`, with a
 generated profile that denies everything by default.
 
 - **Same**: `--rw`, `--ro`, `--name`, `--workdir`, `--offline`, `--nix`/`--no-nix`,
-  `--path`, read-only `.git`, profiles in `/etc/ezcage/profiles`.
-- **Not supported**: `--netns`, `--user`, `--group` (error). Profiles with
-  `groups` or `netns` fail an assertion.
+  `--path`, `--umask`, read-only `.git`, profiles in `/etc/ezcage/profiles`.
+- **Not supported**: `--netns`, `--user`, `--group`, `--main-group` (error).
+  Profiles with `groups`, `mainGroup` or `netns` fail an assertion.
 - **Weaker than Linux**:
   - runs as you, no separate user; no `sudo` needed
   - blocked paths are denied, not hidden: names and metadata of any path can

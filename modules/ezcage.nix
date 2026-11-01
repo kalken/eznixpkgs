@@ -43,6 +43,21 @@ let
           write a `readWrite` path. Only for the run: no group file changes.
         '';
       };
+      mainGroup = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "eznix";
+        description = ''
+          Main group the cage runs with, so new files get this group.
+          Default: the cage user's own group.
+        '';
+      };
+      umask = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "0002";
+        description = "Umask for the cage. `0002` makes new files group-writable.";
+      };
       netns = mkOption {
         type = types.nullOr types.str;
         default = null;
@@ -95,6 +110,8 @@ let
     ++ concatMap (x: [ "--rw" x ]) p.readWrite
     ++ concatMap (x: [ "--ro" x ]) p.readOnly
     ++ concatMap (g: [ "--group" g ]) p.groups
+    ++ optionals (p.mainGroup != null) [ "--main-group" p.mainGroup ]
+    ++ optionals (p.umask != null) [ "--umask" p.umask ]
     ++ optionals (p.netns != null) [ "--netns" p.netns ]
     ++ optional p.offline "--offline"
     ++ optional (p.nix == true) "--nix"
@@ -150,8 +167,9 @@ in
           (config.nix.settings.trusted-users or [ ]));
       message = "programs.ezcage: cage users must not be in nix.settings.trusted-users; they could add binary caches or unsigned store paths.";
     }] ++ optionals (!isNixOS) (map (name: {
-      assertion = cfg.profiles.${name}.groups == [ ] && cfg.profiles.${name}.netns == null;
-      message = "programs.ezcage.profiles.${name}: groups and netns are not supported on macOS.";
+      assertion = cfg.profiles.${name}.groups == [ ] && cfg.profiles.${name}.mainGroup == null
+        && cfg.profiles.${name}.netns == null;
+      message = "programs.ezcage.profiles.${name}: groups, mainGroup and netns are not supported on macOS.";
     }) (attrNames cfg.profiles));
 
     environment.systemPackages = [ cfg.package ];
