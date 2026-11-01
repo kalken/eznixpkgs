@@ -192,6 +192,9 @@ trap cleanup EXIT
 (allow file-ioctl (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))
 EOF
   echo "(allow file-read* (subpath $(q "$(dirname "$exereal")")))"
+  # /usr/bin/git and friends are shims that run the developer tools via xcrun
+  devdir=$(xcode-select -p 2>/dev/null) && devdir=$(realpath -- "$devdir" 2>/dev/null) \
+    && echo "(allow file-read* (subpath $(q "$devdir")) (literal \"/private/var/db/xcode_select_link\"))"
   echo "(allow file-read* file-write* (subpath $(q "$home")))"
   parents "$home" /private/etc
   for p in "${ro[@]+"${ro[@]}"}"; do
