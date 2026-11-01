@@ -21,7 +21,11 @@ Usage: ezcage [options] -- COMMAND [ARGS]...
   --umask MASK      umask for the cage, e.g. 0002 for group-writable files
   --path DIR        put DIR on the cage's PATH (repeatable)
   --ssh-agent       let the cage use your SSH agent (from SSH_AUTH_SOCK): it can
-                    sign as you, e.g. git push, but still can't read the keys
+                    sign as you, e.g. git push, but still can't read the keys.
+                    It may also read ~/.ssh/known_hosts and ~/.ssh/config
+  --claude-token    with --name: ask for a token from `claude setup-token` and
+                    keep it in the cage's home, so Claude stays logged in
+                    (the cage can't use the Keychain)
   -h, --help        show this help
 
   Not on macOS: --netns, --user, --group, --main-group.
@@ -37,7 +41,7 @@ if [ $# -gt 0 ] && [[ "$1" != -* ]]; then
   set -- "${pargs[@]}" "${@:2}"
 fi
 
-rw=() ro=() paths=() name="" workdir="" umask="" offline=0 nix="" ssh_agent=0 cmd=()
+rw=() ro=() paths=() name="" workdir="" umask="" offline=0 nix="" ssh_agent=0 claude_token=0 cmd=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -49,6 +53,7 @@ while [ $# -gt 0 ]; do
     --nix) nix=1; shift ;;
     --no-nix) nix=0; shift ;;
     --ssh-agent) ssh_agent=1; shift ;;
+    --claude-token) claude_token=1; shift ;;
     --umask) umask="${2:?--umask needs a mask}"; shift 2 ;;
     --path) paths+=("${2:?--path needs a directory}"); shift 2 ;;
     --netns|--user|--group|--main-group) die "$1 is not supported on macOS" ;;
@@ -58,7 +63,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ ${#cmd[@]} -gt 0 ] || { usage >&2; exit 1; }
+[ "$claude_token" = 0 ] || [ -n "$name" ] || die "--claude-token needs --name"
+[ ${#cmd[@]} -gt 0 ] || [ "$claude_token" = 1 ] || { usage >&2; exit 1; }
 [ -z "$name" ] || [[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || die "invalid name: $name"
 [ -z "$umask" ] || [[ "$umask" =~ ^[0-7]{3,4}$ ]] || die "invalid umask: $umask"
 
@@ -75,11 +81,6 @@ for i in "${!rw[@]}"; do rw[i]=$(resolve "${rw[i]}"); done
 for i in "${!ro[@]}"; do ro[i]=$(resolve "${ro[i]}"); done
 for i in "${!paths[@]}"; do paths[i]=$(resolve "${paths[i]}"); done
 
-searchpath=$(IFS=:; echo "${paths[*]+${paths[*]}}")
-exe=$(PATH="${searchpath:+$searchpath:}$PATH" type -P -- "${cmd[0]}") || die "command not found: ${cmd[0]}"
-# The program file itself (often behind a symlink, e.g. in Homebrew) must be readable
-exereal=$(resolve "$exe")
-
 tmphome=""
 if [ -n "$name" ]; then
   # Outside your home folder: its parents get listed (see parents below)
@@ -92,6 +93,22 @@ else
 fi
 home=$(resolve "$home")
 mkdir -p "$home/tmp"
+
+# Claude Code keeps its login in the Keychain, which the cage can't reach.
+# A token from `claude setup-token` in the cage's home works instead.
+tokenfile="$home/.claude-oauth-token"
+if [ "$claude_token" = 1 ]; then
+  read -rsp "Token from 'claude setup-token': " token; echo
+  [ -n "$token" ] || die "no token given"
+  (umask 077; printf '%s\n' "$token" > "$tokenfile")
+  echo "Saved in $tokenfile"
+  [ ${#cmd[@]} -gt 0 ] || exit 0
+fi
+
+searchpath=$(IFS=:; echo "${paths[*]+${paths[*]}}")
+exe=$(PATH="${searchpath:+$searchpath:}$PATH" type -P -- "${cmd[0]}") || die "command not found: ${cmd[0]}"
+# The program file itself (often behind a symlink, e.g. in Homebrew) must be readable
+exereal=$(resolve "$exe")
 
 inside() {
   local d="$1" p
@@ -113,6 +130,13 @@ agent=""
 if [ "$ssh_agent" = 1 ]; then
   [ -S "${SSH_AUTH_SOCK:-}" ] || die "--ssh-agent: no agent (SSH_AUTH_SOCK is not a socket)"
   agent=$(resolve "$SSH_AUTH_SOCK")
+fi
+# ssh reads ~/.ssh from your real home, not HOME: let it check host keys
+sshfiles=()
+if [ -n "$agent" ]; then
+  for f in "$HOME/.ssh/known_hosts" "$HOME/.ssh/config"; do
+    [ -f "$f" ] && sshfiles+=("$(resolve "$f")")
+  done
 fi
 
 q() { printf '"%s"' "$1"; }
@@ -200,6 +224,9 @@ EOF
   if [ -n "$agent" ]; then
     echo "(allow network-outbound (remote unix-socket (path-literal $(q "$agent"))))"
   fi
+  for f in "${sshfiles[@]+"${sshfiles[@]}"}"; do
+    echo "(allow file-read* (literal $(q "$f")))"
+  done
 } > "$profile"
 
 syspath="/etc/profiles/per-user/$USER/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
@@ -222,6 +249,7 @@ env=(
 )
 [ -n "${COLORTERM:-}" ] && env+=(COLORTERM="$COLORTERM")
 [ -n "$agent" ] && env+=(SSH_AUTH_SOCK="$agent")
+[ -s "$tokenfile" ] && env+=(CLAUDE_CODE_OAUTH_TOKEN="$(cat "$tokenfile")")
 
 cd "$workdir"
 rc=0

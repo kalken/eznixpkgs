@@ -197,8 +197,10 @@ it still can't read the keys.
   another one. So `ezcage` runs a `socat` relay as you for the length of the
   run, with its socket in a private `mktemp -d` directory, and mounts only that
   socket into the cage as `/run/ssh-agent.sock`.
-- **macOS**: the sandbox allows connecting to the agent's socket; without the
-  flag only IP and a few named sockets are allowed (DNS's `mDNSResponder`,
+- **macOS**: the sandbox allows connecting to the agent's socket, and reading
+  `~/.ssh/known_hosts` and `~/.ssh/config` (ssh reads your real home, not
+  `HOME`, so it could not check host keys otherwise). The keys stay blocked.
+  Without the flag only IP and a few named sockets are allowed (DNS's `mDNSResponder`,
   the Nix daemon, sockets in the cage's home). Before this, a cage that knew
   the agent's (random) path could use it.
 - Tested 2026-11-01: on ezberry with a throwaway agent and key (visible with
@@ -215,6 +217,13 @@ generated profile that denies everything by default.
   `--path`, `--umask`, read-only `.git`, profiles in `/etc/ezcage/profiles`.
 - **Not supported**: `--netns`, `--user`, `--group`, `--main-group` (error).
   Profiles with `groups`, `mainGroup` or `netns` fail an assertion.
+- **Claude login**: Claude Code keeps it in the Keychain, which the cage
+  can't reach, so `/login` is never saved. `claude setup-token` (outside the
+  cage) makes a long-lived token; `ezcage --name NAME --claude-token` asks
+  for it and keeps it in the cage's home (`.claude-oauth-token`, `0600`), and
+  each run passes it as `CLAUDE_CODE_OAUTH_TOKEN`. A profile's home is its
+  name, so `--name <profile>` sets it for the profile. Opening the Keychain
+  to the cage would expose your other passwords.
 - **Weaker than Linux**:
   - runs as you, no separate user; no `sudo` needed
   - blocked paths are denied, not hidden: names and metadata of any path can
