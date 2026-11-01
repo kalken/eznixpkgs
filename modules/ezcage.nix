@@ -1,6 +1,10 @@
-{ config, lib, pkgs, ... }:
+{ config, options, lib, pkgs, ... }:
 let
   cfg = config.programs.ezcage;
+
+  # Also used as a nix-darwin module (darwinModules in flake.nix). macOS has no
+  # cage users, groups or network namespaces: the cage runs as you.
+  isNixOS = options ? systemd;
   inherit (lib) mkEnableOption mkIf mkOption types mapAttrs' nameValuePair
     optional optionals concatMap concatStringsSep attrNames any hasPrefix stringLength;
 
@@ -59,6 +63,14 @@ let
           network.
         '';
       };
+      sshAgent = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Let the cage use your SSH agent, for example for `git push`. It can
+          then sign as you, though it still can't read the keys.
+        '';
+      };
       workDir = mkOption {
         type = types.nullOr types.str;
         default = null;
@@ -78,7 +90,8 @@ let
   profileUser = name: "ezcage-${name}";
 
   profileArgs = name: p:
-    [ "--name" name "--user" (profileUser name) ]
+    [ "--name" name ]
+    ++ optionals isNixOS [ "--user" (profileUser name) ]
     ++ concatMap (x: [ "--rw" x ]) p.readWrite
     ++ concatMap (x: [ "--ro" x ]) p.readOnly
     ++ concatMap (g: [ "--group" g ]) p.groups
@@ -86,6 +99,7 @@ let
     ++ optional p.offline "--offline"
     ++ optional (p.nix == true) "--nix"
     ++ optional (p.nix == false) "--no-nix"
+    ++ optional p.sshAgent "--ssh-agent"
     ++ optionals (p.workDir != null) [ "--workdir" p.workDir ]
     ++ optionals (p.packages != [ ]) [
       "--path"
@@ -125,15 +139,20 @@ in
     };
   };
 
-  config = mkIf cfg.enable {
+  config = mkIf cfg.enable ({
     assertions = map (name: {
       assertion = builtins.match "[A-Za-z0-9_-]+" name != null && stringLength (profileUser name) <= 32;
       message = "programs.ezcage.profiles.${name}: the name may only contain letters, digits, '_' and '-', and be at most 25 characters.";
     }) (attrNames cfg.profiles) ++ [{
-      assertion = !(any (u: u == "ezcage" || u == "@ezcage" || hasPrefix "ezcage-" u || hasPrefix "@ezcage-" u)
-        (config.nix.settings.trusted-users or [ ]));
+      # nix-darwin with nix.enable off (Nix managed elsewhere) forbids reading nix.settings
+      assertion = !(config.nix.enable or true)
+        || !(any (u: u == "ezcage" || u == "@ezcage" || hasPrefix "ezcage-" u || hasPrefix "@ezcage-" u)
+          (config.nix.settings.trusted-users or [ ]));
       message = "programs.ezcage: cage users must not be in nix.settings.trusted-users; they could add binary caches or unsigned store paths.";
-    }];
+    }] ++ optionals (!isNixOS) (map (name: {
+      assertion = cfg.profiles.${name}.groups == [ ] && cfg.profiles.${name}.netns == null;
+      message = "programs.ezcage.profiles.${name}: groups and netns are not supported on macOS.";
+    }) (attrNames cfg.profiles));
 
     environment.systemPackages = [ cfg.package ];
 
@@ -142,7 +161,7 @@ in
       nameValuePair "ezcage/profiles/${name}" {
         text = concatStringsSep "\n" (profileArgs name p) + "\n";
       }) cfg.profiles;
-
+  } // (if isNixOS then {
     # Shared user for ad-hoc runs; every cage also runs with the ezcage group
     users.users = {
       ezcage = {
@@ -160,5 +179,5 @@ in
     users.groups = {
       ezcage = { };
     } // mapAttrs' (name: _: nameValuePair (profileUser name) { }) cfg.profiles;
-  };
+  } else { }));
 }

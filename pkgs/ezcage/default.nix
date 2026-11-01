@@ -6,11 +6,17 @@
 , coreutils
 , getent
 , systemd
+, socat
 }:
 
+let
+  # Linux: systemd units with namespaces. macOS: the built-in sandbox (sandbox-exec).
+  script = if stdenv.hostPlatform.isDarwin then "ezcage-darwin.sh" else "ezcage.sh";
+  runtimeDeps = if stdenv.hostPlatform.isDarwin then [ coreutils ] else [ coreutils getent socat systemd ];
+in
 stdenv.mkDerivation {
   pname = "ezcage";
-  version = "0.1.0";
+  version = "0.2.0";
 
   src = ./.;
 
@@ -19,15 +25,15 @@ stdenv.mkDerivation {
 
   # sudo is not added to PATH: it must be the setuid wrapper from the system PATH
   installPhase = ''
-    install -Dm755 ezcage.sh $out/bin/ezcage
+    install -Dm755 ${script} $out/bin/ezcage
     patchShebangs $out/bin/ezcage
     wrapProgram $out/bin/ezcage \
-      --prefix PATH : ${lib.makeBinPath [ coreutils getent systemd ]}
+      --prefix PATH : ${lib.makeBinPath runtimeDeps}
   '';
 
   meta = with lib; {
     description = "Run a program that sees only the paths it is granted";
     license = licenses.gpl3;
-    platforms = platforms.linux;
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

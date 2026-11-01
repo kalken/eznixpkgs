@@ -19,11 +19,12 @@
       };
     };
 
-    # The modules that also work under nix-darwin. Not ./modules as a whole: the rest are
-    # built on systemd, networkd and the like.
+    # The modules that also work under nix-darwin (ezcage with its package from ./pkgs).
+    # Not ./modules as a whole: the rest are built on systemd, networkd and the like.
     darwinModules = {
-      default = { imports = [ ./modules/ezsh.nix ]; };
+      default = { imports = [ ./modules/ezsh.nix ./modules/ezcage.nix ./pkgs ]; };
       ezsh    = ./modules/ezsh.nix;
+      ezcage  = { imports = [ ./modules/ezcage.nix ./pkgs ]; };
     };
   };
 }

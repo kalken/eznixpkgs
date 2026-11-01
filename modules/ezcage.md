@@ -179,6 +179,59 @@ programs.ezcage = {
   package and `offline` works, extra args are passed on, `--user root` is
   refused; switching back removed the users.
 
+## SSH agent
+
+Off by default: the cage can't read `~/.ssh` and can't reach your agent.
+`--ssh-agent` (profile option `sshAgent = true`) lets it use the agent from
+`SSH_AUTH_SOCK`, for `git push` and the like. It can then sign as you, though
+it still can't read the keys.
+
+- **Linux**: `ssh-agent` only answers its own user, and the cage runs as
+  another one. So `ezcage` runs a `socat` relay as you for the length of the
+  run, with its socket in a private `mktemp -d` directory, and mounts only that
+  socket into the cage as `/run/ssh-agent.sock`.
+- **macOS**: the sandbox allows connecting to the agent's socket; without the
+  flag only IP and a few named sockets are allowed (DNS's `mDNSResponder`,
+  the Nix daemon, sockets in the cage's home). Before this, a cage that knew
+  the agent's (random) path could use it.
+- Tested 2026-11-01: on ezberry with a throwaway agent and key (visible with
+  the flag, unreachable without), on this Mac with the login agent.
+
+## macOS
+
+`pkgs/ezcage/ezcage-darwin.sh`, installed as `ezcage` on macOS; the module is in
+`darwinModules` (`default` and `ezcage`). No namespaces there, and no VMs (the
+user's choice), so it uses the built-in sandbox, `sandbox-exec`, with a
+generated profile that denies everything by default.
+
+- **Same**: `--rw`, `--ro`, `--name`, `--workdir`, `--offline`, `--nix`/`--no-nix`,
+  `--path`, read-only `.git`, profiles in `/etc/ezcage/profiles`.
+- **Not supported**: `--netns`, `--user`, `--group` (error). Profiles with
+  `groups` or `netns` fail an assertion.
+- **Weaker than Linux**:
+  - runs as you, no separate user; no `sudo` needed
+  - blocked paths are denied, not hidden: names and metadata of any path can
+    be read (`stat`), contents and directory listings cannot
+  - Nix opens every directory on the way to its home and `/etc`, so those
+    parents can be listed (names only). Named homes are therefore in
+    `/Users/Shared/ezcage/<user>/<name>` (mode `0700`), not under your home
+    folder, which would make your home's file names listable.
+- **Readable**: `/System`, `/usr`, `/bin`, `/sbin`, `/private/etc`,
+  `/Library/Preferences`, `/dev`, `/opt/homebrew`, `/nix/store`,
+  `/nix/var/nix/profiles`, the command's own directory, granted paths, the home.
+- **System services** (`mach-lookup`): only users, DNS, network config,
+  certificates, logging, preferences and FSEvents. Not LaunchServices, the
+  clipboard or AppleEvents, which could act outside the sandbox.
+- **Tested on this Mac (macOS 27.0.1, 2026-11-01)**: Claude Code 2.1.309
+  `--version`; granted folder writable, `.git`, home files, `Documents`,
+  `/tmp` and the clipboard denied; network works, `--offline` blocks it; named
+  home persists; `nix shell` works; `open -a Calculator` fails (no app
+  launched); the cage can't see your Keychain, so Claude needs its own login
+  there. The nix-darwin system builds with a profile, and the profile runs.
+- **Not yet tried**: an interactive Claude session and its login (Claude
+  normally keeps its login in the Keychain; whether it falls back to a file
+  in the cage's home is untested).
+
 ## Threat model
 
 - **Covers**: mistakes and prompt injection. Casual escape. With `--netns` or `--offline`, also reaching the LAN or
@@ -201,10 +254,6 @@ programs.ezcage = {
   NixOS, else mount `/usr` (and the `/bin`, `/lib` links) read-only, accept
   commands from `/usr/bin`, and create the `ezcage` user with `useradd`.
   About 15 lines in the script.
-- **macOS (maybe).** No namespaces, and no VMs (the user's choice), so a
-  Seatbelt (`sandbox-exec`) backend with the same flags. Weaker: blocks reads,
-  writes and network outside allowed paths, but blocked paths stay visible by
-  name, and there is no `--netns` and no separate user.
 
 ## Prototype results (ezberry, 2026-11-01, systemd 260)
 

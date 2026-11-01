@@ -24,6 +24,8 @@ Usage: ezcage [options] -- COMMAND [ARGS]...
   --group GROUP     also run with GROUP, e.g. the group that owns a --rw path
                     (repeatable)
   --path DIR        put DIR (in /nix/store) on the cage's PATH (repeatable)
+  --ssh-agent       let the cage use your SSH agent (from SSH_AUTH_SOCK): it can
+                    sign as you, e.g. git push, but still can't read the keys
   -h, --help        show this help
 EOF
 }
@@ -39,7 +41,7 @@ if [ $# -gt 0 ] && [[ "$1" != -* ]]; then
   set -- "${pargs[@]}" "${@:2}"
 fi
 
-rw=() ro=() groups=() paths=() name="" workdir="" netns="" offline=0 nix="" user="ezcage" cmd=()
+rw=() ro=() groups=() paths=() name="" workdir="" netns="" offline=0 nix="" ssh_agent=0 agentsock="" user="ezcage" cmd=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -54,6 +56,9 @@ while [ $# -gt 0 ]; do
     --user) user="${2:?--user needs a user}"; shift 2 ;;
     --group) groups+=("${2:?--group needs a group}"); shift 2 ;;
     --path) paths+=("${2:?--path needs a directory}"); shift 2 ;;
+    --ssh-agent) ssh_agent=1; shift ;;
+    # Internal: the relay socket set up before sudo
+    --ssh-agent-socket) agentsock="${2:?}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     --) shift; cmd=("$@"); break ;;
     *) die "unknown option: $1 (see --help)" ;;
@@ -102,6 +107,22 @@ if [ "$EUID" -ne 0 ]; then
   searchpath=$(IFS=:; echo "${paths[*]+${paths[*]}}")
   exe=$(PATH="${searchpath:+$searchpath:}$PATH" type -P -- "${cmd[0]}") || die "command not found: ${cmd[0]}"
   exe=$(storepath "$exe")
+  if [ "$ssh_agent" = 1 ]; then
+    [ -S "${SSH_AUTH_SOCK:-}" ] || die "--ssh-agent: no agent (SSH_AUTH_SOCK is not a socket)"
+    # ssh-agent only answers its own user, and the cage runs as another one:
+    # relay it as you, through a socket in a private directory that only the
+    # cage gets mounted
+    relaydir=$(mktemp -d)
+    socat UNIX-LISTEN:"$relaydir/agent",fork,perm=0666 UNIX-CONNECT:"$SSH_AUTH_SOCK" 2>/dev/null &
+    relay=$!
+    trap 'kill "$relay" 2>/dev/null; rm -rf "$relaydir"' EXIT
+    for _ in $(seq 50); do [ -S "$relaydir/agent" ] && break; sleep 0.1; done
+    [ -S "$relaydir/agent" ] || die "--ssh-agent: relay did not start"
+    args+=(--ssh-agent-socket "$relaydir/agent")
+    rc=0
+    sudo "$0" "${args[@]}" -- "$exe" "${cmd[@]:1}" || rc=$?
+    exit "$rc"
+  fi
   exec sudo "$0" "${args[@]}" -- "$exe" "${cmd[@]:1}"
 fi
 
@@ -209,6 +230,13 @@ if [ "$nix" = 1 ]; then
   props+=(-p BindPaths=/nix/var/nix/daemon-socket -p BindReadOnlyPaths=-/etc/nix)
 fi
 
+if [ -n "$agentsock" ]; then
+  [ -S "$agentsock" ] || die "--ssh-agent: relay socket not found: $agentsock"
+  props+=(-p BindPaths="$agentsock:/run/ssh-agent.sock")
+elif [ "$ssh_agent" = 1 ]; then
+  die "--ssh-agent: run ezcage as your own user, not as root"
+fi
+
 env=(
   -E HOME="$home"
   -E USER="$user"
@@ -222,6 +250,7 @@ env=(
 )
 [ -n "${COLORTERM:-}" ] && env+=(-E COLORTERM="$COLORTERM")
 [ -n "${LOCALE_ARCHIVE:-}" ] && env+=(-E LOCALE_ARCHIVE="$LOCALE_ARCHIVE")
+[ -n "$agentsock" ] && env+=(-E SSH_AUTH_SOCK=/run/ssh-agent.sock)
 
 # No name: the home is created in the private /tmp before the command runs
 if [ -z "$name" ]; then
