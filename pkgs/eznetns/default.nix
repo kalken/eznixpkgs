@@ -1,7 +1,11 @@
-{ pkgs, lib, ezsources, ... }:
+{ pkgs, lib, ... }:
 let
-  # From the eznetns input in flake.nix
-  eznetns-src = ezsources.eznetns;
+  eznetns-src = pkgs.fetchFromGitHub {
+    owner = "kalken";
+    repo = "eznetns";
+    rev = "5c3148f89bfdffabed8b8b44127657d38816c973";          # main branch
+    hash = "sha256-Bj8HfVkCoQEI8/CxNhaCAD7PIC43oAEalP0Cu4oxac0=";
+  };
 in
 pkgs.stdenv.mkDerivation rec {
   pname = "eznetns";

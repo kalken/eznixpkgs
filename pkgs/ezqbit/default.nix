@@ -1,11 +1,15 @@
-{ pkgs, lib, qbittorrent-nox, ezsources, ... }:
+{ pkgs, lib, qbittorrent-nox, ... }:
 let
-  # From the ezqbit input in flake.nix
-  ezqbit-src = ezsources.ezqbit;
+  ezqbit-src = pkgs.fetchFromGitHub {
+    owner = "kalken";
+    repo = "ezqbit";
+    rev = "82aa2712e591566baa943fe591d59059e41a09bd";
+    hash = "sha256-WRl9eH2i1NkwdTUezR2I5fENOuhTHoCVaqVdPsViEO8=";
+  };
 in
 pkgs.stdenvNoCC.mkDerivation {
   pname = "ezqbit";
-  version = "unstable-${lib.substring 0 8 ezqbit-src.lastModifiedDate}";
+  version = "unstable-2026-10-05";
   src = ezqbit-src;
 
   # The repo only holds the theme CSS; build.sh combines it with the stock
