@@ -210,6 +210,8 @@ env=(
   USER="$USER"
   LOGNAME="$USER"
   TMPDIR="$home/tmp"
+  # Claude Code ignores TMPDIR and would use /tmp/claude-<uid>
+  CLAUDE_CODE_TMPDIR="$home/tmp"
   PATH="$cagepath"
   TERM="${TERM:-dumb}"
   LANG="${LANG:-en_US.UTF-8}"
