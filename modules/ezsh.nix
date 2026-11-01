@@ -1,13 +1,8 @@
 { config, options, pkgs, lib, ... }:
 let
   cfg = config.programs.ezsh;
-  ezsh-src = pkgs.fetchFromGitHub {
-    owner = "kalken";
-    repo = "ezsh";
-    rev = "aa5debe401e54f721a55ce063a70b78ab6994424";
-    hash = "sha256-uAj1VJXHS8t9ZHxjZo+s0u0lU54J8+OUqPrrid7KmuY=";
-  };
-  ezshrc = "${ezsh-src}/zshrc";
+  # From the ezsh input in flake.nix
+  ezshrc = "${pkgs.ezsources.ezsh}/zshrc";
 in
 {
   options.programs.ezsh = {

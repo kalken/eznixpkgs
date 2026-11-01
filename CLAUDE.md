@@ -32,10 +32,10 @@ The repo has two top-level layers:
 Each `.nix` file is a self-contained NixOS module (e.g., `services.ezrouter`, `programs.ezsh`). `modules/default.nix` auto-discovers and imports all `.nix` files in the directory via `builtins.readDir`, so adding a new module requires only creating the file — no registration needed.
 
 ### `pkgs/` — Standalone packages
-Each subdirectory is a package exposed via a Nix overlay. `pkgs/default.nix` auto-discovers subdirectories and calls `callPackage` on each, making them available as `pkgs.ezconf-cli`, `pkgs.ezman`, etc. External projects (eznetns, ezsocks, wg-tools) are fetched from GitHub via `fetchFromGitHub` and wrapped with Nix-managed dependencies.
+Each subdirectory is a package exposed via a Nix overlay. `pkgs/default.nix` auto-discovers subdirectories and calls `callPackage` on each, making them available as `pkgs.ezconf-cli`, `pkgs.ezman`, etc. External projects of the user (eznetns, ezsocks, ezqbit, and the ezsh zshrc) are non-flake inputs in `flake.nix` following their `develop` (ezsh: `master`) branch, reached as `pkgs.ezsources.<name>`; a machine's `nix flake update` moves them, and `--override-input eznixpkgs/<name> path:…` tries a local checkout. wg-tools (Mullvad's repo) stays pinned with `fetchFromGitHub`.
 
 ### `flake.nix`
-Minimal entry point — imports `modules/` and `pkgs/`, exports `nixosModules.default` (all modules combined) and the package overlay. `darwinModules` lists, by hand, only the modules that also evaluate under nix-darwin (currently `ezsh`); a module added there must not set options nix-darwin lacks — `ezsh.nix` branches on `options.users ? defaultUserShell` for that reason (NixOS: sets it; macOS: an activation step that moves root off `/bin/sh` instead).
+Minimal entry point — imports `modules/` and `pkgs/`, exports `nixosModules.default` (all modules combined) and the package overlay. `darwinModules` lists, by hand, only the modules that also evaluate under nix-darwin (currently `ezsh` and `ezcage`, plus `pkgs/` and the `ezsources` overlay they need); a module added there must not set options nix-darwin lacks — `ezsh.nix` branches on `options.users ? defaultUserShell` for that reason (NixOS: sets it; macOS: an activation step that moves root off `/bin/sh` instead).
 
 ## Key Patterns
 

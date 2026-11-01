@@ -1,16 +1,12 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, ezsources, ... }:
 
 let
-  ezsocks-src = pkgs.fetchFromGitHub {
-    owner = "kalken";
-    repo = "ezsocks";
-    rev = "58f65bbf2cae89c65de242d1161f611f1455350b";          # develop branch
-    hash = "sha256-AuyfILTbnAbAKbsd5xk1Ti9foZakloRCfqxvSXmnpM8=";
-  };
+  # From the ezsocks input in flake.nix
+  ezsocks-src = ezsources.ezsocks;
 in
 pkgs.stdenv.mkDerivation rec {
   pname = "ezsocks";
-  version = "unstable-2026-10-30";
+  version = "unstable-${lib.substring 0 8 ezsocks-src.lastModifiedDate}";
   src = ezsocks-src;
 
   dontUnpack = true;
