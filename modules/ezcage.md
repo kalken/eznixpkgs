@@ -40,8 +40,11 @@ A wrapper around `sudo systemd-run --pty` that builds a transient unit.
 ```
 ezcage [--rw PATH]... [--ro PATH]... [--name NAME] [--workdir DIR]
        [--netns NAME | --offline] [--nix | --no-nix]
+       [--user USER] [--group GROUP]... [--main-group GROUP] [--umask MASK]
+       [--git] [--ssh-agent] [--path DIR]...
        -- COMMAND [ARGS]...
-ezcage PROFILE
+ezcage --name NAME --claude-token        (macOS only)
+ezcage PROFILE [ARGS]...
 ```
 
 - **Empty root**: `RootDirectory=/run/ezcage/root` (an empty directory ezcage
