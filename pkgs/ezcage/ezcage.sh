@@ -48,7 +48,7 @@ if [ $# -gt 0 ] && [[ "$1" != -* ]]; then
   set -- "${pargs[@]}" "${@:2}"
 fi
 
-rw=() ro=() groups=() paths=() name="" workdir="" netns="" maingroup="" umask="" offline=0 git=0 gitname="" gitemail="" nix="" ssh_agent=0 agentsock="" user="ezcage" cmd=()
+rw=() ro=() groups=() paths=() name="" workdir="" netns="" maingroup="" umask="" offline=0 git=0 gitname="" gitemail="" gitignore="" nix="" ssh_agent=0 agentsock="" user="ezcage" cmd=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -68,6 +68,7 @@ while [ $# -gt 0 ]; do
     # Internal: your git identity, read before sudo
     --git-name) gitname="${2:?}"; shift 2 ;;
     --git-email) gitemail="${2:?}"; shift 2 ;;
+    --git-ignore) gitignore="${2:?}"; shift 2 ;;
     --path) paths+=("${2:?--path needs a directory}"); shift 2 ;;
     --ssh-agent) ssh_agent=1; shift ;;
     # Internal: the relay socket set up before sudo
@@ -109,6 +110,11 @@ if [ "$EUID" -ne 0 ]; then
   [ "$offline" = 1 ] && args+=(--offline)
   [ "$nix" = 1 ] && args+=(--nix)
   [ "$nix" = 0 ] && args+=(--no-nix)
+  # Your global gitignore, so git in the cage ignores what it ignores outside.
+  # Mounted, not copied: only if the cage user may read it.
+  gi=$(git config --global --path core.excludesFile 2>/dev/null) \
+    || gi="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
+  [ -n "$(find "$gi" -maxdepth 0 -type f -perm -o=r 2>/dev/null)" ] && args+=(--git-ignore "$(resolve "$gi")")
   if [ "$git" = 1 ]; then
     args+=(--git)
     # The cage can't read your git config: commit as you
@@ -167,6 +173,7 @@ for g in "${groups[@]+"${groups[@]}"}" ${maingroup:+"$maingroup"}; do
   getent group "$g" >/dev/null || die "group not found: $g"
 done
 
+[ -z "$gitignore" ] || gitignore=$(resolve "$gitignore")
 for i in "${!rw[@]}"; do rw[i]=$(resolve "${rw[i]}"); done
 for i in "${!ro[@]}"; do ro[i]=$(resolve "${ro[i]}"); done
 
@@ -226,6 +233,7 @@ props=(
 )
 
 [ -n "$name" ] && props+=(-p StateDirectory="ezcage/$name")
+[ -n "$gitignore" ] && props+=(-p BindReadOnlyPaths="$gitignore:/etc/gitignore")
 [ -n "$maingroup" ] && props+=(-p Group="$maingroup")
 [ -n "$umask" ] && props+=(-p UMask="$umask")
 
@@ -293,6 +301,7 @@ env=(
 [ -n "${COLORTERM:-}" ] && env+=(-E COLORTERM="$COLORTERM")
 [ -n "${LOCALE_ARCHIVE:-}" ] && env+=(-E LOCALE_ARCHIVE="$LOCALE_ARCHIVE")
 [ -n "$agentsock" ] && env+=(-E SSH_AUTH_SOCK=/run/ssh-agent.sock)
+[ -n "$gitignore" ] && env+=(-E GIT_CONFIG_COUNT=2 -E GIT_CONFIG_KEY_1=core.excludesFile -E GIT_CONFIG_VALUE_1=/etc/gitignore)
 [ -n "$gitname" ] && env+=(-E GIT_AUTHOR_NAME="$gitname" -E GIT_COMMITTER_NAME="$gitname")
 [ -n "$gitemail" ] && env+=(-E GIT_AUTHOR_EMAIL="$gitemail" -E GIT_COMMITTER_EMAIL="$gitemail")
 

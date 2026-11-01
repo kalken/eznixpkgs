@@ -136,6 +136,11 @@ if [ "$ssh_agent" = 1 ]; then
   [ -S "${SSH_AUTH_SOCK:-}" ] || die "--ssh-agent: no agent (SSH_AUTH_SOCK is not a socket)"
   agent=$(resolve "$SSH_AUTH_SOCK")
 fi
+# Your global gitignore, so git in the cage ignores what it ignores outside
+gitignore=$(git config --global --path core.excludesFile 2>/dev/null) \
+  || gitignore="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
+if [ -f "$gitignore" ]; then gitignore=$(resolve "$gitignore"); else gitignore=""; fi
+
 # ssh reads ~/.ssh from your real home, not HOME: let it check host keys
 sshfiles=()
 if [ -n "$agent" ]; then
@@ -235,6 +240,7 @@ EOF
   if [ -n "$agent" ]; then
     echo "(allow network-outbound (remote unix-socket (path-literal $(q "$agent"))))"
   fi
+  [ -n "$gitignore" ] && echo "(allow file-read* (literal $(q "$gitignore")))"
   for f in "${sshfiles[@]+"${sshfiles[@]}"}"; do
     echo "(allow file-read* (literal $(q "$f")))"
   done
@@ -260,6 +266,7 @@ env=(
 )
 [ -n "${COLORTERM:-}" ] && env+=(COLORTERM="$COLORTERM")
 [ -n "$agent" ] && env+=(SSH_AUTH_SOCK="$agent")
+[ -n "$gitignore" ] && env+=(GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_1=core.excludesFile GIT_CONFIG_VALUE_1="$gitignore")
 # The cage can't read your git config: commit as you
 if [ "$git" = 1 ]; then
   n=$(git config user.name 2>/dev/null) && env+=(GIT_AUTHOR_NAME="$n" GIT_COMMITTER_NAME="$n")

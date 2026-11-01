@@ -159,7 +159,10 @@ ACL with `systemd.tmpfiles`.
   and push with `--ssh-agent`. The price: it can then run commands as you
   outside the cage, through git. Commits carry your `user.name` and
   `user.email` (read outside, passed as `GIT_AUTHOR_*`/`GIT_COMMITTER_*`); the
-  rest of your git config stays unreadable. Tested 2026-11-01 on this Mac and ezberry:
+  rest of your git config stays unreadable, except your global gitignore
+  (`core.excludesFile`, else `~/.config/git/ignore`), read-only, so git
+  ignores the same files as outside (macOS: read in place; Linux: mounted as
+  `/etc/gitignore` when it is world-readable). Tested 2026-11-01 on this Mac and ezberry:
   without it hooks in a repo and a nested repo can't be written, with it
   commit works.
 - `ezcage` writes `safe.directory` into the cage home's `.gitconfig`, because git
