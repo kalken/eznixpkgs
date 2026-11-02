@@ -29,7 +29,7 @@ services.eznetns.instances.surf.wireguard.wg0-surf = {
 };
 ```
 
-This expects `surf/wg0-surf/` (templates) inside the zip or folder, and writes `/etc/eznetns/surf/wireguard/wg0-surf.conf`. The settings file `surf/wg0-surf.conf` beside it is optional; without it the chosen template is used unchanged. If no config can be generated the service fails instead of reloading the old one. Several interfaces work the same way, each with its own `keys` and `rotate`.
+This expects `surf/wg0-surf/` (templates) inside the zip or folder, and writes `/etc/eznetns/surf/wireguard/wg0-surf.conf`. The settings file `surf/wg0-surf.conf` beside it is optional; without it the chosen template is used unchanged. If the zip or folder has no `surf/wg0-surf/` folder, the `.conf` files at its top are the templates instead, each a complete config with its private key (a zip from a VPN provider, say), and a random one is picked; there is no settings file then, and `pattern` still narrows the choice. If no config can be generated the service fails instead of reloading the old one. Several interfaces work the same way, each with its own `keys` and `rotate`.
 
 - Change the config by hand at any time: `systemctl start eznetns-surf-rotate-wg0-surf`
 - See when the timer fires next: `systemctl list-timers 'eznetns-*'`
