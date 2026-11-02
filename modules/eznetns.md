@@ -23,17 +23,19 @@ eznetns can automatically setup wireguard files it finds in **/etc/eznetns/nameo
 `ezwgen` builds a WireGuard config by picking a random template and merging your settings (private key and so on) into it. The module can run it for you and reload the interface:
 
 ```nix
-services.eznetns.instances.surf.wireguard.wg0-surf.rotate = {
-  interval = "daily";                   # optional, leave out for manual only
-  # source = "/root/.config/ezwgen";    # the default, same as ezwgen itself
+services.eznetns.instances.surf.wireguard.wg0-surf = {
+  keys = "/var/lib/ezwgen/surf.zip";    # a zip or a folder, default /root/.config/ezwgen
+  rotate = "*-*-* 05:00:00";            # optional, leave out for manual only
 };
 ```
 
-This expects the folder `/root/.config/ezwgen/surf/wg0-surf/` (templates) and writes `/etc/eznetns/surf/wireguard/wg0-surf.conf`. The settings file `/root/.config/ezwgen/surf/wg0-surf.conf` is optional; without it the chosen template is used unchanged. If no config can be generated the service fails instead of reloading the old one.
+This expects `surf/wg0-surf/` (templates) inside the zip or folder, and writes `/etc/eznetns/surf/wireguard/wg0-surf.conf`. The settings file `surf/wg0-surf.conf` beside it is optional; without it the chosen template is used unchanged. If no config can be generated the service fails instead of reloading the old one. Several interfaces work the same way, each with its own `keys` and `rotate`.
 
 - Change the config by hand at any time: `systemctl start eznetns-surf-rotate-wg0-surf`
 - See when the timer fires next: `systemctl list-timers 'eznetns-*'`
-- `source` is read at runtime and never copied to the nix store. Keep it outside your configuration repository: with a flake, anything git tracks is copied into the world-readable nix store, private keys included.
+- `keys` is read at runtime and never copied to the nix store. A zip is read in memory and never unpacked. Keep it outside your configuration repository: with a flake, anything git tracks is copied into the world-readable nix store, private keys included.
+
+**Deprecated, will be removed at some point:** `rotate` as a set (`rotate = { source = ...; pattern = ...; interval = ...; }`). It still works, so existing configurations keep building. Use `keys` for `source`, `pattern` on the interface for `pattern`, and `rotate` itself for `interval`.
 
 ## Quick Start
 
@@ -180,10 +182,12 @@ Things to know:
 | `services.eznetns.instances.<name>.portForwards[].allowedSources` | list of str | [] | nat only: source addresses/networks to forward (empty = any) |
 | `services.eznetns.instances.<name>.portForwards[].fromHost` | bool | false | nat only: also forward connections made by the host itself |
 | `services.eznetns.instances.<name>.portForwards[].*` | any | - | proxy only: extra attrs passed to socketConfig |
-| `services.eznetns.instances.<name>.wireguard.<interface>.rotate` | null or submodule | null | Rotate this interface's config with ezwgen, see [Rotating the WireGuard config](#rotating-the-wireguard-config) |
-| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.source` | str | /root/.config/ezwgen | Folder with `<name>/<interface>.conf` and `<name>/<interface>/` templates |
-| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.pattern` | str | . | Only pick templates whose file name contains this text |
-| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.interval` | null or str | null | systemd calendar expression for the timer, null for manual only |
+| `services.eznetns.instances.<name>.wireguard.<interface>.keys` | null or str | null | Folder or zip file with `<name>/<interface>.conf` and `<name>/<interface>/` templates; setting it turns on rotation, see [Rotating the WireGuard config](#rotating-the-wireguard-config) |
+| `services.eznetns.instances.<name>.wireguard.<interface>.pattern` | null or str | null | Only pick templates whose file name contains this text |
+| `services.eznetns.instances.<name>.wireguard.<interface>.rotate` | null or str | null | systemd calendar expression for the timer, null for manual only |
+| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.source` | str | /root/.config/ezwgen | **Deprecated**, use `keys` |
+| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.pattern` | str | . | **Deprecated**, use `pattern` |
+| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.interval` | null or str | null | **Deprecated**, set `rotate` to the expression |
 | `services.eznetns.instances.<name>.services` | list of str | [] | Systemd services to run inside this netns, same as mapping them in `netnsService` |
 | `services.eznetns.instances.<name>.route.interfaces` | list of str | [] | Host interfaces whose clients are routed through this netns (IPv4 and IPv6), see [Routing clients through a netns](#routing-clients-through-a-netns) |
 | `services.eznetns.instances.<name>.route.macs` | list of str | [] | MAC addresses of single clients routed through this netns (IPv4 and IPv6) |
