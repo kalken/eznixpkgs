@@ -26,6 +26,10 @@ stdenv.mkDerivation {
   # sudo is not added to PATH: it must be the setuid wrapper from the system PATH
   installPhase = ''
     install -Dm755 ${script} $out/bin/ezcage
+    ${lib.optionalString (!stdenv.hostPlatform.isDarwin) ''
+      # sudo runs the wrapper, not the wrapped script ($0)
+      substituteInPlace $out/bin/ezcage --replace-fail '@self@' "$out/bin/ezcage"
+    ''}
     patchShebangs $out/bin/ezcage
     wrapProgram $out/bin/ezcage \
       --prefix PATH : ${lib.makeBinPath runtimeDeps}

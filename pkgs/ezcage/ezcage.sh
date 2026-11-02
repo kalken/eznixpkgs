@@ -5,6 +5,12 @@
 # See modules/ezcage.md.
 set -euo pipefail
 
+# What sudo runs: the installed wrapper, set by the build. $0 would be the
+# wrapped script in the store, which no sudoers rule can name. Run from a
+# checkout, the placeholder is left and $0 is used.
+self="@self@"
+case "$self" in @*) self=$0 ;; esac
+
 usage() {
   cat <<'EOF'
 Usage: ezcage [options] -- COMMAND [ARGS]...
@@ -157,10 +163,10 @@ if [ "$EUID" -ne 0 ]; then
     done
     args+=(--ssh-agent-socket "$relaydir/agent")
     rc=0
-    sudo "$0" "${args[@]}" -- "$exe" "${cmd[@]:1}" || rc=$?
+    sudo "$self" "${args[@]}" -- "$exe" "${cmd[@]:1}" || rc=$?
     exit "$rc"
   fi
-  exec sudo "$0" "${args[@]}" -- "$exe" "${cmd[@]:1}"
+  exec sudo "$self" "${args[@]}" -- "$exe" "${cmd[@]:1}"
 fi
 
 # Never root or a real account: only the users the module creates for cages
