@@ -196,6 +196,9 @@ programs.ezcage = {
 - **No sudoers rule**: `ezcage` calls `sudo` itself, so normal sudo rights
   (`wheel`) apply. A passwordless rule would need limits on `--group` (for
   example `--group shadow --ro /etc/shadow`) and is left out.
+- `ezcage` runs `sudo` on its installed path (`/run/current-system/sw/bin/ezcage`),
+  not on the wrapped script in the store, so a sudoers rule can name that path
+  and stays valid across updates. macOS uses no `sudo`.
 - A bind mount skips the parent directory's permission check, so
   `--ro /home/other/x` could expose world-readable files inside a `0700` home.
   Since only sudoers can run it, that does not matter.
