@@ -258,6 +258,18 @@ generated profile that denies everything by default.
     parents can be listed (names only). Named homes are therefore in
     `/Users/Shared/ezcage/<user>/<name>` (mode `0700`), not under your home
     folder, which would make your home's file names listable.
+- **Signals**: the cage can signal itself and what runs in the same cage
+  (`same-sandbox`), so it can stop a server it started. It was `self` alone,
+  and a test server left running could only be stopped from outside (found
+  2026-11-02). Processes outside the cage cannot be signalled. Listing
+  processes (`ps`, `pkill`) still fails; `kill PID` works. Not yet tried.
+- **Terminals**: a program in the cage can open its own pseudo-terminals
+  (`/dev/ptmx`), for a shell, `expect` or a terminal server such as eznix's.
+  Without that rule `openpty()` failed with "out of pty devices" (found
+  2026-11-02, running eznix's test server in the cage). The profile also lets
+  it write to and `ioctl` any `/dev/ttysNNN`, not only its own, because the
+  names of the ptys it makes are not known in advance. That could put text on
+  another terminal window of yours; not tried, and not narrowed.
 - **Readable**: `/System`, `/usr`, `/bin`, `/sbin`, `/private/etc`,
   `/Library/Preferences`, `/dev`, `/opt/homebrew`, `/nix/store`,
   `/nix/var/nix/profiles`, the command's own directory, granted paths, the home.

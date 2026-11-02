@@ -175,7 +175,8 @@ trap cleanup EXIT
 (version 1)
 (deny default)
 (allow process-exec process-fork)
-(allow signal (target self))
+; Itself and what runs in this cage (a test server it started, a build), nothing outside it
+(allow signal (target same-sandbox))
 (allow sysctl-read ipc-posix-shm ipc-posix-sem pseudo-tty)
 
 ; Only the system services programs need: users, DNS, network config,
