@@ -44,8 +44,13 @@ ezcage [--rw PATH]... [--ro PATH]... [--name NAME] [--workdir DIR]
        [--git] [--ssh-agent] [--path DIR]...
        -- COMMAND [ARGS]...
 ezcage --name NAME --claude-token        (macOS only)
-ezcage PROFILE [ARGS]...
+ezcage [OPTIONS]... PROFILE [ARGS]...
 ```
+
+- **Options before a profile** are added to the profile's own, for one run:
+  `ezcage --ro /path/to/dir claude --continue`. `--rw`, `--ro`, `--group` and
+  `--path` add up; for a single value (`--name`, `--workdir`) the profile's own
+  wins. Anything after the profile name goes to its command.
 
 - **Empty root**: `RootDirectory=/run/ezcage/root` (an empty directory ezcage
   creates), `TemporaryFileSystem=/`, `MountAPIVFS=yes`, `PrivateTmp=yes`.

@@ -14,7 +14,8 @@ case "$self" in @*) self=$0 ;; esac
 usage() {
   cat <<'EOF'
 Usage: ezcage [options] -- COMMAND [ARGS]...
-       ezcage PROFILE [ARGS]...     (profiles from programs.ezcage.profiles)
+       ezcage [options] PROFILE [ARGS]...     (profiles from programs.ezcage.profiles;
+                                              options before it are added to its own)
 
   --rw PATH         grant read-write access (repeatable)
   --ro PATH         grant read-only access (repeatable)
@@ -48,10 +49,23 @@ die() { echo "ezcage: $*" >&2; exit 1; }
 # A profile is a file of arguments, one per line, ending with "--" and the
 # command. Arguments after the profile name are passed on to the command.
 profiles=/etc/ezcage/profiles
+# Options can come before the profile name: ezcage --ro DIR PROFILE [ARGS]...
+# They are put first, so a profile's own value for --name or --workdir wins, while
+# --rw, --ro, --group and --path add up.
+pre=()
+while [ $# -gt 0 ] && [[ "$1" == -* ]] && [[ "$1" != -- && "$1" != -h && "$1" != --help ]]; do
+  case "$1" in
+    --rw|--ro|--name|--workdir|--umask|--path|--netns|--user|--group|--main-group|--git-name|--git-email|--git-ignore|--ssh-agent-socket)
+      pre+=("$1" "${2:?$1 needs a value}"); shift 2 ;;
+    *) pre+=("$1"); shift ;;
+  esac
+done
 if [ $# -gt 0 ] && [[ "$1" != -* ]]; then
   [ -f "$profiles/$1" ] || die "unknown profile: $1 (see $profiles)"
   mapfile -t pargs < "$profiles/$1"
-  set -- "${pargs[@]}" "${@:2}"
+  set -- "${pre[@]+"${pre[@]}"}" "${pargs[@]}" "${@:2}"
+else
+  set -- "${pre[@]+"${pre[@]}"}" "$@"
 fi
 
 rw=() ro=() groups=() paths=() name="" workdir="" netns="" maingroup="" umask="" offline=0 git=0 gitname="" gitemail="" gitignore="" nix="" ssh_agent=0 agentsock="" user="ezcage" cmd=()
