@@ -199,9 +199,12 @@ trap cleanup EXIT
   (subpath "/private/etc") (subpath "/private/var/db/timezone")
   (subpath "/Library/Preferences") (subpath "/dev")
   (subpath "/opt/homebrew") (subpath "/nix/store") (subpath "/nix/var/nix/profiles"))
+; /dev/ptmx is what openpty() opens to make a pseudo-terminal: without write and
+; ioctl on it a program in here cannot start a shell of its own (a terminal
+; server, script, expect), and fails with "out of pty devices".
 (allow file-write* (literal "/dev/null") (literal "/dev/tty") (literal "/dev/dtracehelper")
-  (regex #"^/dev/ttys[0-9]+$") (subpath "/dev/fd"))
-(allow file-ioctl (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))
+  (literal "/dev/ptmx") (regex #"^/dev/ttys[0-9]+$") (subpath "/dev/fd"))
+(allow file-ioctl (literal "/dev/tty") (literal "/dev/ptmx") (regex #"^/dev/ttys[0-9]+$"))
 EOF
   echo "(allow file-read* (subpath $(q "$(dirname "$exereal")")))"
   # /usr/bin/git and friends are shims that run the developer tools via xcrun
