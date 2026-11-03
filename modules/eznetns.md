@@ -33,7 +33,7 @@ This expects `surf/wg0-surf/` (templates) inside the zip or folder, and writes `
 
 - Change the config by hand at any time: `systemctl start eznetns-surf-rotate-wg0-surf`
 - See when the timer fires next: `systemctl list-timers 'eznetns-*'`
-- To keep the private key apart from the zip, put it in a config file of its own (`[Interface]` with `PrivateKey = ...`) and set `settings = "/var/lib/ezwgen/surf.conf"`. Anything in that file is merged over the chosen template, and over the settings file inside `keys` if there is one, so it wins. Works with a flat zip of provider configs too.
+- To keep the private key apart from the zip, put it in a config file of its own (`[Interface]` with `PrivateKey = ...`) and set `settings = "/var/lib/ezwgen/surf.conf"`. That file is used instead of the settings file inside `keys` (which is then ignored), and is merged over the chosen template, so it wins. Works with a flat zip of provider configs too.
 - `keys` is read at runtime and never copied to the nix store. A zip is read in memory and never unpacked. Keep it outside your configuration repository: with a flake, anything git tracks is copied into the world-readable nix store, private keys included.
 
 **Deprecated, will be removed at some point:** `rotate` as a set (`rotate = { source = ...; pattern = ...; interval = ...; }`). It still works, so existing configurations keep building. Use `keys` for `source`, `pattern` on the interface for `pattern`, and `rotate` itself for `interval`.
@@ -184,7 +184,7 @@ Things to know:
 | `services.eznetns.instances.<name>.portForwards[].fromHost` | bool | false | nat only: also forward connections made by the host itself |
 | `services.eznetns.instances.<name>.portForwards[].*` | any | - | proxy only: extra attrs passed to socketConfig |
 | `services.eznetns.instances.<name>.wireguard.<interface>.keys` | null or str | null | Folder or zip file with `<name>/<interface>.conf` and `<name>/<interface>/` templates; setting it turns on rotation, see [Rotating the WireGuard config](#rotating-the-wireguard-config) |
-| `services.eznetns.instances.<name>.wireguard.<interface>.settings` | null or str | null | A config file kept apart from `keys` (a private key, say), merged over the chosen template so its settings win |
+| `services.eznetns.instances.<name>.wireguard.<interface>.settings` | null or str | null | Settings file kept apart from `keys` (a private key, say), used instead of the one inside `keys` |
 | `services.eznetns.instances.<name>.wireguard.<interface>.pattern` | null or str | null | Only pick templates whose file name contains this text |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate` | null or str | null | systemd calendar expression for the timer, null for manual only |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.source` | str | /root/.config/ezwgen | **Deprecated**, use `keys` |

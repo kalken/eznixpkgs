@@ -516,9 +516,9 @@ in
                   default = null;
                   example = "/var/lib/ezwgen/surf.conf";
                   description = ''
-                    A WireGuard config file kept apart from `keys`, for a private key you upload
-                    on its own, say. Whatever it contains is merged over the chosen template
-                    (and over the settings file inside `keys`, if there is one), so its
+                    A settings file kept apart from `keys`, for a private key you upload on its
+                    own, say. It is used instead of <netns>/<interface>.conf inside `keys`
+                    (which is then ignored), and merged over the chosen template, so its
                     settings win. Read at runtime by root, so it is not copied to the nix store.
                   '';
                 };
