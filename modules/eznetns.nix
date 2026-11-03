@@ -290,11 +290,11 @@ let
   netnsServiceMap = listToAttrs (map (e: nameValuePair e.service e.netns) netnsServiceEntries);
 
   # WireGuard interfaces with config rotation, as { name, dev, source, settings, pattern, interval }
-  # entries. An interface is rotated when it has `keys` or `rotate` set.
+  # entries. An interface is rotated when it has `configs` or `rotate` set.
   #
   # DEPRECATED, to be removed at some point: `rotate` as a set ({ source, pattern, interval }).
   # It is still read here so existing configurations keep building. The replacement is
-  # `keys` (was rotate.source), `pattern` (was rotate.pattern) and `rotate` as a plain
+  # `configs` (was rotate.source), `pattern` (was rotate.pattern) and `rotate` as a plain
   # calendar expression (was rotate.interval). Remove `legacy` and the submodule type of
   # `rotate` below when the old form goes.
   rotations = concatLists (mapAttrsToList (name: instanceCfg:
@@ -303,7 +303,7 @@ let
         legacy = if isAttrs wg.rotate then wg.rotate else null;
       in {
         inherit name dev;
-        source = if wg.keys != null then wg.keys
+        source = if wg.configs != null then wg.configs
           else if legacy != null then legacy.source
           else "/root/.config/ezwgen";
         settings = wg.settings;
@@ -314,7 +314,7 @@ let
           else if legacy != null then legacy.interval
           else null;
       }
-    ) (filterAttrs (_: wg: wg.keys != null || wg.rotate != null) instanceCfg.wireguard))
+    ) (filterAttrs (_: wg: wg.configs != null || wg.rotate != null) instanceCfg.wireguard))
   ) cfg.instances);
 in
 {
@@ -495,12 +495,12 @@ in
           wireguard = mkOption {
             type = types.attrsOf (types.submodule {
               options = {
-                keys = mkOption {
+                configs = mkOption {
                   type = types.nullOr types.str;
                   default = null;
                   example = "/var/lib/ezwgen/surf.zip";
                   description = ''
-                    Where ezwgen reads this interface's keys and templates from: a folder, or a
+                    Where ezwgen reads this interface's configs and templates from: a folder, or a
                     zip file with the same layout inside. It needs <netns>/<interface>.conf
                     (settings such as the private key) and the folder <netns>/<interface>/ with
                     templates to pick from. Read at runtime, so the private key is not copied
@@ -516,8 +516,8 @@ in
                   default = null;
                   example = "/var/lib/ezwgen/surf.conf";
                   description = ''
-                    A settings file kept apart from `keys`, for a private key you upload on its
-                    own, say. It is used instead of <netns>/<interface>.conf inside `keys`
+                    A settings file kept apart from `configs`, for a private key you upload on its
+                    own, say. It is used instead of <netns>/<interface>.conf inside `configs`
                     (which is then ignored), and merged over the chosen template, so its
                     settings win. Read at runtime by root, so it is not copied to the nix store.
                   '';
@@ -537,7 +537,7 @@ in
                         type = types.str;
                         default = "/root/.config/ezwgen";
                         example = "/var/lib/ezwgen";
-                        description = "DEPRECATED, will be removed at some point: use `keys` instead.";
+                        description = "DEPRECATED, will be removed at some point: use `configs` instead.";
                       };
 
                       pattern = mkOption {
@@ -563,7 +563,7 @@ in
                     service only runs when started manually.
 
                     The old form, a set with source, pattern and interval, still works but is
-                    DEPRECATED and will be removed at some point. Use `keys`, `pattern` and
+                    DEPRECATED and will be removed at some point. Use `configs`, `pattern` and
                     this option instead.
                   '';
                 };
@@ -574,7 +574,7 @@ in
             example = literalExpression ''
               {
                 wg0-surf = {
-                  keys = "/var/lib/ezwgen/surf.zip";
+                  configs = "/var/lib/ezwgen/surf.zip";
                   rotate = "*-*-* 05:00:00";
                 };
               }

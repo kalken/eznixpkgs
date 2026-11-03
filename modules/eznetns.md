@@ -24,19 +24,19 @@ eznetns can automatically setup wireguard files it finds in **/etc/eznetns/nameo
 
 ```nix
 services.eznetns.instances.surf.wireguard.wg0-surf = {
-  keys = "/var/lib/ezwgen/surf.zip";    # a zip or a folder, default /root/.config/ezwgen
+  configs = "/var/lib/ezwgen/surf.zip";    # a zip or a folder, default /root/.config/ezwgen
   rotate = "*-*-* 05:00:00";            # optional, leave out for manual only
 };
 ```
 
-This expects `surf/wg0-surf/` (templates) inside the zip or folder, and writes `/etc/eznetns/surf/wireguard/wg0-surf.conf`. The settings file `surf/wg0-surf.conf` beside it is optional; without it the chosen template is used unchanged. If the zip or folder has no `surf/wg0-surf/` folder, the `.conf` files at its top are the templates instead, each a complete config with its private key (a zip from a VPN provider, say), and a random one is picked; there is no settings file then, and `pattern` still narrows the choice. If no config can be generated the service fails instead of reloading the old one. Several interfaces work the same way, each with its own `keys` and `rotate`.
+This expects `surf/wg0-surf/` (templates) inside the zip or folder, and writes `/etc/eznetns/surf/wireguard/wg0-surf.conf`. The settings file `surf/wg0-surf.conf` beside it is optional; without it the chosen template is used unchanged. If the zip or folder has no `surf/wg0-surf/` folder, the `.conf` files at its top are the templates instead, each a complete config with its private key (a zip from a VPN provider, say), and a random one is picked; there is no settings file then, and `pattern` still narrows the choice. If no config can be generated the service fails instead of reloading the old one. Several interfaces work the same way, each with its own `configs` and `rotate`.
 
 - Change the config by hand at any time: `systemctl start eznetns-surf-rotate-wg0-surf`
 - See when the timer fires next: `systemctl list-timers 'eznetns-*'`
-- To keep the private key apart from the zip, put it in a config file of its own (`[Interface]` with `PrivateKey = ...`) and set `settings = "/var/lib/ezwgen/surf.conf"`. That file is used instead of the settings file inside `keys` (which is then ignored), and is merged over the chosen template, so it wins. Works with a flat zip of provider configs too.
-- `keys` is read at runtime and never copied to the nix store. A zip is read in memory and never unpacked. Keep it outside your configuration repository: with a flake, anything git tracks is copied into the world-readable nix store, private keys included.
+- To keep the private key apart from the zip, put it in a config file of its own (`[Interface]` with `PrivateKey = ...`) and set `settings = "/var/lib/ezwgen/surf.conf"`. That file is used instead of the settings file inside `configs` (which is then ignored), and is merged over the chosen template, so it wins. Works with a flat zip of provider configs too.
+- `configs` is read at runtime and never copied to the nix store. A zip is read in memory and never unpacked. Keep it outside your configuration repository: with a flake, anything git tracks is copied into the world-readable nix store, private keys included.
 
-**Deprecated, will be removed at some point:** `rotate` as a set (`rotate = { source = ...; pattern = ...; interval = ...; }`). It still works, so existing configurations keep building. Use `keys` for `source`, `pattern` on the interface for `pattern`, and `rotate` itself for `interval`.
+**Deprecated, will be removed at some point:** `rotate` as a set (`rotate = { source = ...; pattern = ...; interval = ...; }`). It still works, so existing configurations keep building. Use `configs` for `source`, `pattern` on the interface for `pattern`, and `rotate` itself for `interval`.
 
 ## Quick Start
 
@@ -183,11 +183,11 @@ Things to know:
 | `services.eznetns.instances.<name>.portForwards[].allowedSources` | list of str | [] | nat only: source addresses/networks to forward (empty = any) |
 | `services.eznetns.instances.<name>.portForwards[].fromHost` | bool | false | nat only: also forward connections made by the host itself |
 | `services.eznetns.instances.<name>.portForwards[].*` | any | - | proxy only: extra attrs passed to socketConfig |
-| `services.eznetns.instances.<name>.wireguard.<interface>.keys` | null or str | null | Folder or zip file with `<name>/<interface>.conf` and `<name>/<interface>/` templates; setting it turns on rotation, see [Rotating the WireGuard config](#rotating-the-wireguard-config) |
-| `services.eznetns.instances.<name>.wireguard.<interface>.settings` | null or str | null | Settings file kept apart from `keys` (a private key, say), used instead of the one inside `keys` |
+| `services.eznetns.instances.<name>.wireguard.<interface>.configs` | null or str | null | Folder or zip file with `<name>/<interface>.conf` and `<name>/<interface>/` templates; setting it turns on rotation, see [Rotating the WireGuard config](#rotating-the-wireguard-config) |
+| `services.eznetns.instances.<name>.wireguard.<interface>.settings` | null or str | null | Settings file kept apart from `configs` (a private key, say), used instead of the one inside `configs` |
 | `services.eznetns.instances.<name>.wireguard.<interface>.pattern` | null or str | null | Only pick templates whose file name contains this text |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate` | null or str | null | systemd calendar expression for the timer, null for manual only |
-| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.source` | str | /root/.config/ezwgen | **Deprecated**, use `keys` |
+| `services.eznetns.instances.<name>.wireguard.<interface>.rotate.source` | str | /root/.config/ezwgen | **Deprecated**, use `configs` |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.pattern` | str | . | **Deprecated**, use `pattern` |
 | `services.eznetns.instances.<name>.wireguard.<interface>.rotate.interval` | null or str | null | **Deprecated**, set `rotate` to the expression |
 | `services.eznetns.instances.<name>.services` | list of str | [] | Systemd services to run inside this netns, same as mapping them in `netnsService` |
