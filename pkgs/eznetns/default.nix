@@ -3,8 +3,8 @@ let
   eznetns-src = pkgs.fetchFromGitHub {
     owner = "kalken";
     repo = "eznetns";
-    rev = "2e54d748803e6b4419ea3ee2551e61a52d684ab1";          # develop branch, until tried: then main
-    hash = "sha256-8IUqCm9FauVpIuK/nCGcWScpxd7lKz1NyxpFhjm1Gx8=";
+    rev = "113ca223b2cd37421d1c5bd41d48fd19b45f4aff";          # develop branch, until tried: then main
+    hash = "sha256-PVOwtBox1Vjv3BDgiACvq6keKERuHee/C8YTh5zYb1E=";
   };
 in
 pkgs.stdenv.mkDerivation rec {

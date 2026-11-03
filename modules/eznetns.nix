@@ -289,7 +289,7 @@ let
     ) cfg.instances);
   netnsServiceMap = listToAttrs (map (e: nameValuePair e.service e.netns) netnsServiceEntries);
 
-  # WireGuard interfaces with config rotation, as { name, dev, source, pattern, interval }
+  # WireGuard interfaces with config rotation, as { name, dev, source, settings, pattern, interval }
   # entries. An interface is rotated when it has `keys` or `rotate` set.
   #
   # DEPRECATED, to be removed at some point: `rotate` as a set ({ source, pattern, interval }).
@@ -306,6 +306,7 @@ let
         source = if wg.keys != null then wg.keys
           else if legacy != null then legacy.source
           else "/root/.config/ezwgen";
+        settings = wg.settings;
         pattern = if wg.pattern != null then wg.pattern
           else if legacy != null then legacy.pattern
           else ".";
@@ -507,6 +508,18 @@ in
                     eznetns-<netns>-rotate-<interface>.service, which generates a new config
                     (a random template merged with your settings) and reloads the interface.
                     Without it, /root/.config/ezwgen is used when rotate is set.
+                  '';
+                };
+
+                settings = mkOption {
+                  type = types.nullOr types.str;
+                  default = null;
+                  example = "/var/lib/ezwgen/surf.conf";
+                  description = ''
+                    A WireGuard config file kept apart from `keys`, for a private key you upload
+                    on its own, say. Whatever it contains is merged over the chosen template
+                    (and over the settings file inside `keys`, if there is one), so its
+                    settings win. Read at runtime by root, so it is not copied to the nix store.
                   '';
                 };
 
@@ -757,7 +770,7 @@ in
         ) cfg.instances);
 
         # WireGuard config rotation, also usable manually with systemctl start
-        rotateServices = map ({ name, dev, source, pattern, interval }:
+        rotateServices = map ({ name, dev, source, settings, pattern, interval }:
           nameValuePair "eznetns-${name}-rotate-${dev}" ({
             description = "New WireGuard config for ${dev} in ${name}";
             unitConfig = {
@@ -766,13 +779,13 @@ in
             };
             serviceConfig = {
               Type = "oneshot";
-              ExecStartPre = escapeShellArgs [
+              ExecStartPre = escapeShellArgs ([
                 "${cfg.package}/bin/ezwgen"
                 "--source" source
                 "--netns" name
                 "--dev" dev
                 "--pattern" pattern
-              ];
+              ] ++ optionals (settings != null) [ "--settings" settings ]);
               ExecStart = escapeShellArgs [ "${cfg.package}/bin/eznetns" name "wg.reload" dev ];
             } // optionalAttrs (hasRoute cfg.instances.${name}) {
               # The new config may name another DNS server
