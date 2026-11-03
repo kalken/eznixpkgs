@@ -275,6 +275,9 @@ env=(
   # Claude Code ignores TMPDIR and would use /tmp/claude-<uid>
   CLAUDE_CODE_TMPDIR="$home/tmp"
   PATH="$cagepath"
+  # nix-darwin's /etc/zshenv sets PATH again in every zsh unless this is set, which would
+  # drop the profile's packages from the shells the command starts
+  __NIX_DARWIN_SET_ENVIRONMENT_DONE=1
   TERM="${TERM:-dumb}"
   LANG="${LANG:-en_US.UTF-8}"
   # The cage's git can't read your ~/.gitconfig
