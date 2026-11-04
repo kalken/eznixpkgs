@@ -60,7 +60,7 @@ try it after a rebuild: `sudo systemctl start eznotify@nixos-upgrade.service`.
 ## 📝 Notes
 
 - `onSuccess` is for services that end: a oneshot, or the job of a timer such as `nixos-upgrade`. A service that keeps running never ends well, so it only has `onFailure`.
-- The message is sent by the template `eznotify@.service`. `onFailure` and `onSuccess` are added to the listed services, next to any such settings they have already.
+- The message is sent by the template `eznotify@.service`. `onFailure` and `onSuccess` are added to the listed services as a drop-in file, next to any such settings they have already. An entry for a service the machine does not have does nothing.
 - Most providers want an app password rather than the account's own (Gmail does), and mail from a home connection without an account is often refused.
 
 *eznotify is part of eznixpkgs.*

@@ -167,17 +167,23 @@ in {
   };
 
   config = mkIf cfg.enable {
-    systemd.services = {
-      "eznotify@" = {
-        description = "Message about %i.service";
-        serviceConfig.Type = "oneshot";
-        scriptArgs = "%i";
-        path = [ pkgs.msmtp pkgs.coreutils config.systemd.package ];
-        inherit script;
-      };
-    } // mapAttrs (name: u: {
-      onFailure = optional u.onFailure.enable "eznotify@${name}.service";
-      onSuccess = optional u.onSuccess.enable "eznotify@${name}.service";
-    }) cfg.units;
+    systemd.services."eznotify@" = {
+      description = "Message about %i.service";
+      serviceConfig.Type = "oneshot";
+      scriptArgs = "%i";
+      path = [ pkgs.msmtp pkgs.coreutils config.systemd.package ];
+      inherit script;
+    };
+
+    # A drop-in on each listed service, not a definition of it in systemd.services: that would
+    # make an empty unit of its own for a service the machine does not have. systemd merges a
+    # drop-in into the unit, and ignores it when there is none.
+    systemd.units = mapAttrs' (name: u: nameValuePair "${name}.service.d/eznotify.conf" {
+      text = ''
+        [Unit]
+        ${optionalString u.onFailure.enable "OnFailure=eznotify@${name}.service"}
+        ${optionalString u.onSuccess.enable "OnSuccess=eznotify@${name}.service"}
+      '';
+    }) (filterAttrs (_: u: u.onFailure.enable || u.onSuccess.enable) cfg.units);
   };
 }
