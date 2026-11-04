@@ -58,9 +58,7 @@ This expects `surf/wg0-surf/` (templates) inside the zip or folder, and writes `
       ];
       
       # open port 49152 from internet to netns
-      firewall.extraInputRules = ''
-        tcp dport 49152 accept
-      '';
+      firewall.openPorts = [ { port = 49152; } ];
     };
     
     # WireGuard config file in /etc/eznetns/torrent/wireguard/wg0-torrent.conf
@@ -209,6 +207,7 @@ Things to know:
 | `services.eznetns.instances.<name>.configFiles.<file>.user` | str | root | File owner |
 | `services.eznetns.instances.<name>.configFiles.<file>.group` | str | root | File group |
 | `services.eznetns.instances.<name>.firewall.enable` | bool | true | Enable nftables firewall |
+| `services.eznetns.instances.<name>.firewall.openPorts` | list of submodule | `[]` | Ports to open in the netns. Each has `port` (number or service name), `protocol` (`tcp` or `udp`, default `tcp`) and `interfaces` (default: all) |
 | `services.eznetns.instances.<name>.firewall.extraInputRules` | str | "" | Extra rules for input chain |
 | `services.eznetns.instances.<name>.firewall.extraForwardRules` | str | "" | Extra rules for forward chain |
 | `services.eznetns.netnsService."<service>.service"` | str | required | eznetns instance name |

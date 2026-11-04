@@ -466,6 +466,36 @@ in
                   description = "Whether to enable nftables firewall for this netns";
                 };
 
+                openPorts = mkOption {
+                  type = types.listOf (types.submodule {
+                    options = {
+                      port = mkOption {
+                        type = types.either types.port (types.strMatching "[a-z][a-z0-9-]*|[0-9]+");
+                        description = "Port number or service name (e.g. 22 or \"ssh\")";
+                      };
+                      protocol = mkOption {
+                        type = types.enum [ "tcp" "udp" ];
+                        default = "tcp";
+                        description = "Protocol";
+                      };
+                      interfaces = mkOption {
+                        type = types.listOf (types.strMatching "[A-Za-z0-9_.:-]{1,15}");
+                        default = [];
+                        description = "Interfaces in the netns to open this port on. Empty means all of them";
+                        example = [ "wg0-ovpn" ];
+                      };
+                    };
+                  });
+                  default = [];
+                  description = "Ports to open in the netns input chain";
+                  example = literalExpression ''
+                    [
+                      { port = 49152; }
+                      { port = 51820; protocol = "udp"; interfaces = [ "wg0-ovpn" ]; }
+                    ]
+                  '';
+                };
+
                 extraInputRules = mkOption {
                   type = types.lines;
                   default = "";
@@ -864,7 +894,15 @@ in
                       natInputRules = concatStrings (unique (map (r:
                         "\n\t\tiifname \"${instanceCfg.veth.nsInterface}\" ${r.proto} dport ${r.targetPort} accept"
                       ) (natRules instanceCfg)));
-                      extraInputRules = if instanceCfg.firewall.extraInputRules != "" 
+                      openPortRules = concatMapStrings (r:
+                        let
+                          iface = optionalString (r.interfaces != [])
+                            (if builtins.length r.interfaces == 1
+                             then ''iifname "${builtins.head r.interfaces}" ''
+                             else ''iifname { ${concatMapStringsSep ", " (i: ''"${i}"'') r.interfaces} } '');
+                        in "\n\t\t${iface}${r.protocol} dport ${toString r.port} accept"
+                      ) instanceCfg.firewall.openPorts;
+                      extraInputRules = if instanceCfg.firewall.extraInputRules != ""
                                         then "\n\t\t" + instanceCfg.firewall.extraInputRules 
                                         else "";
                       # Let routed clients out through the netns
@@ -883,7 +921,7 @@ in
                       		ct state invalid drop
                       		icmp type echo-request accept
                       		icmpv6 type != { nd-redirect, 139 } accept
-                      		iifname "lo" accept${natInputRules}${extraInputRules}
+                      		iifname "lo" accept${natInputRules}${openPortRules}${extraInputRules}
                       		reject with icmp port-unreachable
                       		reject with icmpv6 port-unreachable
                       	}
