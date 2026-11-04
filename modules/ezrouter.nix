@@ -205,12 +205,12 @@ in {
           allowedTCPPorts = mkOption {
             type = types.listOf types.port;
             default = [];
-            description = "TCP ports to open on all VLAN interfaces";
+            description = "TCP ports on the router itself that clients on every VLAN may connect to. Does not affect traffic routed through the router";
           };
           allowedUDPPorts = mkOption {
             type = types.listOf types.port;
             default = [];
-            description = "UDP ports to open on all VLAN interfaces, on top of DNS and DHCP, which are opened per VLAN by enableDNS and enableDHCPv4";
+            description = "UDP ports on the router itself that clients on every VLAN may reach, on top of DNS and DHCP, which are opened per VLAN by enableDNS and enableDHCPv4. Does not affect traffic routed through the router";
           };
         };
       };
@@ -574,13 +574,13 @@ in {
           allowedTCPPorts = mkOption {
             type = types.listOf types.port;
             default = [];
-            description = "TCP ports to open on this VLAN interface (merged with vlanFirewallPorts.allowedTCPPorts)";
+            description = "TCP ports on the router itself that clients on this VLAN may connect to (added to vlanFirewallPorts.allowedTCPPorts). Does not affect traffic routed through the router";
           };
 
           allowedUDPPorts = mkOption {
             type = types.listOf types.port;
             default = [];
-            description = "UDP ports to open on this VLAN interface (merged with vlanFirewallPorts.allowedUDPPorts)";
+            description = "UDP ports on the router itself that clients on this VLAN may reach (added to vlanFirewallPorts.allowedUDPPorts, DNS and DHCP are opened by enableDNS and enableDHCPv4). Does not affect traffic routed through the router";
           };
         };
 

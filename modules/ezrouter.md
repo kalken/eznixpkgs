@@ -43,8 +43,8 @@ A simple NixOS module for router setup with VLANs, DHCPv4/DHCPv6, DNS, and firew
 | `services.ezrouter.enable` | bool | `false` | Enable the ezrouter module |
 | `services.ezrouter.debug` | bool | `false` | Enable debug logging (`SYSTEMD_LOG_LEVEL=debug`) for `systemd-networkd` |
 | `services.ezrouter.isolateVlans` | bool | `true` | Block traffic between VLANs (inter-VLAN isolation) |
-| `services.ezrouter.vlanFirewallPorts.allowedTCPPorts` | list of port | `[]` | TCP ports to open from all VLAN interfaces to router |
-| `services.ezrouter.vlanFirewallPorts.allowedUDPPorts` | list of port | `[]` | UDP ports to open from all VLAN interfaces to router, on top of DNS and DHCP |
+| `services.ezrouter.vlanFirewallPorts.allowedTCPPorts` | list of port | `[]` | TCP ports on the router itself that clients on every VLAN may connect to. Does not affect routed traffic. |
+| `services.ezrouter.vlanFirewallPorts.allowedUDPPorts` | list of port | `[]` | UDP ports on the router itself that clients on every VLAN may reach, on top of DNS and DHCP. Does not affect routed traffic. |
 | `services.ezrouter.trustedInterfaces` | list of str | `[bridge.name]` | Interfaces with no firewall restrictions |
 | `services.ezrouter.domain` | null or str | `networking.domain` | Domain sent to DHCP clients (option 15), so a short name like `nas` finds `nas.lan`; `null` sends none |
 | `services.ezrouter.internalInterfaces` | list of str | *auto* | Internal interfaces for NAT/masquerading (default: bridge + all VLANs) |
@@ -112,8 +112,8 @@ bridge.ports.enp5s0.tagged = [ 4 ];             # VLAN 4 is carried through to a
 | `vlan.<name>.forceLocalDNS` | bool | `false` | Send DNS from clients on this VLAN that use another server to the router anyway, see [DNS Configuration](#-dns-configuration). |
 | `vlan.<name>.staticLeases` | list of submodule | `[]` | Clients that always get the same DHCPv4 address on this VLAN. See [Static Leases](#-static-leases) below. |
 | `vlan.<name>.dhcpOptions` | list of str | `[]` | Further DHCPv4 options to send on this VLAN, as for the bridge |
-| `vlan.<name>.allowedTCPPorts` | list of port | `[]` | TCP ports to open on this VLAN interface. Merged with `vlanFirewallPorts.allowedTCPPorts`. |
-| `vlan.<name>.allowedUDPPorts` | list of port | `[]` | UDP ports to open on this VLAN interface. Merged with `vlanFirewallPorts.allowedUDPPorts`. |
+| `vlan.<name>.allowedTCPPorts` | list of port | `[]` | TCP ports on the router itself that clients on this VLAN may connect to. Added to `vlanFirewallPorts.allowedTCPPorts`. Does not affect routed traffic. |
+| `vlan.<name>.allowedUDPPorts` | list of port | `[]` | UDP ports on the router itself that clients on this VLAN may reach. Added to `vlanFirewallPorts.allowedUDPPorts`. Does not affect routed traffic. |
 
 #### VLAN Example Patterns
 
