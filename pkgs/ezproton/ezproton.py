@@ -72,15 +72,15 @@ def fetch_latest_release(api_url):
 
 # -- Version check ------------------------------------------------------------
 
+VERSION_FILE = ".ezproton-version"
+
+
 def is_up_to_date(install_dir, display_name, tag):
-    vdf = os.path.join(install_dir, display_name, "compatibilitytool.vdf")
+    # The tool's internal key is rewritten to display_name (see patch_vdf), so
+    # the release tag is tracked in a marker file instead.
     try:
-        with open(vdf) as f:
-            # Match as a plain substring rather than requiring exact quote
-            # boundaries: GE-Proton's internal tool key equals the tag exactly
-            # (e.g. "GE-Proton11-1"), but CachyOS's key embeds it with a prefix/
-            # suffix (e.g. "proton-cachyos-<tag>-x86_64").
-            return tag in f.read()
+        with open(os.path.join(install_dir, display_name, VERSION_FILE)) as f:
+            return f.read().strip() == tag
     except FileNotFoundError:
         return False
 
@@ -155,10 +155,21 @@ def patch_vdf(install_dir, display_name):
     with open(vdf_path) as f:
         contents = f.read()
 
+    # Steam stores a game's selected tool by its internal key, which upstream
+    # changes every release. Pin it so selections survive upgrades.
+    patched, n = re.subn(
+        r'("compat_tools"\s*\{\s*)"[^"]*"',
+        lambda m: f'{m.group(1)}"{display_name}"',
+        contents,
+        count=1,
+    )
+    if n != 1:
+        error(f"Could not find the internal tool key in {vdf_path}.")
+
     patched = re.sub(
         r'"display_name"\s*"[^"]*"',
         f'"display_name"\t\t"{display_name}"',
-        contents
+        patched
     )
 
     with open(vdf_path, "w") as f:
@@ -244,6 +255,9 @@ def install_variant(variant, install_dir):
 
     info("Patching compatibilitytool.vdf...")
     patch_vdf(install_dir, display_name)
+
+    with open(os.path.join(dest, VERSION_FILE), "w") as f:
+        f.write(tag)
 
     info(f"Done! Installed as '{display_name} ({tag})' -> {dest}")
 
