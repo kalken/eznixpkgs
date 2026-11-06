@@ -1,7 +1,8 @@
 # eznotify
 
-A message when a service has finished or failed. Today the message is a mail, sent through an
-SMTP account of your own.
+A message when a service has finished or failed. Each way of sending is its own switch, and
+any number can be on: `mail` (an SMTP account of your own) and `desktop` (a popup on one user's
+desktop, via the freedesktop notification service that GNOME, KDE, XFCE and others share).
 
 ## ✨ Features
 
@@ -15,6 +16,7 @@ SMTP account of your own.
 ```nix
 services.eznotify = {
   enable = true;
+  desktop.user = "alice";   # a popup on alice's desktop
   mail = {
     to = "you@example.com";
     from = "ezbox@example.com";
@@ -42,9 +44,13 @@ try it after a rebuild: `sudo systemctl start eznotify@nixos-upgrade.service`.
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `services.eznotify.enable` | bool | false | Enable eznotify |
-| `services.eznotify.mail.to` | str | required | Who the mail goes to |
-| `services.eznotify.mail.from` | str | required | The sender address. Some providers only accept their own account's |
-| `services.eznotify.mail.smtp.host` | str | required | The SMTP server |
+| `services.eznotify.desktop.enable` | bool | `user != null` | Show a popup in one user's desktop. On once `user` is set |
+| `services.eznotify.desktop.user` | str or null | null | The user whose desktop shows it. Nothing is shown while they are logged out |
+| `services.eznotify.desktop.logLines` | int | 3 | Log lines of the service in the popup |
+| `services.eznotify.mail.enable` | bool | `to != null` | Send a mail. On once `to` is set; needs `from` and `smtp.host` too |
+| `services.eznotify.mail.to` | str or null | null | Who the mail goes to |
+| `services.eznotify.mail.from` | str or null | null | The sender address. Some providers only accept their own account's |
+| `services.eznotify.mail.smtp.host` | str or null | null | The SMTP server |
 | `services.eznotify.mail.smtp.port` | port | 587 | Its port: 587 for `starttls`, 465 for `tls` |
 | `services.eznotify.mail.smtp.tls` | `"starttls"` or `"tls"` | `"starttls"` | Switch to TLS after connecting, or TLS from the start |
 | `services.eznotify.mail.smtp.user` | str or null | null | Account to log in with. Null for a server that needs no login |
@@ -61,6 +67,8 @@ try it after a rebuild: `sudo systemctl start eznotify@nixos-upgrade.service`.
 
 - `onSuccess` is for services that end: a oneshot, or the job of a timer such as `nixos-upgrade`. A service that keeps running never ends well, so it only has `onFailure`.
 - The message is sent by the template `eznotify@.service`. `onFailure` and `onSuccess` are added to the listed services as a drop-in file, next to any such settings they have already. An entry for a service the machine does not have does nothing.
+- Each way of sending turns on when its setting is given (`mail.to`, `desktop.user`); set its `enable = false` to switch it off and keep the settings. With neither on, eznotify warns that it sends nothing.
+- The popup is shown by entering the user's session bus as that user. A failing popup never fails the service, so the mail still goes out.
 - Most providers want an app password rather than the account's own (Gmail does), and mail from a home connection without an account is often refused.
 
 *eznotify is part of eznixpkgs.*

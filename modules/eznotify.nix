@@ -5,6 +5,7 @@ with lib;
 let
   cfg = config.services.eznotify;
   mail = cfg.mail;
+  desktop = cfg.desktop;
 
   # The mail account for msmtp. It holds no secret: the password is read from a file when a
   # mail is sent, so the file in the store can be read by anyone.
@@ -53,6 +54,31 @@ let
     esac
   '';
 
+  # A popup in the desktop session of one user. The system service is root, so it enters the
+  # user's session bus; with the user logged out there is no bus and nothing is shown. A popup
+  # that fails never fails the service, so the mail still goes out.
+  desktopScript = ''
+    uid=$(id -u ${escapeShellArg desktop.user})
+    if [ -S "/run/user/$uid/bus" ]; then
+      if [ "$outcome" = Failure ]; then urgency=critical; else urgency=normal; fi
+      runuser -u ${escapeShellArg desktop.user} -- env "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus" \
+        notify-send --app-name=eznotify --urgency="$urgency" "$subject" "$(logs ${toString desktop.logLines})" || true
+    fi
+  '';
+
+  mailScript = ''
+    {
+      echo "From: ${mail.from}"
+      echo "To: ${mail.to}"
+      echo "Subject: $subject"
+      echo "Date: $(date -R)"
+      echo
+      systemctl status --full --no-pager --lines=0 "$unit" || true
+      echo
+      logs "$log_lines"
+    } | msmtp --file=${msmtpConfig} --read-recipients
+  '';
+
   # %i is the name of the service, without ".service". Whether it worked is read from the
   # service itself, so one unit serves both onFailure and onSuccess.
   script = ''
@@ -64,44 +90,52 @@ let
       outcome=Failure; word="failed ($result)"
     fi
     ${perMessage}
-    {
-      echo "From: ${mail.from}"
-      echo "To: ${mail.to}"
-      echo "Subject: [$(uname -n)] $unit $word"
-      echo "Date: $(date -R)"
-      echo
-      systemctl status --full --no-pager --lines=0 "$unit" || true
-      echo
+
+    # The last log lines of the service, as many as the caller asks for
+    logs() {
       id=
       if [ "$last_run_only" = 1 ]; then
         # Only the run that just ended, not what an earlier run left in the journal
         id=$(systemctl show --property=InvocationID --value "$unit")
       fi
       if [ -n "$id" ]; then
-        journalctl --no-pager --lines="$log_lines" "_SYSTEMD_INVOCATION_ID=$id" --output=short-iso
+        journalctl --no-pager --lines="$1" "_SYSTEMD_INVOCATION_ID=$id" --output=short-iso
       else
-        journalctl --no-pager --lines="$log_lines" --unit "$unit" --output=short-iso
+        journalctl --no-pager --lines="$1" --unit "$unit" --output=short-iso
       fi
-    } | msmtp --file=${msmtpConfig} --read-recipients
+    }
+
+    subject="[$(uname -n)] $unit $word"
+    ${optionalString desktop.enable desktopScript}
+    ${optionalString mail.enable mailScript}
   '';
 in {
   options.services.eznotify = {
-    enable = mkEnableOption "eznotify, a message when a service has finished or failed";
+    enable = mkEnableOption "eznotify, a message when a service has finished or failed, by mail, as a desktop popup, or both";
 
     mail = {
+      enable = mkOption {
+        type = types.bool;
+        default = mail.to != null;
+        defaultText = literalExpression "config.services.eznotify.mail.to != null";
+        description = "Send a mail through an SMTP account of your own. On as soon as `to` is set.";
+      };
       to = mkOption {
-        type = types.str;
+        type = types.nullOr types.str;
+        default = null;
         example = "you@example.com";
         description = "Who the mail goes to.";
       };
       from = mkOption {
-        type = types.str;
+        type = types.nullOr types.str;
+        default = null;
         example = "ezbox@example.com";
         description = "The sender address. Some providers only accept their own account's address here.";
       };
       smtp = {
         host = mkOption {
-          type = types.str;
+          type = types.nullOr types.str;
+          default = null;
           example = "smtp.example.com";
           description = "The SMTP server mail is sent through.";
         };
@@ -130,6 +164,29 @@ in {
             string, not a path in the flake, or the password ends up in the Nix store.
           '';
         };
+      };
+    };
+
+    desktop = {
+      enable = mkOption {
+        type = types.bool;
+        default = desktop.user != null;
+        defaultText = literalExpression "config.services.eznotify.desktop.user != null";
+        description = ''
+          Show a popup in the desktop session of one user, through the freedesktop notification
+          service that GNOME, KDE, XFCE and others share. On as soon as `user` is set.
+        '';
+      };
+      user = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "alice";
+        description = "The user whose desktop shows the popup. Nothing is shown while they are logged out.";
+      };
+      logLines = mkOption {
+        type = types.ints.positive;
+        default = 3;
+        description = "How many of the service's last log lines go in the popup.";
       };
     };
 
@@ -167,11 +224,27 @@ in {
   };
 
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = !mail.enable || (mail.to != null && mail.from != null && mail.smtp.host != null);
+        message = "services.eznotify.mail needs to, from and smtp.host.";
+      }
+      {
+        assertion = !desktop.enable || desktop.user != null;
+        message = "services.eznotify.desktop needs a user.";
+      }
+    ];
+
+    warnings = optional (!mail.enable && !desktop.enable)
+      "services.eznotify is enabled but sends nothing: set mail.to or desktop.user (or their enable).";
+
     systemd.services."eznotify@" = {
       description = "Message about %i.service";
       serviceConfig.Type = "oneshot";
       scriptArgs = "%i";
-      path = [ pkgs.msmtp pkgs.coreutils config.systemd.package ];
+      path = [ pkgs.coreutils config.systemd.package ]
+        ++ optional mail.enable pkgs.msmtp
+        ++ optionals desktop.enable [ pkgs.libnotify pkgs.util-linux ];
       inherit script;
     };
 
