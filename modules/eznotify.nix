@@ -61,8 +61,9 @@ let
     uid=$(id -u ${escapeShellArg desktop.user})
     if [ -S "/run/user/$uid/bus" ]; then
       if [ "$outcome" = Failure ]; then urgency=critical; else urgency=normal; fi
+      popup="on $(uname -n)"$'\n\n'"$(logs ${toString desktop.logLines} cat)"
       runuser -u ${escapeShellArg desktop.user} -- env "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus" \
-        notify-send --app-name=eznotify --urgency="$urgency" "$subject" "$(logs ${toString desktop.logLines})" || true
+        notify-send --app-name=eznotify --urgency="$urgency" "$unit $word" "$popup" || true
     fi
   '';
 
@@ -75,7 +76,7 @@ let
       echo
       systemctl status --full --no-pager --lines=0 "$unit" || true
       echo
-      logs "$log_lines"
+      logs "$log_lines" short-iso
     } | msmtp --file=${msmtpConfig} --read-recipients
   '';
 
@@ -91,7 +92,7 @@ let
     fi
     ${perMessage}
 
-    # The last log lines of the service, as many as the caller asks for
+    # The last log lines of the service: $1 of them, in journalctl output format $2
     logs() {
       id=
       if [ "$last_run_only" = 1 ]; then
@@ -99,9 +100,9 @@ let
         id=$(systemctl show --property=InvocationID --value "$unit")
       fi
       if [ -n "$id" ]; then
-        journalctl --no-pager --lines="$1" "_SYSTEMD_INVOCATION_ID=$id" --output=short-iso
+        journalctl --no-pager --lines="$1" "_SYSTEMD_INVOCATION_ID=$id" --output="$2"
       else
-        journalctl --no-pager --lines="$1" --unit "$unit" --output=short-iso
+        journalctl --no-pager --lines="$1" --unit "$unit" --output="$2"
       fi
     }
 
