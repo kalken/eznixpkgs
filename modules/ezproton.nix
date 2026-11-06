@@ -24,6 +24,30 @@ in
       example = [ "ge" ];
     };
 
+    versions = lib.mkOption {
+      type = lib.types.submodule {
+        options = {
+          ge = lib.mkOption {
+            type        = lib.types.listOf lib.types.str;
+            default     = [];
+            description = "Specific Proton-GE release tags to install.";
+            example     = [ "GE-Proton10-5" ];
+          };
+          cachyos = lib.mkOption {
+            type        = lib.types.listOf lib.types.str;
+            default     = [];
+            description = "Specific CachyOS Proton release tags to install.";
+          };
+        };
+      };
+      default     = {};
+      description = ''
+        Specific release tags to install next to the *-Latest builds, per variant.
+        Already installed tags are skipped. A tag that does not exist is logged
+        and does not stop the other installs.
+      '';
+    };
+
     timerOnCalendar = lib.mkOption {
       type        = lib.types.nullOr lib.types.str;
       default     = null;
@@ -47,6 +71,11 @@ in
 
   config = lib.mkIf cfg.enable {
 
+    assertions = [{
+      assertion = cfg.variants != [] || cfg.versions.ge != [] || cfg.versions.cachyos != [];
+      message   = "services.ezproton: set at least one of variants or versions.";
+    }];
+
     systemd.services.ezproton = {
       description = "Update Proton-GE / CachyOS Proton to the latest release";
 
@@ -58,8 +87,14 @@ in
       serviceConfig = {
         Type           = "oneshot";
         User           = cfg.user;
-        ExecStart      = "${pkgs.ezproton}/bin/ezproton"
-                          + lib.concatMapStrings (v: " --variant ${v}") cfg.variants;
+        # Pinned installs are prefixed with "-" so a bad tag doesn't block the rest.
+        ExecStart      = lib.optional (cfg.variants != [])
+                           ("${pkgs.ezproton}/bin/ezproton --latest"
+                             + lib.concatMapStrings (v: " --variant ${v}") cfg.variants)
+                         ++ lib.concatMap (variant:
+                              map (v: "-${pkgs.ezproton}/bin/ezproton --variant ${variant} --version ${lib.escapeShellArg v}")
+                                  cfg.versions.${variant})
+                            [ "ge" "cachyos" ];
         ReadWritePaths = [ "/home/${cfg.user}" ];
       };
     };

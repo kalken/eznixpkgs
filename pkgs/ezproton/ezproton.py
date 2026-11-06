@@ -60,12 +60,16 @@ def error(msg):
 
 # -- GitHub release -----------------------------------------------------------
 
-def fetch_latest_release(api_url):
+def fetch_latest_release(api_url, version=None):
     info("Fetching latest release info from GitHub...")
     req = urllib.request.Request(api_url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req) as resp:
             return json.load(resp)
+    except urllib.error.HTTPError as e:
+        if e.code == 404 and version:
+            error(f"Release '{version}' not found. Use --list to see available versions.")
+        error(f"Failed to reach GitHub API: {e}")
     except urllib.error.URLError as e:
         error(f"Failed to reach GitHub API: {e}")
 
@@ -189,7 +193,7 @@ def install_variant(variant, install_dir, version=None):
     api_url = cfg["api_url"]
     if version:
         api_url = api_url.replace("/releases/latest", f"/releases/tags/{version}")
-    release = fetch_latest_release(api_url)
+    release = fetch_latest_release(api_url, version)
     tag = release.get("tag_name") or error("Could not determine release tag.")
     info(f"{'Requested' if version else 'Latest'} release: {tag}")
 
@@ -304,12 +308,20 @@ def main():
         action="store_true",
         help="List the most recent available release tags (newest first) and exit."
     )
+    parser.add_argument(
+        "--latest",
+        action="store_true",
+        help="Install the latest release of each selected variant."
+    )
     args = parser.parse_args()
+    if not (args.latest or args.version or args.list):
+        parser.print_help()
+        return
     variants = args.variant or list(VARIANTS)
     if args.version and len(variants) != 1:
         parser.error("--version requires exactly one --variant.")
-    if args.list and args.version:
-        parser.error("--list cannot be combined with --version.")
+    if sum([args.latest, bool(args.version), args.list]) > 1:
+        parser.error("--latest, --version and --list are mutually exclusive.")
 
     if args.list:
         for variant in variants:

@@ -28,6 +28,19 @@ Then run manually or wait for the timer/upgrade trigger:
 systemctl start ezproton.service
 ```
 
+## 📌 Pinning Specific Versions
+
+```nix
+services.ezproton = {
+  enable   = true;
+  user     = "alice";
+  variants = [ "ge" ];                      # keep GE-Proton-Latest updated
+  versions.ge = [ "GE-Proton10-5" ];        # plus this exact release
+};
+```
+
+Set `variants = [ ]` to install only the pinned versions. A tag that doesn't exist is logged and doesn't stop the other installs; use `ezproton --list` to see valid tags.
+
 ## 🎯 Choosing Variants
 
 Install only Proton-GE:
@@ -88,6 +101,8 @@ services.ezproton = {
 | `services.ezproton.enable` | bool | `false` | Enable the ezproton service |
 | `services.ezproton.user` | str | — | User account to run as — must have Steam installed |
 | `services.ezproton.variants` | list of `"ge"` \| `"cachyos"` | `[ "ge" "cachyos" ]` | Which Proton variant(s) to install and keep updated |
+| `services.ezproton.versions.ge` | list of str | `[]` | Specific Proton-GE tags to install (e.g. `"GE-Proton10-5"`), next to the `*-Latest` builds |
+| `services.ezproton.versions.cachyos` | list of str | `[]` | Specific CachyOS Proton tags to install |
 | `services.ezproton.timerOnCalendar` | str or null | `null` | systemd `OnCalendar` expression for automatic updates. Set to `null` to disable the timer |
 | `services.ezproton.afterAutoUpgrade` | bool | `false` | Run after `nixos-upgrade.service` completes |
 
@@ -100,6 +115,6 @@ services.ezproton = {
 - To install a specific release from the command line, use `ezproton --variant ge --version GE-Proton10-5`. It is installed next to the `*-Latest` build under its own tag name.
 - The tarball cache at `/tmp/ezproton` is cleared on reboot automatically.
 - Run `journalctl -xeu ezproton.service` to see output from the last service run.
-- To also run it manually from the command line, add `pkgs.ezproton` to your `environment.systemPackages`, `users.users.<name>.packages`, or `home.packages`, then run `ezproton` (optionally with `--variant ge` and/or `--variant cachyos`).
+- To also run it manually from the command line, add `pkgs.ezproton` to your `environment.systemPackages`, `users.users.<name>.packages`, or `home.packages`, then run `ezproton --latest` (optionally with `--variant ge` and/or `--variant cachyos`). Running `ezproton` with no arguments shows the help.
 
 *Set it and forget it Proton updates for NixOS.* 🎮
