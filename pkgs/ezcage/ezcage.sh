@@ -91,6 +91,7 @@ while [ $# -gt 0 ]; do
     --git-ignore) gitignore="${2:?}"; shift 2 ;;
     --path) paths+=("${2:?--path needs a directory}"); shift 2 ;;
     --ssh-agent) ssh_agent=1; shift ;;
+    --signal-all) die "--signal-all is only supported on macOS: the cage runs as another user and can't signal yours" ;;
     # Internal: the relay socket set up before sudo
     --ssh-agent-socket) agentsock="${2:?}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;

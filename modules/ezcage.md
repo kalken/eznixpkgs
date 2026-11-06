@@ -42,7 +42,7 @@ ezcage [--rw PATH]... [--ro PATH]... [--name NAME] [--workdir DIR]
        [--netns NAME | --offline] [--nix | --no-nix]
        [--user USER] [--group GROUP]... [--main-group GROUP] [--umask MASK]
        [--git] [--ssh-agent] [--path DIR]...
-       -- COMMAND [ARGS]...
+       -- COMMAND [ARGS]...        (--signal-all: macOS only)
 ezcage --name NAME --claude-token        (macOS only)
 ezcage [OPTIONS]... PROFILE [ARGS]...
 ```
@@ -266,8 +266,14 @@ generated profile that denies everything by default.
 - **Signals**: the cage can signal itself and what runs in the same cage
   (`same-sandbox`), so it can stop a server it started. It was `self` alone,
   and a test server left running could only be stopped from outside (found
-  2026-11-02). Processes outside the cage cannot be signalled. Listing
-  processes (`ps`, `pkill`) still fails; `kill PID` works. Not yet tried.
+  2026-11-02). Processes outside the cage cannot be signalled, unless
+  **`--signal-all`** (profile option `signalAll = true`, macOS only) is given:
+  the cage can then signal any process of yours, such as a server started
+  outside it. The price: it can stop anything you run. Not on Linux, where
+  the cage runs as another user that Linux does not let signal yours; there
+  `--signal-all` and `signalAll` are refused. Listing processes (`ps`,
+  `pkill`) still fails; `kill PID` works, the PID from `lsof -iTCP:PORT`.
+  Not yet tried.
 - **Terminals**: a program in the cage can open its own pseudo-terminals
   (`/dev/ptmx`), for a shell, `expect` or a terminal server such as eznix's.
   Without that rule `openpty()` failed with "out of pty devices" (found

@@ -95,6 +95,15 @@ let
           then sign as you, though it still can't read the keys.
         '';
       };
+      signalAll = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          macOS only. Let the cage signal any process of yours, also one it
+          did not start, for example to stop a server started outside it. It
+          can then stop anything you run.
+        '';
+      };
       workDir = mkOption {
         type = types.nullOr types.str;
         default = null;
@@ -127,6 +136,7 @@ let
     ++ optional (p.nix == false) "--no-nix"
     ++ optional p.sshAgent "--ssh-agent"
     ++ optional p.git "--git"
+    ++ optional p.signalAll "--signal-all"
     ++ optionals (p.workDir != null) [ "--workdir" p.workDir ]
     ++ optionals (p.packages != [ ]) [
       "--path"
@@ -180,6 +190,9 @@ in
       assertion = cfg.profiles.${name}.groups == [ ] && cfg.profiles.${name}.mainGroup == null
         && cfg.profiles.${name}.netns == null;
       message = "programs.ezcage.profiles.${name}: groups, mainGroup and netns are not supported on macOS.";
+    }) (attrNames cfg.profiles)) ++ optionals isNixOS (map (name: {
+      assertion = !cfg.profiles.${name}.signalAll;
+      message = "programs.ezcage.profiles.${name}: signalAll is only supported on macOS, since the cage runs as another user there.";
     }) (attrNames cfg.profiles));
 
     environment.systemPackages = [ cfg.package ];

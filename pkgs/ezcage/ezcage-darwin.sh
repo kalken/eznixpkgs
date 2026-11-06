@@ -28,6 +28,9 @@ Usage: ezcage [options] -- COMMAND [ARGS]...
                     with --ssh-agent). It can then run commands as you, outside
                     the cage, through hooks or .git/config. Default: every .git
                     below a --rw path is read-only, and none can be created
+  --signal-all      let the cage signal any process of yours, also one it did not
+                    start (kill a server started outside it). It can then stop
+                    anything you run. Default: only itself and what runs in it
   --claude-token    with --name: ask for a token from `claude setup-token` and
                     keep it in the cage's home, so Claude stays logged in
                     (the cage can't use the Keychain)
@@ -59,7 +62,7 @@ else
   set -- "${pre[@]+"${pre[@]}"}" "$@"
 fi
 
-rw=() ro=() paths=() name="" workdir="" umask="" offline=0 nix="" ssh_agent=0 claude_token=0 git=0 cmd=()
+rw=() ro=() paths=() name="" workdir="" umask="" offline=0 nix="" ssh_agent=0 claude_token=0 git=0 signal_all=0 cmd=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -73,6 +76,7 @@ while [ $# -gt 0 ]; do
     --ssh-agent) ssh_agent=1; shift ;;
     --claude-token) claude_token=1; shift ;;
     --git) git=1; shift ;;
+    --signal-all) signal_all=1; shift ;;
     --umask) umask="${2:?--umask needs a mask}"; shift 2 ;;
     --path) paths+=("${2:?--path needs a directory}"); shift 2 ;;
     --netns|--user|--group|--main-group) die "$1 is not supported on macOS" ;;
@@ -189,8 +193,6 @@ trap cleanup EXIT
 (version 1)
 (deny default)
 (allow process-exec process-fork)
-; Itself and what runs in this cage (a test server it started, a build), nothing outside it
-(allow signal (target same-sandbox))
 (allow sysctl-read ipc-posix-shm ipc-posix-sem pseudo-tty)
 
 ; Only the system services programs need: users, DNS, network config,
@@ -221,6 +223,9 @@ trap cleanup EXIT
   (literal "/dev/ptmx") (regex #"^/dev/ttys[0-9]+$") (subpath "/dev/fd"))
 (allow file-ioctl (literal "/dev/tty") (literal "/dev/ptmx") (regex #"^/dev/ttys[0-9]+$"))
 EOF
+  # Itself and what runs in this cage (a test server it started, a build); with
+  # --signal-all any process of yours, also one started outside
+  if [ "$signal_all" = 1 ]; then echo '(allow signal)'; else echo '(allow signal (target same-sandbox))'; fi
   echo "(allow file-read* (subpath $(q "$(dirname "$exereal")")))"
   # /usr/bin/git and friends are shims that run the developer tools via xcrun
   devdir=$(xcode-select -p 2>/dev/null) && devdir=$(realpath -- "$devdir" 2>/dev/null) \
