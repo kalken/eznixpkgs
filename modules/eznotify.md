@@ -46,7 +46,7 @@ try it after a rebuild: `sudo systemctl start eznotify@nixos-upgrade.service`.
 | `services.eznotify.enable` | bool | false | Enable eznotify |
 | `services.eznotify.desktop.enable` | bool | `user != null` | Show a popup in one user's desktop. On once `user` is set |
 | `services.eznotify.desktop.user` | str or null | null | The user whose desktop shows it. Nothing is shown while they are logged out |
-| `services.eznotify.desktop.logLines` | int | 3 | Log lines of the service in the popup |
+| `services.eznotify.desktop.logLines` | int | 3 | Log lines of the service in the popup when it fails. A success popup has none |
 | `services.eznotify.mail.enable` | bool | `to != null` | Send a mail. On once `to` is set; needs `from` and `smtp.host` too |
 | `services.eznotify.mail.to` | str or null | null | Who the mail goes to |
 | `services.eznotify.mail.from` | str or null | null | The sender address. Some providers only accept their own account's |

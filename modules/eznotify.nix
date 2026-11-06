@@ -61,9 +61,13 @@ let
     uid=$(id -u ${escapeShellArg desktop.user})
     if [ -S "/run/user/$uid/bus" ]; then
       if [ "$outcome" = Failure ]; then urgency=critical; else urgency=normal; fi
-      popup="on $(uname -n)"$'\n\n'"$(logs ${toString desktop.logLines} cat)"
+      # A log helps to find what went wrong, not to read that it went well
+      popup=
+      if [ "$outcome" = Failure ]; then
+        popup=$(logs ${toString desktop.logLines} cat)
+      fi
       runuser -u ${escapeShellArg desktop.user} -- env "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus" \
-        notify-send --app-name=eznotify --urgency="$urgency" "$unit $word" "$popup" || true
+        notify-send --app-name=eznotify --urgency="$urgency" "$subject" "$popup" || true
     fi
   '';
 
