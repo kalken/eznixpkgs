@@ -178,15 +178,20 @@ def patch_vdf(install_dir, display_name):
 
 # -- Install a single variant ---------------------------------------------------
 
-def install_variant(variant, install_dir):
+def install_variant(variant, install_dir, version=None):
     cfg = VARIANTS[variant]
-    display_name = cfg["display_name"]
+    # A pinned version installs under its own tag with upstream's tool key
+    # untouched, next to (not over) the *-Latest install.
+    display_name = version or cfg["display_name"]
 
     info(f"=== {display_name} ===")
 
-    release = fetch_latest_release(cfg["api_url"])
-    tag = release.get("tag_name") or error("Could not determine latest release tag.")
-    info(f"Latest release: {tag}")
+    api_url = cfg["api_url"]
+    if version:
+        api_url = api_url.replace("/releases/latest", f"/releases/tags/{version}")
+    release = fetch_latest_release(api_url)
+    tag = release.get("tag_name") or error("Could not determine release tag.")
+    info(f"{'Requested' if version else 'Latest'} release: {tag}")
 
     if is_up_to_date(install_dir, display_name, tag):
         info(f"{display_name} is already up to date ({tag}). Nothing to do.")
@@ -253,13 +258,26 @@ def install_variant(variant, install_dir):
 
     extract(tar_path, install_dir, display_name)
 
-    info("Patching compatibilitytool.vdf...")
-    patch_vdf(install_dir, display_name)
+    if not version:
+        info("Patching compatibilitytool.vdf...")
+        patch_vdf(install_dir, display_name)
 
     with open(os.path.join(dest, VERSION_FILE), "w") as f:
         f.write(tag)
 
     info(f"Done! Installed as '{display_name} ({tag})' -> {dest}")
+
+
+# -- List available releases --------------------------------------------------
+
+def list_versions(variant):
+    cfg = VARIANTS[variant]
+    releases = fetch_latest_release(
+        cfg["api_url"].replace("/releases/latest", "/releases?per_page=30")
+    )
+    print(f"{variant}:")
+    for release in releases:
+        print(f"  {release['tag_name']}")
 
 
 # -- Main ---------------------------------------------------------------------
@@ -276,8 +294,27 @@ def main():
         help="Which Proton variant to install. May be given multiple times. "
              "Defaults to all variants (ge, cachyos)."
     )
+    parser.add_argument(
+        "--version",
+        help="Install a specific release tag (e.g. GE-Proton10-5) instead of the latest. "
+             "Requires exactly one --variant."
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List the most recent available release tags (newest first) and exit."
+    )
     args = parser.parse_args()
     variants = args.variant or list(VARIANTS)
+    if args.version and len(variants) != 1:
+        parser.error("--version requires exactly one --variant.")
+    if args.list and args.version:
+        parser.error("--list cannot be combined with --version.")
+
+    if args.list:
+        for variant in variants:
+            list_versions(variant)
+        return
 
     home = os.environ.get("HOME") or error("HOME environment variable not set.")
     steam_dir = os.path.join(home, ".steam")
@@ -286,7 +323,7 @@ def main():
     install_dir = os.path.join(steam_dir, "root", "compatibilitytools.d")
 
     for variant in variants:
-        install_variant(variant, install_dir)
+        install_variant(variant, install_dir, args.version)
 
     info("Restart Steam and select the desired build in a game's compatibility settings.")
 
