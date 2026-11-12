@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, rev ? "dev", ... }:
 let
   eznetns-src = pkgs.fetchFromGitHub {
     owner = "kalken";
@@ -9,7 +9,7 @@ let
 in
 pkgs.stdenv.mkDerivation rec {
   pname = "eznetns";
-  version = "1.1.0";
+  version = rev;
   src = eznetns-src;
   # Python dependencies that are required at runtime
   propagatedBuildInputs = [

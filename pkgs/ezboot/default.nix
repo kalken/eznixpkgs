@@ -9,11 +9,12 @@
 , bootPath ? "/boot"
 , keyFileName ? ".ezboot.key"
 , masterKeyPath ? "/var/lib/ezboot/master.key"
+, rev ? "dev"
 }:
 
 stdenv.mkDerivation {
   pname = "ezboot";
-  version = "0.1.0";
+  version = rev;
 
   src = ./.;
 

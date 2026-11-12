@@ -2,6 +2,7 @@
 { lib
 , python3
 , makeWrapper
+, rev ? "dev"
 }:
 
 let
@@ -9,7 +10,7 @@ let
 in
 python.pkgs.buildPythonApplication {
   pname   = "ezproton";
-  version = "2.0.0";
+  version = rev;
 
   src = ./.;
 

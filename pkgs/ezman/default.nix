@@ -6,11 +6,12 @@
 , gnused
 , coreutils
 , nixos-option
+, rev ? "dev"
 }:
 
 stdenv.mkDerivation {
   pname = "ezman";
-  version = "0.1.0";
+  version = rev;
 
   src = ./.;
 

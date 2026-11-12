@@ -5,11 +5,12 @@
 , bash
 , coreutils
 , gnugrep
+, rev ? "dev"
 }:
 
 stdenv.mkDerivation {
   pname = "ezsensors";
-  version = "0.1.0";
+  version = rev;
 
   src = ./.;
 

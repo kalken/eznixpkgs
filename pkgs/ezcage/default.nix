@@ -7,6 +7,7 @@
 , getent
 , systemd
 , socat
+, rev ? "dev"
 }:
 
 let
@@ -16,7 +17,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "ezcage";
-  version = "0.2.0";
+  version = rev;
 
   src = ./.;
 
