@@ -22,6 +22,7 @@ Usage: ezcage [options] -- COMMAND [ARGS]...
   --name NAME       keep a home in /var/lib/ezcage/NAME across runs
                     (default: temporary home, gone after the run)
   --workdir DIR     start in DIR (default: current directory if granted, else home)
+                    (relative paths are taken from DIR)
   --netns NAME      network of the eznetns namespace NAME, with its DNS
   --offline         no network, loopback only (default: host network)
   --nix, --no-nix   allow or deny Nix commands such as nix shell (default:
@@ -123,6 +124,8 @@ storepath() {
 # Everything that depends on the caller (relative paths, the current
 # directory, the command on the caller's PATH) is resolved before sudo.
 if [ "$EUID" -ne 0 ]; then
+  # Relative paths below are taken from --workdir, not from where ezcage was started.
+  if [ -n "$workdir" ]; then workdir=$(resolve "$workdir"); cd "$workdir"; fi
   args=()
   for p in "${rw[@]+"${rw[@]}"}"; do args+=(--rw "$(resolve "$p")"); done
   for p in "${ro[@]+"${ro[@]}"}"; do args+=(--ro "$(resolve "$p")"); done

@@ -16,6 +16,7 @@ Usage: ezcage [options] -- COMMAND [ARGS]...
   --name NAME       keep a home in /Users/Shared/ezcage/USER/NAME across runs
                     (default: temporary home, gone after the run)
   --workdir DIR     start in DIR (default: current directory if granted, else home)
+                    (relative paths are taken from DIR)
   --offline         no network, loopback only (default: network)
   --nix, --no-nix   allow or deny Nix commands such as nix shell (default:
                     allowed, except with --offline)
@@ -99,6 +100,9 @@ resolve() {
   [[ "$p" == *[\"\\]* ]] && die "path contains a quote or backslash: $p"
   printf '%s\n' "$p"
 }
+
+# Relative paths below are taken from --workdir, not from where ezcage was started.
+if [ -n "$workdir" ]; then workdir=$(resolve "$workdir"); cd "$workdir"; fi
 
 for i in "${!rw[@]}"; do rw[i]=$(resolve "${rw[i]}"); done
 for i in "${!ro[@]}"; do ro[i]=$(resolve "${ro[i]}"); done
