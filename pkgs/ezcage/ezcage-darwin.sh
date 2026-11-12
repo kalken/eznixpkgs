@@ -35,6 +35,7 @@ Usage: ezcage [options] -- COMMAND [ARGS]...
   --claude-token    with --name: ask for a token from `claude setup-token` and
                     keep it in the cage's home, so Claude stays logged in
                     (the cage can't use the Keychain)
+  --version         show the version
   -h, --help        show this help
 
   Not on macOS: --netns, --user, --group, --main-group.
@@ -48,7 +49,7 @@ profiles=/etc/ezcage/profiles
 # They are put first, so a profile's own value for --name or --workdir wins, while
 # --rw, --ro and --path add up.
 pre=()
-while [ $# -gt 0 ] && [[ "$1" == -* ]] && [[ "$1" != -- && "$1" != -h && "$1" != --help ]]; do
+while [ $# -gt 0 ] && [[ "$1" == -* ]] && [[ "$1" != -- && "$1" != -h && "$1" != --help && "$1" != --version ]]; do
   case "$1" in
     --rw|--ro|--name|--workdir|--umask|--path|--netns|--user|--group|--main-group)
       pre+=("$1" "${2:?$1 needs a value}"); shift 2 ;;
@@ -82,6 +83,7 @@ while [ $# -gt 0 ]; do
     --path) paths+=("${2:?--path needs a directory}"); shift 2 ;;
     --netns|--user|--group|--main-group) die "$1 is not supported on macOS" ;;
     -h|--help) usage; exit 0 ;;
+    --version) echo "ezcage @version@"; exit 0 ;;
     --) shift; cmd=("$@"); break ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac

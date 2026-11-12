@@ -31,6 +31,7 @@ stdenv.mkDerivation {
       # sudo runs the wrapper, not the wrapped script ($0)
       substituteInPlace $out/bin/ezcage --replace-fail '@self@' "$out/bin/ezcage"
     ''}
+    substituteInPlace $out/bin/ezcage --replace-fail '@version@' "$version"
     patchShebangs $out/bin/ezcage
     wrapProgram $out/bin/ezcage \
       --prefix PATH : ${lib.makeBinPath runtimeDeps}

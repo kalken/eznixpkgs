@@ -25,4 +25,8 @@ cputemp() {
 }
 
 # Execute the function when script is run
+if [[ "${1:-}" == "--version" ]]; then
+    echo "ezsensors @version@"
+    exit 0
+fi
 cputemp

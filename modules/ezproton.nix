@@ -92,7 +92,7 @@ in
                            ("${pkgs.ezproton}/bin/ezproton --latest"
                              + lib.concatMapStrings (v: " --variant ${v}") cfg.variants)
                          ++ lib.concatMap (variant:
-                              map (v: "-${pkgs.ezproton}/bin/ezproton --variant ${variant} --version ${lib.escapeShellArg v}")
+                              map (v: "-${pkgs.ezproton}/bin/ezproton --variant ${variant} --release ${lib.escapeShellArg v}")
                                   cfg.versions.${variant})
                             [ "ge" "cachyos" ];
         ReadWritePaths = [ "/home/${cfg.user}" ];

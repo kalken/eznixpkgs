@@ -22,6 +22,7 @@ python.pkgs.buildPythonApplication {
     mkdir -p $out/bin
     cp ezproton.py $out/bin/ezproton
     chmod +x $out/bin/ezproton
+    substituteInPlace $out/bin/ezproton --replace-fail '@version@' "$version"
     patchShebangs $out/bin/ezproton
   '';
 

@@ -41,6 +41,7 @@ Usage: ezcage [options] -- COMMAND [ARGS]...
   --path DIR        put DIR (in /nix/store) on the cage's PATH (repeatable)
   --ssh-agent       let the cage use your SSH agent (from SSH_AUTH_SOCK): it can
                     sign as you, e.g. git push, but still can't read the keys
+  --version         show the version
   -h, --help        show this help
 EOF
 }
@@ -54,7 +55,7 @@ profiles=/etc/ezcage/profiles
 # They are put first, so a profile's own value for --name or --workdir wins, while
 # --rw, --ro, --group and --path add up.
 pre=()
-while [ $# -gt 0 ] && [[ "$1" == -* ]] && [[ "$1" != -- && "$1" != -h && "$1" != --help ]]; do
+while [ $# -gt 0 ] && [[ "$1" == -* ]] && [[ "$1" != -- && "$1" != -h && "$1" != --help && "$1" != --version ]]; do
   case "$1" in
     --rw|--ro|--name|--workdir|--umask|--path|--netns|--user|--group|--main-group|--git-name|--git-email|--git-ignore|--ssh-agent-socket)
       pre+=("$1" "${2:?$1 needs a value}"); shift 2 ;;
@@ -96,6 +97,7 @@ while [ $# -gt 0 ]; do
     # Internal: the relay socket set up before sudo
     --ssh-agent-socket) agentsock="${2:?}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
+    --version) echo "ezcage @version@"; exit 0 ;;
     --) shift; cmd=("$@"); break ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac

@@ -6,6 +6,11 @@ NC='\033[0m' # No Color
 
 BASE_OPTION=$1
 
+if [ "$BASE_OPTION" = "--version" ]; then
+    echo "ezman @version@"
+    exit 0
+fi
+
 if [ -z "$BASE_OPTION" ]; then
     echo "Usage: $0 <option.path>"
     exit 1

@@ -27,6 +27,7 @@ stdenv.mkDerivation {
     mkdir -p $out/bin
     cp ezboot.sh $out/bin/ezboot
     chmod +x $out/bin/ezboot
+    substituteInPlace $out/bin/ezboot --replace-fail '@version@' "$version"
     patchShebangs $out/bin/ezboot
 
     runHook postInstall

@@ -183,6 +183,7 @@ commands:
   remove-key                remove a leftover temporary key and its LUKS slot
   remove-master-key         remove the master key and its LUKS slot (you'll
                             need to run init-master-key again afterwards)
+  --version                 show the version
 USAGE
 }
 
@@ -209,6 +210,9 @@ case "${1:-}" in
     ;;
   remove-master-key)
     cmd_remove_master_key
+    ;;
+  --version)
+    echo "ezboot @version@"
     ;;
   ""|help|-h|--help)
     cmd_help

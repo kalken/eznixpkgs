@@ -68,7 +68,7 @@ def fetch_latest_release(api_url, version=None):
             return json.load(resp)
     except urllib.error.HTTPError as e:
         if e.code == 404 and version:
-            error(f"Release '{version}' not found. Use --list to see available versions.")
+            error(f"Release '{version}' not found. Use --list to see available releases.")
         error(f"Failed to reach GitHub API: {e}")
     except urllib.error.URLError as e:
         error(f"Failed to reach GitHub API: {e}")
@@ -300,6 +300,11 @@ def main():
     )
     parser.add_argument(
         "--version",
+        action="version",
+        version="ezproton @version@",
+    )
+    parser.add_argument(
+        "--release",
         help="Install a specific release tag (e.g. GE-Proton10-5) instead of the latest. "
              "Requires exactly one --variant."
     )
@@ -314,14 +319,14 @@ def main():
         help="Install the latest release of each selected variant."
     )
     args = parser.parse_args()
-    if not (args.latest or args.version or args.list):
+    if not (args.latest or args.release or args.list):
         parser.print_help()
         return
     variants = args.variant or list(VARIANTS)
-    if args.version and len(variants) != 1:
-        parser.error("--version requires exactly one --variant.")
-    if sum([args.latest, bool(args.version), args.list]) > 1:
-        parser.error("--latest, --version and --list are mutually exclusive.")
+    if args.release and len(variants) != 1:
+        parser.error("--release requires exactly one --variant.")
+    if sum([args.latest, bool(args.release), args.list]) > 1:
+        parser.error("--latest, --release and --list are mutually exclusive.")
 
     if args.list:
         for variant in variants:
@@ -335,7 +340,7 @@ def main():
     install_dir = os.path.join(steam_dir, "root", "compatibilitytools.d")
 
     for variant in variants:
-        install_variant(variant, install_dir, args.version)
+        install_variant(variant, install_dir, args.release)
 
     info("Restart Steam and select the desired build in a game's compatibility settings.")
 

@@ -27,6 +27,7 @@ stdenv.mkDerivation {
     mkdir -p $out/bin
     cp ezsensors.sh $out/bin/ezsensors
     chmod +x $out/bin/ezsensors
+    substituteInPlace $out/bin/ezsensors --replace-fail '@version@' "$version"
     patchShebangs $out/bin/ezsensors
   '';
 

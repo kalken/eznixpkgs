@@ -25,6 +25,7 @@ stdenv.mkDerivation {
     mkdir -p $out/bin
     cp ezman.sh $out/bin/ezman
     chmod +x $out/bin/ezman
+    substituteInPlace $out/bin/ezman --replace-fail '@version@' "$version"
     patchShebangs $out/bin/ezman
   '';
 
