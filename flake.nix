@@ -8,20 +8,14 @@
 
   outputs = { self, nixpkgs, ezsocks-rs }: let
     # The flake revision as the version of our own packages, so it follows every commit.
-    versioned = [ "ezboot" "ezcage" "ezman" "eznetns" "ezproton" "ezqbit" "ezsensors" "ezsocks" ];
     rev = self.shortRev or self.dirtyShortRev or "dev";
-    pkgRev = {
-      nixpkgs.overlays = [
-        (final: prev: nixpkgs.lib.genAttrs versioned (name: prev.${name}.override { inherit rev; }))
-      ];
-    };
+    pkgs = import ./pkgs rev;
   in {
     nixosModules = {
       default = {
         imports = [
           ./modules
-          ./pkgs
-          pkgRev
+          pkgs
         ];
         nixpkgs.overlays = [
           (final: prev: { ezsocks-rs = ezsocks-rs.packages.${final.stdenv.hostPlatform.system}.default; })
@@ -32,9 +26,9 @@
     # The modules that also work under nix-darwin (ezcage with its package from ./pkgs).
     # Not ./modules as a whole: the rest are built on systemd, networkd and the like.
     darwinModules = {
-      default = { imports = [ ./modules/ezsh.nix ./modules/ezcage.nix ./pkgs pkgRev ]; };
+      default = { imports = [ ./modules/ezsh.nix ./modules/ezcage.nix pkgs ]; };
       ezsh    = ./modules/ezsh.nix;
-      ezcage  = { imports = [ ./modules/ezcage.nix ./pkgs pkgRev ]; };
+      ezcage  = { imports = [ ./modules/ezcage.nix pkgs ]; };
     };
   };
 }
