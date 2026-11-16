@@ -7,9 +7,13 @@ set -euo pipefail
 
 # What sudo runs: the installed wrapper, set by the build. $0 would be the
 # wrapped script in the store, which no sudoers rule can name. Run from a
-# checkout, the placeholder is left and $0 is used.
+# checkout, the placeholder is left and $0 is used. If the system profile
+# links to this same build, use that path instead: a sudoers rule can name it
+# and it stays valid across updates.
 self="@self@"
 case "$self" in @*) self=$0 ;; esac
+sys=/run/current-system/sw/bin/ezcage
+if [[ -x $sys && $(realpath -- "$sys") == "$(realpath -- "$self")" ]]; then self=$sys; fi
 
 usage() {
   cat <<'EOF'
