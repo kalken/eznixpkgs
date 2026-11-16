@@ -1,4 +1,4 @@
-{ pkgs, lib, qbittorrent-nox, rev ? "dev", ... }:
+{ pkgs, lib, qbittorrent-nox, ... }:
 let
   ezqbit-src = pkgs.fetchFromGitHub {
     owner = "kalken";
@@ -9,7 +9,7 @@ let
 in
 pkgs.stdenvNoCC.mkDerivation {
   pname = "ezqbit";
-  version = rev;
+  version = builtins.substring 0 7 ezqbit-src.rev;
   src = ezqbit-src;
 
   # The repo only holds the theme CSS; build.sh combines it with the stock

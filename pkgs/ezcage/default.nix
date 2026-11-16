@@ -7,7 +7,6 @@
 , getent
 , systemd
 , socat
-, rev ? "dev"
 }:
 
 let
@@ -17,7 +16,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "ezcage";
-  version = rev;
+  version = builtins.substring 0 7 (baseNameOf "${./.}"); # hash of this folder, changes only when the package does
 
   src = ./.;
 

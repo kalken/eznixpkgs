@@ -1,4 +1,4 @@
-{ config, pkgs, lib, rev ? "dev", ... }:
+{ config, pkgs, lib, ... }:
 
 let
   ezsocks-src = pkgs.fetchFromGitHub {
@@ -10,7 +10,7 @@ let
 in
 pkgs.stdenv.mkDerivation rec {
   pname = "ezsocks";
-  version = rev;
+  version = builtins.substring 0 7 ezsocks-src.rev;
   src = ezsocks-src;
 
   dontUnpack = true;

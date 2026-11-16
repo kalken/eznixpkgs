@@ -2,7 +2,6 @@
 { lib
 , python3
 , makeWrapper
-, rev ? "dev"
 }:
 
 let
@@ -10,7 +9,7 @@ let
 in
 python.pkgs.buildPythonApplication {
   pname   = "ezproton";
-  version = rev;
+  version = builtins.substring 0 7 (baseNameOf "${./.}"); # hash of this folder, changes only when the package does
 
   src = ./.;
 

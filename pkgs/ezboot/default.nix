@@ -9,12 +9,11 @@
 , bootPath ? "/boot"
 , keyFileName ? ".ezboot.key"
 , masterKeyPath ? "/var/lib/ezboot/master.key"
-, rev ? "dev"
 }:
 
 stdenv.mkDerivation {
   pname = "ezboot";
-  version = rev;
+  version = builtins.substring 0 7 (baseNameOf "${./.}"); # hash of this folder, changes only when the package does
 
   src = ./.;
 

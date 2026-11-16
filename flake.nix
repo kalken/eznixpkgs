@@ -7,9 +7,7 @@
   inputs.ezsocks-rs.url = "github:kalken/ezsocks-rs/master";
 
   outputs = { self, nixpkgs, ezsocks-rs }: let
-    # The flake revision as the version of our own packages, so it follows every commit.
-    rev = self.shortRev or self.dirtyShortRev or "dev";
-    pkgs = import ./pkgs rev;
+    pkgs = import ./pkgs;
   in {
     nixosModules = {
       default = {
