@@ -19,7 +19,8 @@ services.ezupgrade.enable = true;   # flake and user have defaults, see Options
 | `services.ezupgrade.flake` | str | `/etc/nixos`, or `/Users/<user>/.config/nix-darwin` on macOS | Folder of the flake with the system's configuration |
 | `services.ezupgrade.configuration` | str | `"default"` | Name of the configuration in the flake |
 | `services.ezupgrade.user` | str | `root`, or `system.primaryUser` on macOS | Owner of the flake folder. Inputs are updated as this user; the rebuild runs as root |
-| `services.ezupgrade.time` | str | `"04:00"` | When it runs each day, `HH:MM` |
+| `services.ezupgrade.time` | str | `"04:00"` | When it runs each day, `HH:MM`. Ignored when `schedule` is set |
+| `services.ezupgrade.schedule` | str or null | null | When it runs, as a systemd calendar expression: `weekly`, `Sat 04:00`, `Mon..Fri 02:30`, `*-*-01 05:00`. Null runs it daily at `time` |
 | `services.ezupgrade.randomizedDelay` | str | `"0"` | Wait a random time, up to this long, after `time` before it starts: `30s`, `45m`, `1h` or seconds |
 | `services.ezupgrade.update` | bool | true | Update the inputs first. Off, it rebuilds what the lock file says |
 | `services.ezupgrade.homebrew` | bool | false | macOS only: update Homebrew and upgrade its packages before the rebuild |
@@ -31,6 +32,7 @@ services.ezupgrade.enable = true;   # flake and user have defaults, see Options
 - The rebuild uses `path:<flake>#<configuration>`, so files not yet in git are included.
 - NixOS: the job is `nixos-upgrade`, with the inputs updated in its `preStart`. macOS: the daemon is `ezupgrade`, logging to `/var/log/ezupgrade.log`.
 - The message settings (log lines and so on) can be changed under `services.eznotify.units.nixos-upgrade` (NixOS) or `services.eznotify.units.ezupgrade` (macOS).
+- `schedule` is a systemd calendar expression. NixOS takes any (`man systemd.time`). macOS (launchd) takes `hourly`, `daily`, `weekly`, `monthly` and `[WEEKDAYS] [*-MONTH-DAY] HH:MM` (weekdays as `Mon`, `Sat,Sun` or `Mon..Fri`; `*` or a number for month and day); anything else stops the build with a message.
 - macOS has no randomized delay in launchd, so the daemon sleeps for the random time before it starts.
 - To replace a hand-made upgrade daemon, remove it and enable this.
 

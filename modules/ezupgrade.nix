@@ -12,8 +12,43 @@ let
   # The name eznotify knows the upgrade job by.
   unitName = if isNixOS then "nixos-upgrade" else "ezupgrade";
 
-  hour = toInt (head (builtins.match "0?([0-9]+):.*" cfg.time));
-  minute = toInt (head (builtins.match "[0-9]+:0?([0-9]+)" cfg.time));
+  # What `schedule` (or `time`) says, as a systemd calendar expression. NixOS takes it as it is;
+  # launchd has no such language, so macOS reads the common forms of it (launchdEntries).
+  calendar = if cfg.schedule != null then cfg.schedule else "*-*-* ${cfg.time}:00";
+  named = {
+    hourly = "*-*-* *:00:00";
+    daily = "*-*-* 00:00:00";
+    weekly = "Mon *-*-* 00:00:00";
+    monthly = "*-*-01 00:00:00";
+  };
+  spec = named.${calendar} or calendar;
+
+  # `[WEEKDAYS] [*-MONTH-DAY] HH:MM[:SS]`: weekdays as `Mon`, `Sat,Sun` or `Mon..Fri`, any of
+  # hour, month and day as `*`. Null where it is something else (a list of times, `*/2`, `~`).
+  parts = builtins.match "(([A-Za-z][A-Za-z,.-]*) )?(\\*-(\\*|[0-9]{1,2})-(\\*|[0-9]{1,2}) )?([0-9]{1,2}|\\*):([0-9]{2})(:[0-9]{2})?" spec;
+  dayNumbers = { sun = 0; mon = 1; tue = 2; wed = 3; thu = 4; fri = 5; sat = 6; };
+  dayNumber = d: dayNumbers.${toLower (substring 0 3 d)} or null;
+  weekdaysOf = text: let
+    one = item: let
+      ends = builtins.match "([A-Za-z]+)(\\.\\.|-)([A-Za-z]+)" item;
+      from = dayNumber (head ends);
+      to = dayNumber (elemAt ends 2);
+    in if ends == null then [ (dayNumber item) ]
+       else if from == null || to == null then [ null ]
+       else genList (i: mod (from + i) 7) (mod (to - from + 7) 7 + 1);
+  in unique (concatMap one (splitString "," text));
+  number = text: toInt (head (builtins.match "0*([0-9]+)" text));
+  launchdEntries = if !launchdOk then [] else let
+    days = if elemAt parts 1 == null then [ null ] else weekdaysOf (elemAt parts 1);
+    when = { Minute = number (elemAt parts 6); }
+      // optionalAttrs (elemAt parts 5 != "*") { Hour = number (elemAt parts 5); }
+      // optionalAttrs (elemAt parts 3 != null && elemAt parts 3 != "*") { Month = number (elemAt parts 3); }
+      // optionalAttrs (elemAt parts 4 != null && elemAt parts 4 != "*") { Day = number (elemAt parts 4); };
+  in map (d: when // optionalAttrs (d != null) { Weekday = d; }) days;
+  launchdOk = parts != null
+    && (elemAt parts 1 == null || all (d: d != null) (weekdaysOf (elemAt parts 1)))
+    && (elemAt parts 5 == "*" || number (elemAt parts 5) < 24)
+    && number (elemAt parts 6) < 60;
 
   # "45m", "1h", "30s" or a plain number of seconds
   delayParts = builtins.match "([0-9]+)([smh]?)" cfg.randomizedDelay;
@@ -52,7 +87,19 @@ in {
     time = mkOption {
       type = types.strMatching "[0-9]{1,2}:[0-9]{2}";
       default = "04:00";
-      description = "When the upgrade runs each day, as `HH:MM`.";
+      description = "When the upgrade runs each day, as `HH:MM`. Ignored when `schedule` is set.";
+    };
+
+    schedule = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "Sun *-*-* 03:30";
+      description = ''
+        When the upgrade runs, as a systemd calendar expression: `daily`, `weekly`, `monthly`,
+        `hourly`, `Sat 04:00`, `Mon..Fri 02:30`, `*-*-01 05:00`, `*-*-* 00,12:00`. Null runs it
+        every day at `time`. NixOS takes any expression systemd does; macOS (launchd) takes the
+        names above and `[WEEKDAYS] [*-MONTH-DAY] HH:MM`, with `*` or a number for month and day.
+      '';
     };
 
     randomizedDelay = mkOption {
@@ -96,10 +143,16 @@ in {
 
   config = mkIf cfg.enable (mkMerge [
     {
-      assertions = [{
-        assertion = cfg.user != null;
-        message = "services.ezupgrade.user is not set, and neither is system.primaryUser to take it from.";
-      }];
+      assertions = [
+        {
+          assertion = cfg.user != null;
+          message = "services.ezupgrade.user is not set, and neither is system.primaryUser to take it from.";
+        }
+        {
+          assertion = isNixOS || launchdOk;
+          message = "services.ezupgrade.schedule \"${calendar}\" is not one launchd can do: use daily, weekly, monthly, hourly, or [WEEKDAYS] [*-MONTH-DAY] HH:MM.";
+        }
+      ];
     }
     {
       services.eznotify.units.${unitName} = mkIf cfg.notify {
@@ -113,7 +166,7 @@ in {
       system.autoUpgrade = {
         enable = true;
         flake = target;
-        dates = "*-*-* ${cfg.time}:00";
+        dates = calendar;
         randomizedDelaySec = "${toString delaySeconds}s";
       };
 
@@ -136,7 +189,7 @@ in {
           exit $rc
         '';
         serviceConfig = {
-          StartCalendarInterval = [ { Hour = hour; Minute = minute; } ];
+          StartCalendarInterval = launchdEntries;
           EnvironmentVariables.PATH = "/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin";
           StandardOutPath = "/var/log/ezupgrade.log";
           StandardErrorPath = "/var/log/ezupgrade.log";
