@@ -8,7 +8,7 @@ daemon). With [eznotify](eznotify.md) on, it tells you how the upgrade went.
 
 ```nix
 services.eznotify = { enable = true; desktop.user = "alice"; };
-services.ezupgrade.enable = true;   # flake and user have defaults, see Options
+services.ezupgrade = { enable = true; schedule = "*-*-* 04:00"; };   # flake and user have defaults, see Options
 ```
 
 ## 📋 Options
@@ -19,9 +19,8 @@ services.ezupgrade.enable = true;   # flake and user have defaults, see Options
 | `services.ezupgrade.flake` | str | `/etc/nixos`, or `/Users/<user>/.config/nix-darwin` on macOS | Folder of the flake with the system's configuration |
 | `services.ezupgrade.configuration` | str | `"default"` | Name of the configuration in the flake |
 | `services.ezupgrade.user` | str | `root`, or `system.primaryUser` on macOS | Owner of the flake folder. Inputs are updated as this user; the rebuild runs as root |
-| `services.ezupgrade.time` | str | `"04:00"` | When it runs each day, `HH:MM`. Ignored when `schedule` is set |
-| `services.ezupgrade.schedule` | str or null | null | When it runs, as a systemd calendar expression: `weekly`, `Sat 04:00`, `Mon..Fri 02:30`, `*-*-01 05:00`. Null runs it daily at `time` |
-| `services.ezupgrade.randomizedDelay` | str | `"0"` | Wait a random time, up to this long, after `time` before it starts: `30s`, `45m`, `1h` or seconds |
+| `services.ezupgrade.schedule` | str | required | When it runs, as a systemd calendar expression: `weekly`, `Sat 04:00`, `Mon..Fri 02:30`, `*-*-* 05:00` (every night at 5) |
+| `services.ezupgrade.randomizedDelay` | str | `"0"` | Wait a random time, up to this long, after the scheduled time before it starts: `30s`, `45m`, `1h` or seconds |
 | `services.ezupgrade.update` | bool | true | Update the inputs first. Off, it rebuilds what the lock file says |
 | `services.ezupgrade.homebrew` | bool | false | macOS only: update Homebrew and upgrade its packages before the rebuild |
 | `services.ezupgrade.notify` | bool | true | Tell about it through eznotify, when that is enabled |

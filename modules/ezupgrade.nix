@@ -12,9 +12,9 @@ let
   # The name eznotify knows the upgrade job by.
   unitName = if isNixOS then "nixos-upgrade" else "ezupgrade";
 
-  # What `schedule` (or `time`) says, as a systemd calendar expression. NixOS takes it as it is;
+  # What `schedule` says, as a systemd calendar expression. NixOS takes it as it is;
   # launchd has no such language, so macOS reads the common forms of it (launchdEntries).
-  calendar = if cfg.schedule != null then cfg.schedule else "*-*-* ${cfg.time}:00";
+  calendar = cfg.schedule;
   named = {
     hourly = "*-*-* *:00:00";
     daily = "*-*-* 00:00:00";
@@ -81,24 +81,17 @@ in {
       description = "The user who owns the flake folder. The inputs are updated as this user, so the lock file stays theirs, and the rebuild runs as root.";
     };
 
-    time = mkOption {
-      type = types.strMatching "[0-9]{1,2}:[0-9]{2}";
-      default = "04:00";
-      description = "When the upgrade runs each day, as `HH:MM`. Ignored when `schedule` is set.";
-    };
-
     schedule = mkOption {
-      type = types.nullOr types.str;
-      default = null;
+      type = types.str;
       example = "Sun *-*-* 03:30";
-      description = "When the upgrade runs, as a systemd calendar expression: `daily`, `weekly`, `monthly`, `hourly`, `Sat 04:00`, `Mon..Fri 02:30`, `*-*-01 05:00`, `*-*-* 00,12:00`. Null runs it every day at `time`. NixOS takes any expression systemd does; macOS (launchd) takes the names above and `[WEEKDAYS] [*-MONTH-DAY] HH:MM`, with `*` or a number for month and day.";
+      description = "When the upgrade runs, as a systemd calendar expression: `daily`, `weekly`, `monthly`, `hourly`, `Sat 04:00`, `Mon..Fri 02:30`, `*-*-01 05:00`, `*-*-* 00,12:00`. NixOS takes any expression systemd does; macOS (launchd) takes the names above and `[WEEKDAYS] [*-MONTH-DAY] HH:MM`, with `*` or a number for month and day.";
     };
 
     randomizedDelay = mkOption {
       type = types.strMatching "[0-9]+[smh]?";
       default = "0";
       example = "45m";
-      description = "Wait a random time, up to this long, after `time` before the upgrade starts: `30s`, `45m`, `1h`, or a number of seconds. 0 starts it on time.";
+      description = "Wait a random time, up to this long, after the scheduled time before the upgrade starts: `30s`, `45m`, `1h`, or a number of seconds. 0 starts it on time.";
     };
 
     update = mkOption {
