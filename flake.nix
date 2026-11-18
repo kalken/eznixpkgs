@@ -21,12 +21,14 @@
       };
     };
 
-    # The modules that also work under nix-darwin (ezcage with its package from ./pkgs).
+    # The modules that also work under nix-darwin (ezcage with its package from ./pkgs, ezupgrade with eznotify).
     # Not ./modules as a whole: the rest are built on systemd, networkd and the like.
     darwinModules = {
-      default = { imports = [ ./modules/ezsh.nix ./modules/ezcage.nix pkgs ]; };
+      default = { imports = [ ./modules/ezsh.nix ./modules/ezcage.nix ./modules/eznotify.nix ./modules/ezupgrade.nix pkgs ]; };
       ezsh    = ./modules/ezsh.nix;
       ezcage  = { imports = [ ./modules/ezcage.nix pkgs ]; };
+      eznotify  = ./modules/eznotify.nix;
+      ezupgrade = { imports = [ ./modules/eznotify.nix ./modules/ezupgrade.nix ]; };
     };
   };
 }

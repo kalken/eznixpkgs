@@ -4,6 +4,9 @@ A message when a service has finished or failed. Each way of sending is its own 
 any number can be on: `mail` (an SMTP account of your own) and `desktop` (a popup on one user's
 desktop, via the freedesktop notification service that GNOME, KDE, XFCE and others share).
 
+Works on NixOS and on macOS (nix-darwin). On macOS the services are launchd daemons and the
+popup is a Notification Center banner; see Notes.
+
 ## ✨ Features
 
 - Any number of services, each with its own choice of telling about failure, success or both
@@ -70,5 +73,11 @@ try it after a rebuild: `sudo systemctl start eznotify@nixos-upgrade.service`.
 - Each way of sending turns on when its setting is given (`mail.to`, `desktop.user`); set its `enable = false` to switch it off and keep the settings. With neither on, eznotify warns that it sends nothing.
 - The popup is shown by entering the user's session bus as that user. A failing popup never fails the service, so the mail still goes out.
 - Most providers want an app password rather than the account's own (Gmail does), and mail from a home connection without an account is often refused.
+
+### macOS (nix-darwin)
+
+- `units.<name>` is a `launchd.daemons.<name>` with a `command` or `script`. Its program is wrapped in a script that runs it, lets its output go to the usual log, and sends the message when it ends. A failure is a nonzero exit code; the log lines are the last lines it printed in that run.
+- `desktop.user` gets a banner, shown only while that user is logged in at the console. The banner comes from `osascript`, so macOS lists it under Script Editor in System Settings → Notifications; allow it there once.
+- Use it from `darwinModules.eznotify`. There is no `launchd.user.agents` support, and a daemon with only `ProgramArguments` is refused.
 
 *eznotify is part of eznixpkgs.*

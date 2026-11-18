@@ -42,6 +42,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [ezcache](modules/ezcache.md) | Binary cache for eznixpkgs packages built on GitHub, on by default |
 | [ezcert](modules/ezcert.md) | Certificates for a machine's services, signed by an authority of your own or an existing one |
 | [eznotify](modules/eznotify.md) | A message when a service fails or finishes, per service: a mail through an SMTP account of your own, a desktop popup, or both |
+| [ezupgrade](modules/ezupgrade.md) | A nightly update of the flake's inputs and a rebuild, on NixOS and macOS, with a message through eznotify |
 
 ## 🛠 Programs
 

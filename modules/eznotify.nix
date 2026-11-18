@@ -1,8 +1,12 @@
-{ config, lib, pkgs, ... }:
+{ config, options, lib, pkgs, ... }:
 
 with lib;
 
 let
+  # Also used as a nix-darwin module (darwinModules in flake.nix). There the services are
+  # launchd daemons: each listed one is wrapped in a script that runs it and tells how it ended.
+  isNixOS = options ? systemd;
+
   cfg = config.services.eznotify;
   mail = cfg.mail;
   desktop = cfg.desktop;
@@ -46,7 +50,7 @@ let
 
   # The settings differ per service and per outcome, so they are looked up by both.
   perMessage = ''
-    case "$1:$outcome" in
+    case "$name:$outcome" in
     ${concatStrings (mapAttrsToList (name: u: concatStrings (map (outcome: ''
       ${escapeShellArg "${name}:${outcome}"}) log_lines=${toString u.${"on" + outcome}.logLines}; last_run_only=${if u.${"on" + outcome}.lastRunOnly then "1" else "0"} ;;
     '') [ "Failure" "Success" ])) cfg.units)}
@@ -57,7 +61,7 @@ let
   # A popup in the desktop session of one user. The system service is root, so it enters the
   # user's session bus; with the user logged out there is no bus and nothing is shown. A popup
   # that fails never fails the service, so the mail still goes out.
-  desktopScript = ''
+  desktopScriptNixOS = ''
     uid=$(id -u ${escapeShellArg desktop.user})
     if [ -S "/run/user/$uid/bus" ]; then
       if [ "$outcome" = Failure ]; then urgency=critical; else urgency=normal; fi
@@ -71,14 +75,31 @@ let
     fi
   '';
 
-  mailScript = ''
+  # macOS: the popup is shown inside the GUI session of the user at the console. With the user
+  # not logged in there is no session and nothing is shown.
+  desktopScriptDarwin = ''
+    user=${escapeShellArg desktop.user}
+    if [ "$(/usr/bin/stat -f %Su /dev/console)" = "$user" ]; then
+      # A log helps to find what went wrong, not to read that it went well
+      popup=" "
+      if [ "$outcome" = Failure ]; then
+        popup=$(logs ${toString desktop.logLines})
+      fi
+      # Title and text go in as arguments, so no quoting of either is needed
+      /bin/launchctl asuser "$(id -u "$user")" /usr/bin/sudo -u "$user" /usr/bin/osascript \
+        -e 'on run argv' -e 'display notification (item 2 of argv) with title (item 1 of argv)' -e 'end run' \
+        "$subject" "$popup" || true
+    fi
+  '';
+
+  mailScript = status: ''
     {
       echo "From: ${mail.from}"
       echo "To: ${mail.to}"
       echo "Subject: $subject"
       echo "Date: $(date -R)"
       echo
-      systemctl status --full --no-pager --lines=0 "$unit" || true
+      ${status}
       echo
       logs "$log_lines" short-iso
     } | msmtp --file=${msmtpConfig} --read-recipients
@@ -86,7 +107,8 @@ let
 
   # %i is the name of the service, without ".service". Whether it worked is read from the
   # service itself, so one unit serves both onFailure and onSuccess.
-  script = ''
+  scriptNixOS = ''
+    name="$1"
     unit="$1.service"
     result=$(systemctl show --property=Result --value "$unit")
     if [ "$result" = success ]; then
@@ -111,8 +133,38 @@ let
     }
 
     subject="[$(uname -n)] $unit $word"
-    ${optionalString desktop.enable desktopScript}
-    ${optionalString mail.enable mailScript}
+    ${optionalString desktop.enable desktopScriptNixOS}
+    ${optionalString mail.enable (mailScript ''systemctl status --full --no-pager --lines=0 "$unit" || true'')}
+  '';
+
+  # macOS: run what is after the name, keep its output going to launchd's log, and tell how it ended.
+  scriptDarwin = ''
+    name="$1"
+    shift
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    { "$@" 2>&1; echo $? > "$tmp/rc"; } | tee "$tmp/log"
+    rc=$(cat "$tmp/rc")
+    if [ "$rc" = 0 ]; then
+      outcome=Success; word=succeeded
+    else
+      outcome=Failure; word="failed (exit $rc)"
+    fi
+    ${perMessage}
+
+    # The last $1 lines of what the job printed in this run
+    logs() { tail -n "$1" "$tmp/log"; }
+
+    subject="[$(uname -n)] $name $word"
+    ${optionalString desktop.enable desktopScriptDarwin}
+    ${optionalString mail.enable (mailScript ''echo "$name $word"'')}
+    # What the job itself returned is what launchd sees
+    exit "$rc"
+  '';
+
+  runner = pkgs.writeShellScript "eznotify-run" ''
+    export PATH=${makeBinPath ([ pkgs.coreutils ] ++ optional mail.enable pkgs.msmtp)}:/usr/bin:/bin:/usr/sbin:/sbin
+    ${scriptDarwin}
   '';
 in {
   options.services.eznotify = {
@@ -228,7 +280,7 @@ in {
     };
   };
 
-  config = mkIf cfg.enable {
+  config = mkIf cfg.enable (if isNixOS then {
     assertions = [
       {
         assertion = !mail.enable || (mail.to != null && mail.from != null && mail.smtp.host != null);
@@ -250,7 +302,7 @@ in {
       path = [ pkgs.coreutils config.systemd.package ]
         ++ optional mail.enable pkgs.msmtp
         ++ optionals desktop.enable [ pkgs.libnotify pkgs.util-linux ];
-      inherit script;
+      script = scriptNixOS;
     };
 
     # A drop-in on each listed service, not a definition of it in systemd.services: that would
@@ -263,5 +315,30 @@ in {
         ${optionalString u.onSuccess.enable "OnSuccess=eznotify@${name}.service"}
       '';
     }) (filterAttrs (_: u: u.onFailure.enable || u.onSuccess.enable) cfg.units);
-  };
+  } else {
+    assertions = [
+      {
+        assertion = !mail.enable || (mail.to != null && mail.from != null && mail.smtp.host != null);
+        message = "services.eznotify.mail needs to, from and smtp.host.";
+      }
+      {
+        assertion = !desktop.enable || desktop.user != null;
+        message = "services.eznotify.desktop needs a user.";
+      }
+    ] ++ mapAttrsToList (name: _: {
+      assertion = config.launchd.daemons.${name}.command != "";
+      message = "services.eznotify.units.${name}: there is no launchd daemon `${name}` with a `command` or `script`.";
+    }) cfg.units;
+
+    warnings = optional (!mail.enable && !desktop.enable)
+      "services.eznotify is enabled but sends nothing: set mail.to or desktop.user (or their enable).";
+
+    # The daemon keeps its own settings; only what it starts changes: the runner starts it.
+    launchd.daemons = mapAttrs (name: _: {
+      serviceConfig.ProgramArguments = mkForce [
+        "/bin/sh" "-c"
+        "/bin/wait4path /nix/store && exec ${runner} ${escapeShellArg name} ${config.launchd.daemons.${name}.command}"
+      ];
+    }) (filterAttrs (_: u: u.onFailure.enable || u.onSuccess.enable) cfg.units);
+  });
 }
