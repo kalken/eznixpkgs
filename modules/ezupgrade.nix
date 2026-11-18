@@ -68,6 +68,16 @@ in {
       description = "Update the flake's inputs before the rebuild. Off, it only rebuilds what the lock file says.";
     };
 
+    homebrew = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        macOS only: also update Homebrew and upgrade its packages, before the rebuild. Set
+        `homebrew.onActivation.autoUpdate` and `upgrade` to false in nix-darwin to have it done
+        only here and not on every activation.
+      '';
+    };
+
     notify = mkOption {
       type = types.bool;
       default = true;
@@ -114,10 +124,16 @@ in {
       };
     } else {
       launchd.daemons.ezupgrade = {
-        script = ''
+        script = let
+          brew = "${config.homebrew.prefix}/bin/brew";
+        in ''
           ${optionalString (delaySeconds > 0) "/bin/sleep $(/usr/bin/jot -r 1 0 ${toString delaySeconds})"}
-          ${optionalString cfg.update "sudo -u ${escapeShellArg cfg.user} /nix/var/nix/profiles/default/bin/nix flake update --flake ${escapeShellArg cfg.flake} &&"}
-          /run/current-system/sw/bin/darwin-rebuild switch --flake ${escapeShellArg target}
+          # A step that fails is not the end of the others, but the job as a whole has failed
+          rc=0
+          ${optionalString cfg.homebrew "sudo -u ${escapeShellArg cfg.user} ${brew} update && sudo -u ${escapeShellArg cfg.user} ${brew} upgrade || rc=1"}
+          { ${optionalString cfg.update "sudo -u ${escapeShellArg cfg.user} /nix/var/nix/profiles/default/bin/nix flake update --flake ${escapeShellArg cfg.flake} &&"}
+            /run/current-system/sw/bin/darwin-rebuild switch --flake ${escapeShellArg target}; } || rc=1
+          exit $rc
         '';
         serviceConfig = {
           StartCalendarInterval = [ { Hour = hour; Minute = minute; } ];

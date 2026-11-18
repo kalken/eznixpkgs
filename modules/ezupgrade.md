@@ -22,6 +22,7 @@ services.ezupgrade.enable = true;   # flake and user have defaults, see Options
 | `services.ezupgrade.time` | str | `"04:00"` | When it runs each day, `HH:MM` |
 | `services.ezupgrade.randomizedDelay` | str | `"0"` | Wait a random time, up to this long, after `time` before it starts: `30s`, `45m`, `1h` or seconds |
 | `services.ezupgrade.update` | bool | true | Update the inputs first. Off, it rebuilds what the lock file says |
+| `services.ezupgrade.homebrew` | bool | false | macOS only: update Homebrew and upgrade its packages before the rebuild |
 | `services.ezupgrade.notify` | bool | true | Tell about it through eznotify, when that is enabled |
 | `services.ezupgrade.notifyOnSuccess` | bool | true | Also a message when it worked, not only when it failed |
 
