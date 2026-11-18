@@ -8,11 +8,7 @@ daemon). With [eznotify](eznotify.md) on, it tells you how the upgrade went.
 
 ```nix
 services.eznotify = { enable = true; desktop.user = "alice"; };
-services.ezupgrade = {
-  enable = true;
-  flake = "/Users/alice/.config/nix-darwin";
-  user = "alice";
-};
+services.ezupgrade.enable = true;   # flake and user have defaults, see Options
 ```
 
 ## 📋 Options
@@ -20,9 +16,9 @@ services.ezupgrade = {
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `services.ezupgrade.enable` | bool | false | Enable ezupgrade |
-| `services.ezupgrade.flake` | str | | Folder of the flake with the system's configuration |
+| `services.ezupgrade.flake` | str | `/etc/nixos`, or `/Users/<user>/.config/nix-darwin` on macOS | Folder of the flake with the system's configuration |
 | `services.ezupgrade.configuration` | str | `"default"` | Name of the configuration in the flake |
-| `services.ezupgrade.user` | str | | Owner of the flake folder. Inputs are updated as this user; the rebuild runs as root |
+| `services.ezupgrade.user` | str | `root`, or `system.primaryUser` on macOS | Owner of the flake folder. Inputs are updated as this user; the rebuild runs as root |
 | `services.ezupgrade.time` | str | `"04:00"` | When it runs each day, `HH:MM` |
 | `services.ezupgrade.randomizedDelay` | str | `"0"` | Wait a random time, up to this long, after `time` before it starts: `30s`, `45m`, `1h` or seconds |
 | `services.ezupgrade.update` | bool | true | Update the inputs first. Off, it rebuilds what the lock file says |

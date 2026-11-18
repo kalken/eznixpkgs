@@ -26,7 +26,9 @@ in {
 
     flake = mkOption {
       type = types.str;
-      example = "/home/alice/.config/nix-darwin";
+      default = if isNixOS then "/etc/nixos" else "/Users/${cfg.user}/.config/nix-darwin";
+      defaultText = literalMD "`/etc/nixos` on NixOS, `/Users/<user>/.config/nix-darwin` on macOS";
+      example = "/home/alice/nixos";
       description = "The folder of the flake that holds the system's configuration.";
     };
 
@@ -37,7 +39,9 @@ in {
     };
 
     user = mkOption {
-      type = types.str;
+      type = types.nullOr types.str;
+      default = if isNixOS then "root" else config.system.primaryUser;
+      defaultText = literalMD "`root` on NixOS, `system.primaryUser` on macOS";
       example = "alice";
       description = ''
         The user who owns the flake folder. The inputs are updated as this user, so the lock
@@ -81,6 +85,12 @@ in {
   };
 
   config = mkIf cfg.enable (mkMerge [
+    {
+      assertions = [{
+        assertion = cfg.user != null;
+        message = "services.ezupgrade.user is not set, and neither is system.primaryUser to take it from.";
+      }];
+    }
     {
       services.eznotify.units.${unitName} = mkIf cfg.notify {
         onSuccess.enable = mkDefault cfg.notifyOnSuccess;
