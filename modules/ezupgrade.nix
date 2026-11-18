@@ -78,10 +78,7 @@ in {
       default = if isNixOS then "root" else config.system.primaryUser;
       defaultText = literalMD "`root` on NixOS, `system.primaryUser` on macOS";
       example = "alice";
-      description = ''
-        The user who owns the flake folder. The inputs are updated as this user, so the lock
-        file stays theirs, and the rebuild runs as root.
-      '';
+      description = "The user who owns the flake folder. The inputs are updated as this user, so the lock file stays theirs, and the rebuild runs as root.";
     };
 
     time = mkOption {
@@ -94,12 +91,7 @@ in {
       type = types.nullOr types.str;
       default = null;
       example = "Sun *-*-* 03:30";
-      description = ''
-        When the upgrade runs, as a systemd calendar expression: `daily`, `weekly`, `monthly`,
-        `hourly`, `Sat 04:00`, `Mon..Fri 02:30`, `*-*-01 05:00`, `*-*-* 00,12:00`. Null runs it
-        every day at `time`. NixOS takes any expression systemd does; macOS (launchd) takes the
-        names above and `[WEEKDAYS] [*-MONTH-DAY] HH:MM`, with `*` or a number for month and day.
-      '';
+      description = "When the upgrade runs, as a systemd calendar expression: `daily`, `weekly`, `monthly`, `hourly`, `Sat 04:00`, `Mon..Fri 02:30`, `*-*-01 05:00`, `*-*-* 00,12:00`. Null runs it every day at `time`. NixOS takes any expression systemd does; macOS (launchd) takes the names above and `[WEEKDAYS] [*-MONTH-DAY] HH:MM`, with `*` or a number for month and day.";
     };
 
     randomizedDelay = mkOption {
@@ -118,20 +110,13 @@ in {
     homebrew = mkOption {
       type = types.bool;
       default = false;
-      description = ''
-        macOS only: also update Homebrew and upgrade its packages, before the rebuild. Set
-        `homebrew.onActivation.autoUpdate` and `upgrade` to false in nix-darwin to have it done
-        only here and not on every activation.
-      '';
+      description = "macOS only: also update Homebrew and upgrade its packages, before the rebuild. Set `homebrew.onActivation.autoUpdate` and `upgrade` to false in nix-darwin to have it done only here and not on every activation.";
     };
 
     notify = mkOption {
       type = types.bool;
       default = true;
-      description = ''
-        Tell about the upgrade through eznotify (when `services.eznotify` is enabled): a message
-        when it fails, and, with `notifyOnSuccess`, when it worked.
-      '';
+      description = "Tell about the upgrade through eznotify (when `services.eznotify` is enabled): a message when it fails, and, with `notifyOnSuccess`, when it worked.";
     };
 
     notifyOnSuccess = mkOption {
