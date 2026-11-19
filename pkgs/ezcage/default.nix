@@ -1,18 +1,28 @@
 # ezcage/default.nix
-{ stdenv
-, lib
-, makeWrapper
-, bash
-, coreutils
-, getent
-, systemd
-, socat
+{
+  stdenv,
+  lib,
+  makeWrapper,
+  bash,
+  coreutils,
+  getent,
+  systemd,
+  socat,
 }:
 
 let
   # Linux: systemd units with namespaces. macOS: the built-in sandbox (sandbox-exec).
   script = if stdenv.hostPlatform.isDarwin then "ezcage-darwin.sh" else "ezcage.sh";
-  runtimeDeps = if stdenv.hostPlatform.isDarwin then [ coreutils ] else [ coreutils getent socat systemd ];
+  runtimeDeps =
+    if stdenv.hostPlatform.isDarwin then
+      [ coreutils ]
+    else
+      [
+        coreutils
+        getent
+        socat
+        systemd
+      ];
 in
 stdenv.mkDerivation {
   pname = "ezcage";

@@ -1,14 +1,15 @@
 # ezproton/default.nix
-{ lib
-, python3
-, makeWrapper
+{
+  lib,
+  python3,
+  makeWrapper,
 }:
 
 let
   python = python3;
 in
 python.pkgs.buildPythonApplication {
-  pname   = "ezproton";
+  pname = "ezproton";
   version = builtins.substring 0 7 (baseNameOf "${./.}"); # hash of this folder, changes only when the package does
 
   src = ./.;
@@ -27,8 +28,8 @@ python.pkgs.buildPythonApplication {
 
   meta = with lib; {
     description = "Installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d, always presented as GE-Proton-Latest / Proton-CachyOS-Latest";
-    homepage    = "https://github.com/GloriousEggroll/proton-ge-custom";
-    license     = licenses.gpl3;
-    platforms   = platforms.linux;
+    homepage = "https://github.com/GloriousEggroll/proton-ge-custom";
+    license = licenses.gpl3;
+    platforms = platforms.linux;
   };
 }

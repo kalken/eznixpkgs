@@ -1,11 +1,12 @@
-{ stdenv
-, lib
-, makeWrapper
-, bash
-, gnugrep
-, gnused
-, coreutils
-, nixos-option
+{
+  stdenv,
+  lib,
+  makeWrapper,
+  bash,
+  gnugrep,
+  gnused,
+  coreutils,
+  nixos-option,
 }:
 
 stdenv.mkDerivation {
@@ -18,7 +19,13 @@ stdenv.mkDerivation {
   nativeBuildInputs = [ makeWrapper ];
 
   # Tools the script needs to RUN at runtime
-  buildInputs = [ bash gnugrep gnused coreutils nixos-option ];
+  buildInputs = [
+    bash
+    gnugrep
+    gnused
+    coreutils
+    nixos-option
+  ];
 
   installPhase = ''
     mkdir -p $out/bin
@@ -31,13 +38,15 @@ stdenv.mkDerivation {
   # Wrap the program to inject dependencies into PATH
   postInstall = ''
     wrapProgram $out/bin/ezman \
-      --prefix PATH : ${lib.makeBinPath [
-        bash
-        gnugrep
-        gnused
-        coreutils
-        nixos-option
-      ]}
+      --prefix PATH : ${
+        lib.makeBinPath [
+          bash
+          gnugrep
+          gnused
+          coreutils
+          nixos-option
+        ]
+      }
   '';
 
   meta = with lib; {

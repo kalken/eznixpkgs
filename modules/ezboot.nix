@@ -1,4 +1,10 @@
-{ config, lib, pkgs, utils, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  utils,
+  ...
+}:
 
 with lib;
 
@@ -38,7 +44,8 @@ let
     keyFileName = cfg.keyFileName;
     masterKeyPath = cfg.masterKeyPath;
   };
-in {
+in
+{
   options.services.ezboot = {
     enable = mkEnableOption "ezboot one-time LUKS boot-key unlock";
 
@@ -96,7 +103,12 @@ in {
     };
 
     rebootAfterUpgrade = mkOption {
-      type = types.nullOr (types.enum [ "onkernelchange" "onchange" ]);
+      type = types.nullOr (
+        types.enum [
+          "onkernelchange"
+          "onchange"
+        ]
+      );
       default = null;
       example = "onkernelchange";
       description = ''
@@ -117,7 +129,7 @@ in {
 
     waitForUnits = mkOption {
       type = types.listOf types.str;
-      default = [];
+      default = [ ];
       example = [ "ezproton.service" ];
       description = ''
         Extra systemd unit names for rebootAfterUpgrade to wait for
@@ -157,8 +169,13 @@ in {
       # Force-loaded, not hotplug-only (availableKernelModules) - a plain
       # `mount` doesn't trigger hotplug loading. vfat also needs an NLS
       # codepage module to mount at all.
-      boot.initrd.kernelModules = [ bootFs.fsType ]
-        ++ optionals (bootFs.fsType == "vfat") [ "nls_cp437" "nls_iso8859-1" ];
+      boot.initrd.kernelModules = [
+        bootFs.fsType
+      ]
+      ++ optionals (bootFs.fsType == "vfat") [
+        "nls_cp437"
+        "nls_iso8859-1"
+      ];
 
       # Only keyFile: nixpkgs 3ec636362e18 (2026-10-23) removed scripted
       # stage 1, and with it fallbackToPassword, preOpenCommands and

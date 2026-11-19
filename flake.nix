@@ -6,29 +6,54 @@
   # build is the same on every machine and can come from the binary cache.
   inputs.ezsocks-rs.url = "github:kalken/ezsocks-rs/master";
 
-  outputs = { self, nixpkgs, ezsocks-rs }: let
-    pkgs = import ./pkgs;
-  in {
-    nixosModules = {
-      default = {
-        imports = [
-          ./modules
-          pkgs
-        ];
-        nixpkgs.overlays = [
-          (final: prev: { ezsocks-rs = ezsocks-rs.packages.${final.stdenv.hostPlatform.system}.default; })
-        ];
+  outputs =
+    {
+      self,
+      nixpkgs,
+      ezsocks-rs,
+    }:
+    let
+      pkgs = import ./pkgs;
+    in
+    {
+      nixosModules = {
+        default = {
+          imports = [
+            ./modules
+            pkgs
+          ];
+          nixpkgs.overlays = [
+            (final: prev: { ezsocks-rs = ezsocks-rs.packages.${final.stdenv.hostPlatform.system}.default; })
+          ];
+        };
+      };
+
+      # The modules that also work under nix-darwin (ezcage with its package from ./pkgs, ezupgrade with eznotify).
+      # Not ./modules as a whole: the rest are built on systemd, networkd and the like.
+      darwinModules = {
+        default = {
+          imports = [
+            ./modules/ezsh.nix
+            ./modules/ezcage.nix
+            ./modules/eznotify.nix
+            ./modules/ezupgrade.nix
+            pkgs
+          ];
+        };
+        ezsh = ./modules/ezsh.nix;
+        ezcage = {
+          imports = [
+            ./modules/ezcage.nix
+            pkgs
+          ];
+        };
+        eznotify = ./modules/eznotify.nix;
+        ezupgrade = {
+          imports = [
+            ./modules/eznotify.nix
+            ./modules/ezupgrade.nix
+          ];
+        };
       };
     };
-
-    # The modules that also work under nix-darwin (ezcage with its package from ./pkgs, ezupgrade with eznotify).
-    # Not ./modules as a whole: the rest are built on systemd, networkd and the like.
-    darwinModules = {
-      default = { imports = [ ./modules/ezsh.nix ./modules/ezcage.nix ./modules/eznotify.nix ./modules/ezupgrade.nix pkgs ]; };
-      ezsh    = ./modules/ezsh.nix;
-      ezcage  = { imports = [ ./modules/ezcage.nix pkgs ]; };
-      eznotify  = ./modules/eznotify.nix;
-      ezupgrade = { imports = [ ./modules/eznotify.nix ./modules/ezupgrade.nix ]; };
-    };
-  };
 }

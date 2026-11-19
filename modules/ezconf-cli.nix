@@ -1,43 +1,49 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.programs.ezconf-cli;
-in {
+in
+{
   options.programs.ezconf-cli = {
     enable = lib.mkEnableOption "ezconf-cli - custom Neovim";
     theme = lib.mkOption {
       default = {
-        plugin      = pkgs.vimPlugins.onedarkpro-nvim;
+        plugin = pkgs.vimPlugins.onedarkpro-nvim;
         colorscheme = "onedark_dark";
-        setup       = "";
+        setup = "";
       };
       description = "Theme to use. Pass plugin, colorscheme, and optional setup lua.";
       type = lib.types.submodule {
         options = {
           plugin = lib.mkOption {
-            type        = lib.types.package;
+            type = lib.types.package;
             description = "Any vimPlugin package, e.g. pkgs.vimPlugins.kanagawa-nvim";
           };
           colorscheme = lib.mkOption {
-            type        = lib.types.str;
+            type = lib.types.str;
             description = "The colorscheme name passed to vim.cmd.colorscheme()";
           };
           setup = lib.mkOption {
-            type        = lib.types.str;
-            default     = "";
+            type = lib.types.str;
+            default = "";
             description = "Optional Lua setup call, e.g. require('kanagawa').setup()";
           };
         };
       };
     };
     nerdFonts = lib.mkOption {
-      type        = lib.types.bool;
-      default     = false;
+      type = lib.types.bool;
+      default = false;
       description = "Enable Nerd Fonts icons in the completion popup.";
     };
     extraConfig = lib.mkOption {
-      type        = lib.types.lines;
-      default     = "";
-      example     = ''
+      type = lib.types.lines;
+      default = "";
+      example = ''
         vim.opt.guicursor = "a:ver25"
       '';
       description = ''
@@ -49,7 +55,7 @@ in {
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [
       (pkgs.ezconf-cli.override {
-        theme     = cfg.theme;
+        theme = cfg.theme;
         nerdFonts = cfg.nerdFonts;
         extraConfig = cfg.extraConfig;
       })

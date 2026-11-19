@@ -1,17 +1,18 @@
 let
   overlayDir = ./.;
 
-  autoOverlay = final: prev:
+  autoOverlay =
+    final: prev:
     let
       dirs = builtins.readDir overlayDir;
-      subDirs = builtins.filter
-        (name: dirs.${name} == "directory")
-        (builtins.attrNames dirs);
+      subDirs = builtins.filter (name: dirs.${name} == "directory") (builtins.attrNames dirs);
     in
-      builtins.listToAttrs (map (name: {
+    builtins.listToAttrs (
+      map (name: {
         inherit name;
         value = final.callPackage (overlayDir + "/${name}") { };
-      }) subDirs);
+      }) subDirs
+    );
 in
 {
   nixpkgs.overlays = [ autoOverlay ];

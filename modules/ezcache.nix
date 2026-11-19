@@ -1,7 +1,8 @@
 { config, lib, ... }:
 let
   cfg = config.eznixpkgs.cache;
-in {
+in
+{
   options.eznixpkgs.cache.enable = lib.mkOption {
     type = lib.types.bool;
     default = true;
@@ -15,6 +16,8 @@ in {
   config = lib.mkIf cfg.enable {
     # extra-*, so the default cache.nixos.org stays in place
     nix.settings.extra-substituters = [ "https://kalken.cachix.org" ];
-    nix.settings.extra-trusted-public-keys = [ "kalken.cachix.org-1:R4z1JqA48iPrdcZInmnW7Jb8eFFlEcOzHZzyQimXgsI=" ];
+    nix.settings.extra-trusted-public-keys = [
+      "kalken.cachix.org-1:R4z1JqA48iPrdcZInmnW7Jb8eFFlEcOzHZzyQimXgsI="
+    ];
   };
 }

@@ -1,10 +1,11 @@
 # ezsensors/default.nix
-{ stdenv
-, lib
-, makeWrapper
-, bash
-, coreutils
-, gnugrep
+{
+  stdenv,
+  lib,
+  makeWrapper,
+  bash,
+  coreutils,
+  gnugrep,
 }:
 
 stdenv.mkDerivation {
@@ -20,7 +21,11 @@ stdenv.mkDerivation {
   # - bash: for bash-specific features (shopt, local, [[ ]], printf)
   # - coreutils: for basename, cat, echo, printf
   # - gnugrep: ensures consistent regex behavior if script is extended
-  buildInputs = [ bash coreutils gnugrep ];
+  buildInputs = [
+    bash
+    coreutils
+    gnugrep
+  ];
 
   installPhase = ''
     mkdir -p $out/bin
@@ -33,7 +38,13 @@ stdenv.mkDerivation {
   # Wrap the program to inject dependencies into PATH
   postInstall = ''
     wrapProgram $out/bin/ezsensors \
-      --prefix PATH : ${lib.makeBinPath [ bash coreutils gnugrep ]}
+      --prefix PATH : ${
+        lib.makeBinPath [
+          bash
+          coreutils
+          gnugrep
+        ]
+      }
   '';
 
   meta = with lib; {

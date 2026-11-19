@@ -1,8 +1,27 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.services.ezsocks-rs;
-  inherit (lib) mkEnableOption mkIf mkOption types mkMerge nameValuePair mkDefault
-    filterAttrs mapAttrs' mapAttrsToList concatMap escapeShellArgs hasInfix hasPrefix;
+  inherit (lib)
+    mkEnableOption
+    mkIf
+    mkOption
+    types
+    mkMerge
+    nameValuePair
+    mkDefault
+    filterAttrs
+    mapAttrs'
+    mapAttrsToList
+    concatMap
+    escapeShellArgs
+    hasInfix
+    hasPrefix
+    ;
 
   # Enabled instances that run inside an eznetns netns
   netnsInstances = filterAttrs (_: i: i.enable && i.netns != null) cfg.instances;
@@ -11,7 +30,10 @@ let
     options = {
       listenHost = mkOption {
         type = types.listOf types.str;
-        default = [ "127.0.0.1" "::1" ];
+        default = [
+          "127.0.0.1"
+          "::1"
+        ];
         description = ''
           Addresses or host names to listen on. A host name listens on all
           of its addresses.
@@ -23,7 +45,11 @@ let
         description = "Port to listen on.";
       };
       family = mkOption {
-        type = types.enum [ "any" "ipv4" "ipv6" ];
+        type = types.enum [
+          "any"
+          "ipv4"
+          "ipv6"
+        ];
         default = "any";
         description = ''
           Address families to connect out with. `any` uses Happy Eyeballs,
@@ -40,7 +66,12 @@ let
         '';
       };
       logLevel = mkOption {
-        type = types.enum [ "DEBUG" "INFO" "WARNING" "ERROR" ];
+        type = types.enum [
+          "DEBUG"
+          "INFO"
+          "WARNING"
+          "ERROR"
+        ];
         default = "WARNING";
         description = "Logging verbosity. `INFO` logs every connection with its destination.";
       };
@@ -78,20 +109,35 @@ let
   };
 
   # IPv6 addresses need brackets in front of the port
-  listenArg = port: host:
-    if hasInfix ":" host && !(hasPrefix "[" host)
-    then "[${host}]:${toString port}"
-    else "${host}:${toString port}";
+  listenArg =
+    port: host:
+    if hasInfix ":" host && !(hasPrefix "[" host) then
+      "[${host}]:${toString port}"
+    else
+      "${host}:${toString port}";
 
-  mkArgs = s: concatMap (h: [ "--listen" (listenArg s.listenPort h) ]) s.listenHost ++ [
-    "--family" s.family
-    "--threads" (toString s.threads)
-    "--log-level" s.logLevel
-    "--dns-cache-ttl" (toString s.dnsCacheTtl)
-    "--handshake-timeout" (toString s.handshakeTimeout)
-    "--connect-timeout" (toString s.connectTimeout)
-    "--keepalive" (toString s.keepaliveIdle)
-  ];
+  mkArgs =
+    s:
+    concatMap (h: [
+      "--listen"
+      (listenArg s.listenPort h)
+    ]) s.listenHost
+    ++ [
+      "--family"
+      s.family
+      "--threads"
+      (toString s.threads)
+      "--log-level"
+      s.logLevel
+      "--dns-cache-ttl"
+      (toString s.dnsCacheTtl)
+      "--handshake-timeout"
+      (toString s.handshakeTimeout)
+      "--connect-timeout"
+      (toString s.connectTimeout)
+      "--keepalive"
+      (toString s.keepaliveIdle)
+    ];
 
   mkService = description: settings: {
     inherit description;
@@ -118,19 +164,28 @@ let
       ProtectProc = "invisible";
       ProcSubset = "pid";
       # AF_UNIX and AF_NETLINK for host name lookups through glibc
-      RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
+      RestrictAddressFamilies = [
+        "AF_INET"
+        "AF_INET6"
+        "AF_UNIX"
+        "AF_NETLINK"
+      ];
       RestrictNamespaces = true;
       RestrictRealtime = true;
       LockPersonality = true;
       MemoryDenyWriteExecute = true;
       SystemCallArchitectures = "native";
       # @system-service includes splice(), which the relay uses
-      SystemCallFilter = [ "@system-service" "~@privileged" ];
+      SystemCallFilter = [
+        "@system-service"
+        "~@privileged"
+      ];
       SystemCallErrorNumber = "EPERM";
     };
     wantedBy = [ "multi-user.target" ];
   };
-in {
+in
+{
   options.services.ezsocks-rs = {
     enable = mkEnableOption "ezsocks-rs SOCKS5 proxy in the default network namespace";
     settings = mkOption {
@@ -139,26 +194,30 @@ in {
       description = "Settings for the default-namespace service.";
     };
     instances = mkOption {
-      type = types.attrsOf (types.submodule ({ name, ... }: {
-        options = {
-          enable = mkEnableOption "ezsocks-rs instance";
-          netns = mkOption {
-            type = types.nullOr types.str;
-            default = name;
-            defaultText = lib.literalExpression "<name>";
-            description = ''
-              eznetns instance to run this instance in, joined through
-              `services.eznetns.netnsService`. Defaults to the instance name,
-              `null` runs it in the default network namespace.
-            '';
-          };
-          settings = mkOption {
-            type = settingsSubmodule;
-            default = { };
-            description = "Settings for this instance.";
-          };
-        };
-      }));
+      type = types.attrsOf (
+        types.submodule (
+          { name, ... }: {
+            options = {
+              enable = mkEnableOption "ezsocks-rs instance";
+              netns = mkOption {
+                type = types.nullOr types.str;
+                default = name;
+                defaultText = lib.literalExpression "<name>";
+                description = ''
+                  eznetns instance to run this instance in, joined through
+                  `services.eznetns.netnsService`. Defaults to the instance name,
+                  `null` runs it in the default network namespace.
+                '';
+              };
+              settings = mkOption {
+                type = settingsSubmodule;
+                default = { };
+                description = "Settings for this instance.";
+              };
+            };
+          }
+        )
+      );
       default = { };
       description = "Named ezsocks-rs instances, each running in its own eznetns netns by default.";
     };
@@ -169,14 +228,16 @@ in {
       (mkIf cfg.enable {
         ezsocks-rs = mkService "ezsocks-rs SOCKS5 proxy" cfg.settings;
       })
-      (mapAttrs' (name: instanceCfg:
-        nameValuePair "ezsocks-rs-${name}"
-          (mkIf instanceCfg.enable (mkService "ezsocks-rs SOCKS5 proxy ${name}" instanceCfg.settings))
+      (mapAttrs' (
+        name: instanceCfg:
+        nameValuePair "ezsocks-rs-${name}" (
+          mkIf instanceCfg.enable (mkService "ezsocks-rs SOCKS5 proxy ${name}" instanceCfg.settings)
+        )
       ) cfg.instances)
     ];
     # eznetns puts the instance in its netns
-    services.eznetns.netnsService = mapAttrs' (name: instanceCfg:
-      nameValuePair "ezsocks-rs-${name}.service" instanceCfg.netns
+    services.eznetns.netnsService = mapAttrs' (
+      name: instanceCfg: nameValuePair "ezsocks-rs-${name}.service" instanceCfg.netns
     ) netnsInstances;
     assertions = mapAttrsToList (name: instanceCfg: {
       assertion = config.services.eznetns.enable;

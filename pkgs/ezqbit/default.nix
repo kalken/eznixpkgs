@@ -1,4 +1,9 @@
-{ pkgs, lib, qbittorrent-nox, ... }:
+{
+  pkgs,
+  lib,
+  qbittorrent-nox,
+  ...
+}:
 let
   ezqbit-src = pkgs.fetchFromGitHub {
     owner = "kalken";

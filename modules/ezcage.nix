@@ -1,12 +1,32 @@
-{ config, options, lib, pkgs, ... }:
+{
+  config,
+  options,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.programs.ezcage;
 
   # Also used as a nix-darwin module (darwinModules in flake.nix). macOS has no
   # cage users, groups or network namespaces: the cage runs as you.
   isNixOS = options ? systemd;
-  inherit (lib) mkEnableOption mkIf mkOption types mapAttrs' nameValuePair
-    optional optionals concatMap concatStringsSep attrNames any hasPrefix stringLength;
+  inherit (lib)
+    mkEnableOption
+    mkIf
+    mkOption
+    types
+    mapAttrs'
+    nameValuePair
+    optional
+    optionals
+    concatMap
+    concatStringsSep
+    attrNames
+    any
+    hasPrefix
+    stringLength
+    ;
 
   profileSubmodule = types.submodule {
     options = {
@@ -122,27 +142,64 @@ let
   # Each profile runs as its own user, so cages can't see each other's processes
   profileUser = name: "ezcage-${name}";
 
-  profileArgs = name: p:
-    [ "--name" name ]
-    ++ optionals isNixOS [ "--user" (profileUser name) ]
-    ++ concatMap (x: [ "--rw" x ]) p.readWrite
-    ++ concatMap (x: [ "--ro" x ]) p.readOnly
-    ++ concatMap (g: [ "--group" g ]) p.groups
-    ++ optionals (p.mainGroup != null) [ "--main-group" p.mainGroup ]
-    ++ optionals (p.umask != null) [ "--umask" p.umask ]
-    ++ optionals (p.netns != null) [ "--netns" p.netns ]
+  profileArgs =
+    name: p:
+    [
+      "--name"
+      name
+    ]
+    ++ optionals isNixOS [
+      "--user"
+      (profileUser name)
+    ]
+    ++ concatMap (x: [
+      "--rw"
+      x
+    ]) p.readWrite
+    ++ concatMap (x: [
+      "--ro"
+      x
+    ]) p.readOnly
+    ++ concatMap (g: [
+      "--group"
+      g
+    ]) p.groups
+    ++ optionals (p.mainGroup != null) [
+      "--main-group"
+      p.mainGroup
+    ]
+    ++ optionals (p.umask != null) [
+      "--umask"
+      p.umask
+    ]
+    ++ optionals (p.netns != null) [
+      "--netns"
+      p.netns
+    ]
     ++ optional p.offline "--offline"
     ++ optional (p.nix == true) "--nix"
     ++ optional (p.nix == false) "--no-nix"
     ++ optional p.sshAgent "--ssh-agent"
     ++ optional p.git "--git"
     ++ optional p.signalAll "--signal-all"
-    ++ optionals (p.workDir != null) [ "--workdir" p.workDir ]
+    ++ optionals (p.workDir != null) [
+      "--workdir"
+      p.workDir
+    ]
     ++ optionals (p.packages != [ ]) [
       "--path"
-      "${pkgs.buildEnv { name = "ezcage-${name}-path"; paths = p.packages; }}/bin"
+      "${
+        pkgs.buildEnv {
+          name = "ezcage-${name}-path";
+          paths = p.packages;
+        }
+      }/bin"
     ]
-    ++ [ "--" p.command ] ++ p.args;
+    ++ [
+      "--"
+      p.command
+    ]
+    ++ p.args;
 in
 {
   options.programs.ezcage = {
@@ -176,49 +233,77 @@ in
     };
   };
 
-  config = mkIf cfg.enable ({
-    assertions = map (name: {
-      assertion = builtins.match "[A-Za-z0-9_-]+" name != null && stringLength (profileUser name) <= 32;
-      message = "programs.ezcage.profiles.${name}: the name may only contain letters, digits, '_' and '-', and be at most 25 characters.";
-    }) (attrNames cfg.profiles) ++ [{
-      # nix-darwin with nix.enable off (Nix managed elsewhere) forbids reading nix.settings
-      assertion = !(config.nix.enable or true)
-        || !(any (u: u == "ezcage" || u == "@ezcage" || hasPrefix "ezcage-" u || hasPrefix "@ezcage-" u)
-          (config.nix.settings.trusted-users or [ ]));
-      message = "programs.ezcage: cage users must not be in nix.settings.trusted-users; they could add binary caches or unsigned store paths.";
-    }] ++ optionals (!isNixOS) (map (name: {
-      assertion = cfg.profiles.${name}.groups == [ ] && cfg.profiles.${name}.mainGroup == null
-        && cfg.profiles.${name}.netns == null;
-      message = "programs.ezcage.profiles.${name}: groups, mainGroup and netns are not supported on macOS.";
-    }) (attrNames cfg.profiles)) ++ optionals isNixOS (map (name: {
-      assertion = !cfg.profiles.${name}.signalAll;
-      message = "programs.ezcage.profiles.${name}: signalAll is only supported on macOS, since the cage runs as another user there.";
-    }) (attrNames cfg.profiles));
+  config = mkIf cfg.enable (
+    {
+      assertions =
+        map (name: {
+          assertion = builtins.match "[A-Za-z0-9_-]+" name != null && stringLength (profileUser name) <= 32;
+          message = "programs.ezcage.profiles.${name}: the name may only contain letters, digits, '_' and '-', and be at most 25 characters.";
+        }) (attrNames cfg.profiles)
+        ++ [
+          {
+            # nix-darwin with nix.enable off (Nix managed elsewhere) forbids reading nix.settings
+            assertion =
+              !(config.nix.enable or true)
+              || !(any (u: u == "ezcage" || u == "@ezcage" || hasPrefix "ezcage-" u || hasPrefix "@ezcage-" u) (
+                config.nix.settings.trusted-users or [ ]
+              ));
+            message = "programs.ezcage: cage users must not be in nix.settings.trusted-users; they could add binary caches or unsigned store paths.";
+          }
+        ]
+        ++ optionals (!isNixOS) (
+          map (name: {
+            assertion =
+              cfg.profiles.${name}.groups == [ ]
+              && cfg.profiles.${name}.mainGroup == null
+              && cfg.profiles.${name}.netns == null;
+            message = "programs.ezcage.profiles.${name}: groups, mainGroup and netns are not supported on macOS.";
+          }) (attrNames cfg.profiles)
+        )
+        ++ optionals isNixOS (
+          map (name: {
+            assertion = !cfg.profiles.${name}.signalAll;
+            message = "programs.ezcage.profiles.${name}: signalAll is only supported on macOS, since the cage runs as another user there.";
+          }) (attrNames cfg.profiles)
+        );
 
-    environment.systemPackages = [ cfg.package ];
+      environment.systemPackages = [ cfg.package ];
 
-    # One argument per line; ezcage reads them back with mapfile
-    environment.etc = mapAttrs' (name: p:
-      nameValuePair "ezcage/profiles/${name}" {
-        text = concatStringsSep "\n" (profileArgs name p) + "\n";
-      }) cfg.profiles;
-  } // (if isNixOS then {
-    # Shared user for ad-hoc runs; every cage also runs with the ezcage group
-    users.users = {
-      ezcage = {
-        isSystemUser = true;
-        group = "ezcage";
-        home = "/var/empty";
-      };
-    } // mapAttrs' (name: _:
-      nameValuePair (profileUser name) {
-        isSystemUser = true;
-        group = profileUser name;
-        home = "/var/lib/ezcage/${name}";
-      }) cfg.profiles;
+      # One argument per line; ezcage reads them back with mapfile
+      environment.etc = mapAttrs' (
+        name: p:
+        nameValuePair "ezcage/profiles/${name}" {
+          text = concatStringsSep "\n" (profileArgs name p) + "\n";
+        }
+      ) cfg.profiles;
+    }
+    // (
+      if isNixOS then
+        {
+          # Shared user for ad-hoc runs; every cage also runs with the ezcage group
+          users.users = {
+            ezcage = {
+              isSystemUser = true;
+              group = "ezcage";
+              home = "/var/empty";
+            };
+          }
+          // mapAttrs' (
+            name: _:
+            nameValuePair (profileUser name) {
+              isSystemUser = true;
+              group = profileUser name;
+              home = "/var/lib/ezcage/${name}";
+            }
+          ) cfg.profiles;
 
-    users.groups = {
-      ezcage = { };
-    } // mapAttrs' (name: _: nameValuePair (profileUser name) { }) cfg.profiles;
-  } else { }));
+          users.groups = {
+            ezcage = { };
+          }
+          // mapAttrs' (name: _: nameValuePair (profileUser name) { }) cfg.profiles;
+        }
+      else
+        { }
+    )
+  );
 }

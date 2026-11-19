@@ -1,8 +1,23 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.services.ezsocks;
-  inherit (lib) mkEnableOption mkIf mkOption types mkMerge nameValuePair mkDefault
-    filterAttrs mapAttrs' mapAttrsToList;
+  inherit (lib)
+    mkEnableOption
+    mkIf
+    mkOption
+    types
+    mkMerge
+    nameValuePair
+    mkDefault
+    filterAttrs
+    mapAttrs'
+    mapAttrsToList
+    ;
 
   # Enabled instances that run inside an eznetns netns
   netnsInstances = filterAttrs (_: i: i.enable && i.netns != null) cfg.instances;
@@ -13,7 +28,10 @@ let
     options = {
       listenHost = mkOption {
         type = types.listOf types.str;
-        default = [ "127.0.0.1" "::1" ];
+        default = [
+          "127.0.0.1"
+          "::1"
+        ];
         description = "Addresses to listen on.";
       };
       listenPort = mkOption {
@@ -27,7 +45,13 @@ let
         description = "Backlog for the listening socket(s).";
       };
       logLevel = mkOption {
-        type = types.enum [ "DEBUG" "INFO" "WARNING" "ERROR" "CRITICAL" ];
+        type = types.enum [
+          "DEBUG"
+          "INFO"
+          "WARNING"
+          "ERROR"
+          "CRITICAL"
+        ];
         default = "WARNING";
         description = "Logging verbosity.";
       };
@@ -115,22 +139,25 @@ let
     };
   };
 
-  mkConfigFile = name: settings: tomlFormat.generate "ezsocks-${name}.toml" {
-    listen_host = settings.listenHost;
-    listen_port = settings.listenPort;
-    listen_backlog = settings.listenBacklog;
-    log_level = settings.logLevel;
-    use_builtin_happy_eyeballs = settings.useBuiltinHappyEyeballs;
-    resolution_delay = settings.resolutionDelay;
-    first_address_family_count = settings.firstAddressFamilyCount;
-    connection_attempt_delay = settings.connectionAttemptDelay;
-    worker_processes = settings.workerProcesses;
-    relay_buffer_size = settings.relayBufferSize;
-    keepalive_idle = settings.keepaliveIdle;
-    dns_cache_ttl = settings.dnsCacheTtl;
-    handshake_timeout = settings.handshakeTimeout;
-  };
-in {
+  mkConfigFile =
+    name: settings:
+    tomlFormat.generate "ezsocks-${name}.toml" {
+      listen_host = settings.listenHost;
+      listen_port = settings.listenPort;
+      listen_backlog = settings.listenBacklog;
+      log_level = settings.logLevel;
+      use_builtin_happy_eyeballs = settings.useBuiltinHappyEyeballs;
+      resolution_delay = settings.resolutionDelay;
+      first_address_family_count = settings.firstAddressFamilyCount;
+      connection_attempt_delay = settings.connectionAttemptDelay;
+      worker_processes = settings.workerProcesses;
+      relay_buffer_size = settings.relayBufferSize;
+      keepalive_idle = settings.keepaliveIdle;
+      dns_cache_ttl = settings.dnsCacheTtl;
+      handshake_timeout = settings.handshakeTimeout;
+    };
+in
+{
   options.services.ezsocks = {
     enable = mkEnableOption "EzSocks service in default namespace";
     user = mkOption {
@@ -149,68 +176,80 @@ in {
       description = "EzSocks settings for the default-namespace service, written to a TOML config file.";
     };
     instances = mkOption {
-      type = types.attrsOf (types.submodule ({ name, ... }: {
-        options = {
-          enable = mkEnableOption "EzSocks instance";
-          netns = mkOption {
-            type = types.nullOr types.str;
-            default = name;
-            defaultText = lib.literalExpression "<name>";
-            description = ''
-              eznetns instance to run this instance in, joined through
-              `services.eznetns.netnsService`. Defaults to the instance name,
-              `null` runs it in the default network namespace.
-            '';
-          };
-          user = mkOption {
-            type = types.str;
-            default = "ezsocks";
-            description = "User under which to run this EzSocks instance in the network namespace.";
-          };
-          group = mkOption {
-            type = types.str;
-            default = "nogroup";
-            description = "Group under which to run this EzSocks instance in the network namespace.";
-          };
-          settings = mkOption {
-            type = settingsSubmodule;
-            default = { };
-            description = "EzSocks settings for this instance, written to a TOML config file.";
-          };
-        };
-      }));
-      default = {};
+      type = types.attrsOf (
+        types.submodule (
+          { name, ... }: {
+            options = {
+              enable = mkEnableOption "EzSocks instance";
+              netns = mkOption {
+                type = types.nullOr types.str;
+                default = name;
+                defaultText = lib.literalExpression "<name>";
+                description = ''
+                  eznetns instance to run this instance in, joined through
+                  `services.eznetns.netnsService`. Defaults to the instance name,
+                  `null` runs it in the default network namespace.
+                '';
+              };
+              user = mkOption {
+                type = types.str;
+                default = "ezsocks";
+                description = "User under which to run this EzSocks instance in the network namespace.";
+              };
+              group = mkOption {
+                type = types.str;
+                default = "nogroup";
+                description = "Group under which to run this EzSocks instance in the network namespace.";
+              };
+              settings = mkOption {
+                type = settingsSubmodule;
+                default = { };
+                description = "EzSocks settings for this instance, written to a TOML config file.";
+              };
+            };
+          }
+        )
+      );
+      default = { };
       description = "Named EzSocks instances, each running in its own eznetns netns by default";
     };
   };
-  config = mkIf (cfg.enable || (cfg.instances != {})) {
+  config = mkIf (cfg.enable || (cfg.instances != { })) {
     # Define users and groups for both default service and instances
-    users.users = mkMerge ([
-      (mkIf cfg.enable {
-        "${cfg.user}" = {
-          isSystemUser = true;
-          group = cfg.group;
-          description = "EzSocks service user";
-        };
-      })
-    ] ++ (lib.mapAttrsToList (name: instanceCfg:
-      mkIf instanceCfg.enable {
-        "ezsocks-${name}" = {
-          isSystemUser = true;
-          group = instanceCfg.group;
-          description = "EzSocks instance user for ${name}";
-        };
-      }
-    ) cfg.instances));
-    users.groups = mkMerge ([
-      (mkIf cfg.enable {
-        "${cfg.group}" = {};
-      })
-    ] ++ (lib.mapAttrsToList (name: instanceCfg:
-      mkIf instanceCfg.enable {
-        "${instanceCfg.group}" = {};
-      }
-    ) cfg.instances));
+    users.users = mkMerge (
+      [
+        (mkIf cfg.enable {
+          "${cfg.user}" = {
+            isSystemUser = true;
+            group = cfg.group;
+            description = "EzSocks service user";
+          };
+        })
+      ]
+      ++ (lib.mapAttrsToList (
+        name: instanceCfg:
+        mkIf instanceCfg.enable {
+          "ezsocks-${name}" = {
+            isSystemUser = true;
+            group = instanceCfg.group;
+            description = "EzSocks instance user for ${name}";
+          };
+        }
+      ) cfg.instances)
+    );
+    users.groups = mkMerge (
+      [
+        (mkIf cfg.enable {
+          "${cfg.group}" = { };
+        })
+      ]
+      ++ (lib.mapAttrsToList (
+        name: instanceCfg:
+        mkIf instanceCfg.enable {
+          "${instanceCfg.group}" = { };
+        }
+      ) cfg.instances)
+    );
     # Define all systemd services (default and instances)
     systemd.services = mkMerge ([
       # Default EzSocks service
@@ -231,7 +270,8 @@ in {
         };
       })
       # Instance-specific services
-      (lib.mapAttrs' (name: instanceCfg:
+      (lib.mapAttrs' (
+        name: instanceCfg:
         nameValuePair "ezsocks-${name}" (
           mkIf instanceCfg.enable {
             enable = true;
@@ -251,8 +291,8 @@ in {
       ) cfg.instances)
     ]);
     # eznetns puts the instance in its netns
-    services.eznetns.netnsService = mapAttrs' (name: instanceCfg:
-      nameValuePair "ezsocks-${name}.service" instanceCfg.netns
+    services.eznetns.netnsService = mapAttrs' (
+      name: instanceCfg: nameValuePair "ezsocks-${name}.service" instanceCfg.netns
     ) netnsInstances;
     assertions = mapAttrsToList (name: instanceCfg: {
       assertion = config.services.eznetns.enable;

@@ -1,4 +1,10 @@
-{ config, options, lib, pkgs, ... }:
+{
+  config,
+  options,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -24,36 +30,54 @@ let
     port ${toString mail.smtp.port}
     from ${mail.from}
     ${optionalString (mail.smtp.user != null) "user ${mail.smtp.user}"}
-    ${optionalString (mail.smtp.passwordFile != null) "passwordeval cat ${escapeShellArg (toString mail.smtp.passwordFile)}"}
+    ${optionalString (
+      mail.smtp.passwordFile != null
+    ) "passwordeval cat ${escapeShellArg (toString mail.smtp.passwordFile)}"}
   '';
 
   # What a message holds, for one service and one outcome.
-  messageType = enableDefault: types.submodule {
-    options = {
-      enable = mkOption {
-        type = types.bool;
-        default = enableDefault;
-        description = "Send a message for this outcome.";
-      };
-      logLines = mkOption {
-        type = types.ints.positive;
-        default = 30;
-        description = "How many of the service's last log lines go in the mail.";
-      };
-      lastRunOnly = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Take the log lines from the run that just ended only. Off, they are the last lines of the service's journal, which can include earlier runs.";
+  messageType =
+    enableDefault:
+    types.submodule {
+      options = {
+        enable = mkOption {
+          type = types.bool;
+          default = enableDefault;
+          description = "Send a message for this outcome.";
+        };
+        logLines = mkOption {
+          type = types.ints.positive;
+          default = 30;
+          description = "How many of the service's last log lines go in the mail.";
+        };
+        lastRunOnly = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Take the log lines from the run that just ended only. Off, they are the last lines of the service's journal, which can include earlier runs.";
+        };
       };
     };
-  };
 
   # The settings differ per service and per outcome, so they are looked up by both.
   perMessage = ''
     case "$name:$outcome" in
-    ${concatStrings (mapAttrsToList (name: u: concatStrings (map (outcome: ''
-      ${escapeShellArg "${name}:${outcome}"}) log_lines=${toString u.${"on" + outcome}.logLines}; last_run_only=${if u.${"on" + outcome}.lastRunOnly then "1" else "0"} ;;
-    '') [ "Failure" "Success" ])) cfg.units)}
+    ${concatStrings (
+      mapAttrsToList (
+        name: u:
+        concatStrings (
+          map
+            (outcome: ''
+              ${escapeShellArg "${name}:${outcome}"}) log_lines=${
+                toString u.${"on" + outcome}.logLines
+              }; last_run_only=${if u.${"on" + outcome}.lastRunOnly then "1" else "0"} ;;
+            '')
+            [
+              "Failure"
+              "Success"
+            ]
+        )
+      ) cfg.units
+    )}
       *) log_lines=30; last_run_only=1 ;;
     esac
   '';
@@ -134,7 +158,9 @@ let
 
     subject="[$(uname -n)] $unit $word"
     ${optionalString desktop.enable desktopScriptNixOS}
-    ${optionalString mail.enable (mailScript ''systemctl status --full --no-pager --lines=0 "$unit" || true'')}
+    ${optionalString mail.enable (
+      mailScript ''systemctl status --full --no-pager --lines=0 "$unit" || true''
+    )}
   '';
 
   # macOS: run what is after the name, keep its output going to launchd's log, and tell how it ended.
@@ -163,10 +189,13 @@ let
   '';
 
   runner = pkgs.writeShellScript "eznotify-run" ''
-    export PATH=${makeBinPath ([ pkgs.coreutils ] ++ optional mail.enable pkgs.msmtp)}:/usr/bin:/bin:/usr/sbin:/sbin
+    export PATH=${
+      makeBinPath ([ pkgs.coreutils ] ++ optional mail.enable pkgs.msmtp)
+    }:/usr/bin:/bin:/usr/sbin:/sbin
     ${scriptDarwin}
   '';
-in {
+in
+{
   options.services.eznotify = {
     enable = mkEnableOption "eznotify, a message when a service has finished or failed, by mail, as a desktop popup, or both";
 
@@ -202,7 +231,10 @@ in {
           description = "Its port: 587 for `starttls`, 465 for `tls`.";
         };
         tls = mkOption {
-          type = types.enum [ "starttls" "tls" ];
+          type = types.enum [
+            "starttls"
+            "tls"
+          ];
           default = "starttls";
           description = "`starttls` starts plain and switches to TLS (port 587), `tls` is TLS from the start (port 465).";
         };
@@ -248,21 +280,23 @@ in {
     };
 
     units = mkOption {
-      type = types.attrsOf (types.submodule {
-        options = {
-          onFailure = mkOption {
-            type = messageType true;
-            default = {};
-            description = "The message when the service fails. On unless `onFailure.enable = false`.";
+      type = types.attrsOf (
+        types.submodule {
+          options = {
+            onFailure = mkOption {
+              type = messageType true;
+              default = { };
+              description = "The message when the service fails. On unless `onFailure.enable = false`.";
+            };
+            onSuccess = mkOption {
+              type = messageType false;
+              default = { };
+              description = "The message when the service ends well. Off unless `onSuccess.enable = true`.";
+            };
           };
-          onSuccess = mkOption {
-            type = messageType false;
-            default = {};
-            description = "The message when the service ends well. Off unless `onSuccess.enable = true`.";
-          };
-        };
-      });
-      default = {};
+        }
+      );
+      default = { };
       example = literalExpression ''
         {
           nixos-upgrade = {
@@ -280,65 +314,85 @@ in {
     };
   };
 
-  config = mkIf cfg.enable (if isNixOS then {
-    assertions = [
+  config = mkIf cfg.enable (
+    if isNixOS then
       {
-        assertion = !mail.enable || (mail.to != null && mail.from != null && mail.smtp.host != null);
-        message = "services.eznotify.mail needs to, from and smtp.host.";
+        assertions = [
+          {
+            assertion = !mail.enable || (mail.to != null && mail.from != null && mail.smtp.host != null);
+            message = "services.eznotify.mail needs to, from and smtp.host.";
+          }
+          {
+            assertion = !desktop.enable || desktop.user != null;
+            message = "services.eznotify.desktop needs a user.";
+          }
+        ];
+
+        warnings = optional (
+          !mail.enable && !desktop.enable
+        ) "services.eznotify is enabled but sends nothing: set mail.to or desktop.user (or their enable).";
+
+        systemd.services."eznotify@" = {
+          description = "Message about %i.service";
+          serviceConfig.Type = "oneshot";
+          scriptArgs = "%i";
+          path = [
+            pkgs.coreutils
+            config.systemd.package
+          ]
+          ++ optional mail.enable pkgs.msmtp
+          ++ optionals desktop.enable [
+            pkgs.libnotify
+            pkgs.util-linux
+          ];
+          script = scriptNixOS;
+        };
+
+        # A drop-in on each listed service, not a definition of it in systemd.services: that would
+        # make an empty unit of its own for a service the machine does not have. systemd merges a
+        # drop-in into the unit, and ignores it when there is none.
+        systemd.units = mapAttrs' (
+          name: u:
+          nameValuePair "${name}.service.d/eznotify.conf" {
+            text = ''
+              [Unit]
+              ${optionalString u.onFailure.enable "OnFailure=eznotify@${name}.service"}
+              ${optionalString u.onSuccess.enable "OnSuccess=eznotify@${name}.service"}
+            '';
+          }
+        ) (filterAttrs (_: u: u.onFailure.enable || u.onSuccess.enable) cfg.units);
       }
+    else
       {
-        assertion = !desktop.enable || desktop.user != null;
-        message = "services.eznotify.desktop needs a user.";
+        assertions = [
+          {
+            assertion = !mail.enable || (mail.to != null && mail.from != null && mail.smtp.host != null);
+            message = "services.eznotify.mail needs to, from and smtp.host.";
+          }
+          {
+            assertion = !desktop.enable || desktop.user != null;
+            message = "services.eznotify.desktop needs a user.";
+          }
+        ]
+        ++ mapAttrsToList (name: _: {
+          assertion = config.launchd.daemons.${name}.command != "";
+          message = "services.eznotify.units.${name}: there is no launchd daemon `${name}` with a `command` or `script`.";
+        }) cfg.units;
+
+        warnings = optional (
+          !mail.enable && !desktop.enable
+        ) "services.eznotify is enabled but sends nothing: set mail.to or desktop.user (or their enable).";
+
+        # The daemon keeps its own settings; only what it starts changes: the runner starts it.
+        launchd.daemons = mapAttrs (name: _: {
+          serviceConfig.ProgramArguments = mkForce [
+            "/bin/sh"
+            "-c"
+            "/bin/wait4path /nix/store && exec ${runner} ${escapeShellArg name} ${
+              config.launchd.daemons.${name}.command
+            }"
+          ];
+        }) (filterAttrs (_: u: u.onFailure.enable || u.onSuccess.enable) cfg.units);
       }
-    ];
-
-    warnings = optional (!mail.enable && !desktop.enable)
-      "services.eznotify is enabled but sends nothing: set mail.to or desktop.user (or their enable).";
-
-    systemd.services."eznotify@" = {
-      description = "Message about %i.service";
-      serviceConfig.Type = "oneshot";
-      scriptArgs = "%i";
-      path = [ pkgs.coreutils config.systemd.package ]
-        ++ optional mail.enable pkgs.msmtp
-        ++ optionals desktop.enable [ pkgs.libnotify pkgs.util-linux ];
-      script = scriptNixOS;
-    };
-
-    # A drop-in on each listed service, not a definition of it in systemd.services: that would
-    # make an empty unit of its own for a service the machine does not have. systemd merges a
-    # drop-in into the unit, and ignores it when there is none.
-    systemd.units = mapAttrs' (name: u: nameValuePair "${name}.service.d/eznotify.conf" {
-      text = ''
-        [Unit]
-        ${optionalString u.onFailure.enable "OnFailure=eznotify@${name}.service"}
-        ${optionalString u.onSuccess.enable "OnSuccess=eznotify@${name}.service"}
-      '';
-    }) (filterAttrs (_: u: u.onFailure.enable || u.onSuccess.enable) cfg.units);
-  } else {
-    assertions = [
-      {
-        assertion = !mail.enable || (mail.to != null && mail.from != null && mail.smtp.host != null);
-        message = "services.eznotify.mail needs to, from and smtp.host.";
-      }
-      {
-        assertion = !desktop.enable || desktop.user != null;
-        message = "services.eznotify.desktop needs a user.";
-      }
-    ] ++ mapAttrsToList (name: _: {
-      assertion = config.launchd.daemons.${name}.command != "";
-      message = "services.eznotify.units.${name}: there is no launchd daemon `${name}` with a `command` or `script`.";
-    }) cfg.units;
-
-    warnings = optional (!mail.enable && !desktop.enable)
-      "services.eznotify is enabled but sends nothing: set mail.to or desktop.user (or their enable).";
-
-    # The daemon keeps its own settings; only what it starts changes: the runner starts it.
-    launchd.daemons = mapAttrs (name: _: {
-      serviceConfig.ProgramArguments = mkForce [
-        "/bin/sh" "-c"
-        "/bin/wait4path /nix/store && exec ${runner} ${escapeShellArg name} ${config.launchd.daemons.${name}.command}"
-      ];
-    }) (filterAttrs (_: u: u.onFailure.enable || u.onSuccess.enable) cfg.units);
-  });
+  );
 }

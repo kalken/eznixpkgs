@@ -1,10 +1,15 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   ezsocks-src = pkgs.fetchFromGitHub {
     owner = "kalken";
     repo = "ezsocks";
-    rev = "58f65bbf2cae89c65de242d1161f611f1455350b";          # develop branch
+    rev = "58f65bbf2cae89c65de242d1161f611f1455350b"; # develop branch
     hash = "sha256-AuyfILTbnAbAKbsd5xk1Ti9foZakloRCfqxvSXmnpM8=";
   };
 in

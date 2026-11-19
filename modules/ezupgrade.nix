@@ -1,4 +1,10 @@
-{ config, options, lib, pkgs, ... }:
+{
+  config,
+  options,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -26,36 +32,74 @@ let
   # `[WEEKDAYS] [*-MONTH-DAY] HH:MM[:SS]`: weekdays as `Mon`, `Sat,Sun` or `Mon..Fri`, any of
   # hour, month and day as `*`. Null where it is something else (a list of times, `*/2`, `~`).
   parts = builtins.match "(([A-Za-z][A-Za-z,.-]*) )?(\\*-(\\*|[0-9]{1,2})-(\\*|[0-9]{1,2}) )?([0-9]{1,2}|\\*):([0-9]{2})(:[0-9]{2})?" spec;
-  dayNumbers = { sun = 0; mon = 1; tue = 2; wed = 3; thu = 4; fri = 5; sat = 6; };
+  dayNumbers = {
+    sun = 0;
+    mon = 1;
+    tue = 2;
+    wed = 3;
+    thu = 4;
+    fri = 5;
+    sat = 6;
+  };
   dayNumber = d: dayNumbers.${toLower (substring 0 3 d)} or null;
-  weekdaysOf = text: let
-    one = item: let
-      ends = builtins.match "([A-Za-z]+)(\\.\\.|-)([A-Za-z]+)" item;
-      from = dayNumber (head ends);
-      to = dayNumber (elemAt ends 2);
-    in if ends == null then [ (dayNumber item) ]
-       else if from == null || to == null then [ null ]
-       else genList (i: mod (from + i) 7) (mod (to - from + 7) 7 + 1);
-  in unique (concatMap one (splitString "," text));
+  weekdaysOf =
+    text:
+    let
+      one =
+        item:
+        let
+          ends = builtins.match "([A-Za-z]+)(\\.\\.|-)([A-Za-z]+)" item;
+          from = dayNumber (head ends);
+          to = dayNumber (elemAt ends 2);
+        in
+        if ends == null then
+          [ (dayNumber item) ]
+        else if from == null || to == null then
+          [ null ]
+        else
+          genList (i: mod (from + i) 7) (mod (to - from + 7) 7 + 1);
+    in
+    unique (concatMap one (splitString "," text));
   number = text: toInt (head (builtins.match "0*([0-9]+)" text));
-  launchdEntries = if !launchdOk then [] else let
-    days = if elemAt parts 1 == null then [ null ] else weekdaysOf (elemAt parts 1);
-    when = { Minute = number (elemAt parts 6); }
-      // optionalAttrs (elemAt parts 5 != "*") { Hour = number (elemAt parts 5); }
-      // optionalAttrs (elemAt parts 3 != null && elemAt parts 3 != "*") { Month = number (elemAt parts 3); }
-      // optionalAttrs (elemAt parts 4 != null && elemAt parts 4 != "*") { Day = number (elemAt parts 4); };
-  in map (d: when // optionalAttrs (d != null) { Weekday = d; }) days;
-  launchdOk = parts != null
+  launchdEntries =
+    if !launchdOk then
+      [ ]
+    else
+      let
+        days = if elemAt parts 1 == null then [ null ] else weekdaysOf (elemAt parts 1);
+        when = {
+          Minute = number (elemAt parts 6);
+        }
+        // optionalAttrs (elemAt parts 5 != "*") { Hour = number (elemAt parts 5); }
+        // optionalAttrs (elemAt parts 3 != null && elemAt parts 3 != "*") {
+          Month = number (elemAt parts 3);
+        }
+        // optionalAttrs (elemAt parts 4 != null && elemAt parts 4 != "*") {
+          Day = number (elemAt parts 4);
+        };
+      in
+      map (d: when // optionalAttrs (d != null) { Weekday = d; }) days;
+  launchdOk =
+    parts != null
     && (elemAt parts 1 == null || all (d: d != null) (weekdaysOf (elemAt parts 1)))
     && (elemAt parts 5 == "*" || number (elemAt parts 5) < 24)
     && number (elemAt parts 6) < 60;
 
   # "45m", "1h", "30s" or a plain number of seconds
   delayParts = builtins.match "([0-9]+)([smh]?)" cfg.randomizedDelay;
-  delaySeconds = toInt (head delayParts) * { "" = 1; s = 1; m = 60; h = 3600; }.${elemAt delayParts 1};
+  delaySeconds =
+    toInt (head delayParts)
+    * {
+      "" = 1;
+      s = 1;
+      m = 60;
+      h = 3600;
+    }
+    .${elemAt delayParts 1};
 
   target = "path:${cfg.flake}#${cfg.configuration}";
-in {
+in
+{
   options.services.ezupgrade = {
     enable = mkEnableOption "ezupgrade, a nightly update of the flake's inputs and a rebuild of the system";
 
@@ -140,39 +184,49 @@ in {
       };
     }
 
-    (if isNixOS then {
-      system.autoUpgrade = {
-        enable = true;
-        flake = target;
-        dates = calendar;
-        randomizedDelaySec = "${toString delaySeconds}s";
-      };
+    (
+      if isNixOS then
+        {
+          system.autoUpgrade = {
+            enable = true;
+            flake = target;
+            dates = calendar;
+            randomizedDelaySec = "${toString delaySeconds}s";
+          };
 
-      # With a flake, nixos-upgrade does not touch the lock file, so it is updated first.
-      systemd.services.nixos-upgrade = mkIf cfg.update {
-        path = [ pkgs.util-linux config.nix.package ];
-        preStart = "runuser -u ${escapeShellArg cfg.user} -- nix flake update --flake ${escapeShellArg cfg.flake}";
-      };
-    } else {
-      launchd.daemons.ezupgrade = {
-        script = let
-          brew = "${config.homebrew.prefix}/bin/brew";
-        in ''
-          ${optionalString (delaySeconds > 0) "/bin/sleep $(/usr/bin/jot -r 1 0 ${toString delaySeconds})"}
-          # A step that fails is not the end of the others, but the job as a whole has failed
-          rc=0
-          ${optionalString cfg.homebrew "sudo -u ${escapeShellArg cfg.user} ${brew} update && sudo -u ${escapeShellArg cfg.user} ${brew} upgrade || rc=1"}
-          { ${optionalString cfg.update "sudo -u ${escapeShellArg cfg.user} /nix/var/nix/profiles/default/bin/nix flake update --flake ${escapeShellArg cfg.flake} &&"}
-            /run/current-system/sw/bin/darwin-rebuild switch --flake ${escapeShellArg target}; } || rc=1
-          exit $rc
-        '';
-        serviceConfig = {
-          StartCalendarInterval = launchdEntries;
-          EnvironmentVariables.PATH = "/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-          StandardOutPath = "/var/log/ezupgrade.log";
-          StandardErrorPath = "/var/log/ezupgrade.log";
-        };
-      };
-    })
+          # With a flake, nixos-upgrade does not touch the lock file, so it is updated first.
+          systemd.services.nixos-upgrade = mkIf cfg.update {
+            path = [
+              pkgs.util-linux
+              config.nix.package
+            ];
+            preStart = "runuser -u ${escapeShellArg cfg.user} -- nix flake update --flake ${escapeShellArg cfg.flake}";
+          };
+        }
+      else
+        {
+          launchd.daemons.ezupgrade = {
+            script =
+              let
+                brew = "${config.homebrew.prefix}/bin/brew";
+              in
+              ''
+                ${optionalString (delaySeconds > 0) "/bin/sleep $(/usr/bin/jot -r 1 0 ${toString delaySeconds})"}
+                # A step that fails is not the end of the others, but the job as a whole has failed
+                rc=0
+                ${optionalString cfg.homebrew "sudo -u ${escapeShellArg cfg.user} ${brew} update && sudo -u ${escapeShellArg cfg.user} ${brew} upgrade || rc=1"}
+                { ${optionalString cfg.update "sudo -u ${escapeShellArg cfg.user} /nix/var/nix/profiles/default/bin/nix flake update --flake ${escapeShellArg cfg.flake} &&"}
+                  /run/current-system/sw/bin/darwin-rebuild switch --flake ${escapeShellArg target}; } || rc=1
+                exit $rc
+              '';
+            serviceConfig = {
+              StartCalendarInterval = launchdEntries;
+              EnvironmentVariables.PATH = "/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+              StandardOutPath = "/var/log/ezupgrade.log";
+              StandardErrorPath = "/var/log/ezupgrade.log";
+            };
+          };
+        }
+    )
   ]);
 }

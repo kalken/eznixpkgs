@@ -1,4 +1,10 @@
-{ pkgs, lib, theme ? null, extraConfig ? "", nerdFonts ? false }:
+{
+  pkgs,
+  lib,
+  theme ? null,
+  extraConfig ? "",
+  nerdFonts ? false,
+}:
 let
   initLua = pkgs.writeText "config.lua" ''
     ${lib.optionalString (theme != null) ''
@@ -26,9 +32,14 @@ let
       };
     };
   };
-in pkgs.symlinkJoin {
+in
+pkgs.symlinkJoin {
   name = "ezconf-cli";
-  paths = [ neovimPackage pkgs.nixd pkgs.alejandra ];
+  paths = [
+    neovimPackage
+    pkgs.nixd
+    pkgs.alejandra
+  ];
   postBuild = ''
     ln -s $out/bin/nvim $out/bin/ezconf-cli
   '';
