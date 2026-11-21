@@ -291,7 +291,7 @@ cmd_add() { # [--install | --installed] [exe]
   installer=$(readlink -f "$installer")
 
   if [ -z "$mode" ]; then
-    reply=$(ask_mode "Is $(basename "$installer") an installer to install, or a game to add?" \
+    reply=$(ask_mode "Is $(basename "$installer") an installer or a game to add?" \
       "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")") || exit 1
     mode=${reply%%|*}
     version=${reply#*|}
