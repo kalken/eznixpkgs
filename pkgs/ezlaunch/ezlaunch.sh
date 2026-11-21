@@ -107,11 +107,11 @@ ask_mode() { # question, current Proton version
       # yad shows the buttons in the order given: Cancel on the left, Install on the right
       reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width 460 \
         --field "Proton version:CB" "$choices" \
-        --button Cancel:1 --button "Already installed:2" --button Install:0) || rc=$?
+        --button Cancel:1 --button Add:2 --button Install:0) || rc=$?
       reply=${reply%%|*}
     else
       yad --title ezlaunch --text "$1" --no-markup --center --width 420 \
-        --button Cancel:1 --button "Already installed:2" --button Install:0 || rc=$?
+        --button Cancel:1 --button Add:2 --button Install:0 || rc=$?
       reply=
     fi
     case $rc in
@@ -291,7 +291,7 @@ cmd_add() { # [--install | --installed] [exe]
   installer=$(readlink -f "$installer")
 
   if [ -z "$mode" ]; then
-    reply=$(ask_mode "Is $(basename "$installer") an installer, or a game that is already installed?" \
+    reply=$(ask_mode "Is $(basename "$installer") an installer to install, or a game to add?" \
       "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")") || exit 1
     mode=${reply%%|*}
     version=${reply#*|}
