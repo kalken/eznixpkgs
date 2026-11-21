@@ -7,11 +7,11 @@ Install and launch Windows games with Proton, without Steam or a launcher app. D
 - Double-click a `.exe`: it runs in a new prefix with [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher), then you pick the game's exe and a start menu entry (with the exe's icon) is written
 - One prefix per game, in `~/.local/share/ezlaunch/games/<name>/`
 - Any Proton option works: settings are plain `KEY=value` environment variables
-- Right-click **Settings** opens a small menu:
-  - **Options**: checklist of common options (HDR, Wayland, NTSync, NVAPI, MangoHud, GameMode, ...) and a free-text field for any other variable
-  - **Proton version**: choose from the versions installed in `~/.local/share/Steam/compatibilitytools.d`
-  - **Change executable**: pick another exe for the game (refreshes the icon and the menu entry)
-  - **Change icon**: pick an image (png, svg), an `.ico` or an `.exe` to take the icon from
+- Right-click **Settings** opens one window with everything for the game, and a Save button:
+  - checkboxes for common options (HDR, Wayland, NTSync, NVAPI, MangoHud, GameMode, ...)
+  - the Proton version, chosen from the versions installed in `~/.local/share/Steam/compatibilitytools.d`
+  - the game's executable and its icon (an image, an `.ico` or an `.exe`), each with a file chooser
+  - a text box for any other variable
 - Right-click **Stop**: closes the game if it is running
 - Right-click **Remove**: deletes the game, its prefix and its menu entry
 - In a terminal, leave out the game name (`ezlaunch run`, `settings`, `exe`, `remove`) to choose it from an arrow-key menu (fzf)

@@ -102,59 +102,6 @@ ask_yesno() { # question
   esac
 }
 
-ask_edit() { # title, text
-  case $GUI in
-    zenity) printf '%s\n' "$2" | zenity --text-info --editable --title "$1" --width 700 --height 450 ;;
-    kdialog) kdialog --title ezlaunch --textinputbox "$1" "$2" 700 450 ;;
-    *) die "this needs a graphical session" ;;
-  esac
-}
-
-# prompt, then key label on|off triplets. Prints the checked keys, one per line.
-ask_checklist() {
-  local prompt=$1
-  shift
-  local args=()
-  case $GUI in
-    zenity)
-      while [ $# -gt 0 ]; do
-        if [ "$3" = on ]; then args+=(TRUE "$1" "$2"); else args+=(FALSE "$1" "$2"); fi
-        shift 3
-      done
-      zenity --list --checklist --title ezlaunch --text "$prompt" --width 640 --height 640 \
-        --column "" --column Key --column Setting --hide-column 2 --print-column 2 \
-        --separator $'\n' "${args[@]}"
-      ;;
-    kdialog) kdialog --title ezlaunch --separate-output --checklist "$prompt" "$@" ;;
-    *) die "this needs a graphical session" ;;
-  esac
-}
-
-# prompt, then name on|off pairs. Prints the chosen name.
-ask_radio() {
-  local prompt=$1
-  shift
-  local args=()
-  case $GUI in
-    zenity)
-      while [ $# -gt 0 ]; do
-        if [ "$2" = on ]; then args+=(TRUE "$1"); else args+=(FALSE "$1"); fi
-        shift 2
-      done
-      zenity --list --radiolist --title ezlaunch --text "$prompt" --width 520 --height 480 \
-        --column "" --column Choice "${args[@]}"
-      ;;
-    kdialog)
-      while [ $# -gt 0 ]; do
-        args+=("$1" "$1" "$2")
-        shift 2
-      done
-      kdialog --title ezlaunch --radiolist "$prompt" "${args[@]}"
-      ;;
-    *) die "this needs a graphical session" ;;
-  esac
-}
-
 # Arrow-key menu of the games, for commands given no name
 pick_game() { # [list of games, default all]
   local games=${1:-}
@@ -323,39 +270,20 @@ cmd_add() { # [installer]
   info "Added $name to the start menu."
 }
 
-cmd_exe() { # name
-  local name=${1:-} dir exe icon
-  if [ -z "$name" ]; then name=$(pick_game); fi
-  check_name "$name"
-  dir="$GAMES/$name"
-  [ -f "$dir/config" ] || die "unknown game: $name"
-  [ -n "$GUI" ] || die "this needs a graphical session. Edit EZLAUNCH_EXE in $dir/config instead."
+# The apply_ functions change one part of a game's config. They do not ask anything.
 
-  exe=$(getv EZLAUNCH_EXE "$dir/config")
-  exe=$(ask_file "Choose the game executable" "$(dirname "${exe:-$dir/prefix/drive_c/x}")/" "$EXE_FILTER")
-  [ -f "$exe" ] || die "not a file: $exe"
-
+# Make exe the game's executable, with the icon taken from it
+apply_exe() { # name, exe
+  local dir="$GAMES/$1"
   rm -f "$dir"/icon.*
-  extract_icon "$exe" "$dir/icon.png"
-
+  extract_icon "$2" "$dir/icon.png"
   { grep -v '^EZLAUNCH_EXE=' "$dir/config" || true; } >"$dir/config.new"
-  printf 'EZLAUNCH_EXE=%s\n' "$exe" >>"$dir/config.new"
+  printf 'EZLAUNCH_EXE=%s\n' "$2" >>"$dir/config.new"
   mv "$dir/config.new" "$dir/config"
-  # Also gives a game added earlier the current menu actions
-  write_desktop "$name" "$(icon_for "$dir")"
-  info "$name now starts $(basename "$exe")."
 }
 
-cmd_icon() { # name
-  local name=${1:-} dir src new
-  if [ -z "$name" ]; then name=$(pick_game); fi
-  check_name "$name"
-  dir="$GAMES/$name"
-  [ -f "$dir/config" ] || die "unknown game: $name"
-  [ -n "$GUI" ] || die "this needs a graphical session"
-
-  src=$(ask_file "Choose an icon (image, .ico or .exe)" "$HOME/")
-  [ -f "$src" ] || die "not a file: $src"
+apply_icon() { # name, an image, .ico or .exe
+  local dir="$GAMES/$1" src=$2 new
   case "${src,,}" in
     *.png | *.svg | *.xpm)
       new="$dir/new-icon.${src##*.}"
@@ -373,6 +301,68 @@ cmd_icon() { # name
   [ -f "$new" ] || die "no icon found in $src"
   rm -f "$dir"/icon.*
   mv "$new" "$dir/icon.${new##*.}"
+}
+
+apply_proton() { # name, version
+  local cfg="$GAMES/$1/config"
+  { grep -v '^PROTONPATH=' "$cfg" || true; } >"$cfg.new"
+  # Only a version other than the default is saved for the game
+  if [ "$2" != "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")" ]; then
+    echo "PROTONPATH=$2" >>"$cfg.new"
+  fi
+  mv "$cfg.new" "$cfg"
+}
+
+apply_options() { # name, checked keys one per line, custom variables
+  local selected=$2 custom=$3 cfg="$GAMES/$1/config"
+  local inherited=("$SYSTEM_CONF" "$USER_CONF") entry key on off label
+  {
+    echo "EZLAUNCH_EXE=$(getv EZLAUNCH_EXE "$cfg")"
+    # The Proton version has its own field, keep it
+    if grep -q '^PROTONPATH=' "$cfg"; then echo "PROTONPATH=$(getv PROTONPATH "$cfg")"; fi
+    for entry in "${KNOWN[@]}"; do
+      IFS='|' read -r key on off label <<<"$entry"
+      if grep -qx "$key" <<<"$selected"; then
+        if [ "$(getv "$key" "${inherited[@]}")" != "$on" ]; then echo "$key=$on"; fi
+      elif [ "$(getv "$key" "${inherited[@]}")" = "$on" ]; then
+        echo "$key=$off"
+      fi
+    done
+    if [ -n "$custom" ]; then printf '%s\n' "$custom"; fi
+  } >"$cfg.new"
+  mv "$cfg.new" "$cfg"
+}
+
+cmd_exe() { # name
+  local name=${1:-} dir exe
+  if [ -z "$name" ]; then name=$(pick_game); fi
+  check_name "$name"
+  dir="$GAMES/$name"
+  [ -f "$dir/config" ] || die "unknown game: $name"
+  [ -n "$GUI" ] || die "this needs a graphical session. Edit EZLAUNCH_EXE in $dir/config instead."
+
+  exe=$(getv EZLAUNCH_EXE "$dir/config")
+  exe=$(ask_file "Choose the game executable" "$(dirname "${exe:-$dir/prefix/drive_c/x}")/" "$EXE_FILTER")
+  [ -f "$exe" ] || die "not a file: $exe"
+
+  apply_exe "$name" "$exe"
+  # Also gives a game added earlier the current menu actions
+  write_desktop "$name" "$(icon_for "$dir")"
+  info "$name now starts $(basename "$exe")."
+}
+
+cmd_icon() { # name
+  local name=${1:-} dir src
+  if [ -z "$name" ]; then name=$(pick_game); fi
+  check_name "$name"
+  dir="$GAMES/$name"
+  [ -f "$dir/config" ] || die "unknown game: $name"
+  [ -n "$GUI" ] || die "this needs a graphical session"
+
+  src=$(ask_file "Choose an icon (image, .ico or .exe)" "$HOME/")
+  [ -f "$src" ] || die "not a file: $src"
+
+  apply_icon "$name" "$src"
   write_desktop "$name" "$(icon_for "$dir")"
   info "Changed the icon of $name."
 }
@@ -398,84 +388,89 @@ cmd_run() { # name, args...
   launch "$EZLAUNCH_EXE" ${EZLAUNCH_ARGS:-} "$@"
 }
 
-settings_options() { # name
-  local name=${1:-} cfg
+# All the settings of a game in one window
+cmd_settings() { # [name]
+  local name=${1:-} dir cfg
   if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
-  cfg="$GAMES/$name/config"
+  dir="$GAMES/$name"
+  cfg="$dir/config"
   [ -f "$cfg" ] || die "unknown game: $name"
-  [ -n "$GUI" ] || die "settings needs a graphical session. Edit $cfg instead."
+  command -v yad >/dev/null || die "settings needs yad. Edit $cfg instead."
+  [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || die "settings needs a graphical session. Edit $cfg instead."
 
-  local inherited=("$SYSTEM_CONF" "$USER_CONF") all=("$SYSTEM_CONF" "$USER_CONF" "$cfg")
-  local entry key on off label state items=() managed=EZLAUNCH_EXE\|PROTONPATH
+  local all=("$SYSTEM_CONF" "$USER_CONF" "$cfg")
+  local fields=() entry key on off label state managed='EZLAUNCH_EXE|PROTONPATH'
   for entry in "${KNOWN[@]}"; do
     IFS='|' read -r key on off label <<<"$entry"
-    state=off
-    if [ "$(getv "$key" "${all[@]}")" = "$on" ]; then state=on; fi
-    items+=("$key" "$label" "$state")
+    state=FALSE
+    if [ "$(getv "$key" "${all[@]}")" = "$on" ]; then state=TRUE; fi
+    fields+=(--field "$label:CHK" "$state")
     managed+="|$key"
   done
-  local selected
-  selected=$(ask_checklist "Settings for $name" "${items[@]}")
 
-  local custom
-  custom=$({ grep -Ev "^($managed)=" "$cfg" || true; })
-  custom=$(ask_edit "Custom variables (KEY=value, one per line)" "$custom")
-
-  {
-    echo "EZLAUNCH_EXE=$(getv EZLAUNCH_EXE "$cfg")"
-    # The Proton version is set in its own dialog, keep it
-    if grep -q '^PROTONPATH=' "$cfg"; then echo "PROTONPATH=$(getv PROTONPATH "$cfg")"; fi
-    for entry in "${KNOWN[@]}"; do
-      IFS='|' read -r key on off label <<<"$entry"
-      if grep -qx "$key" <<<"$selected"; then
-        if [ "$(getv "$key" "${inherited[@]}")" != "$on" ]; then echo "$key=$on"; fi
-      elif [ "$(getv "$key" "${inherited[@]}")" = "$on" ]; then
-        echo "$key=$off"
-      fi
-    done
-    if [ -n "$custom" ]; then printf '%s\n' "$custom"; fi
-  } >"$cfg.new"
-  mv "$cfg.new" "$cfg"
-  info "Saved the settings for $name."
-}
-
-settings_proton() { # name
-  local name=$1 cfg="$GAMES/$1/config" current version dir versions=() pairs=()
-  current=$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF" "$cfg")
-  for dir in "$TOOLS"/*/; do
-    if [ -d "$dir" ]; then versions+=("$(basename "$dir")"); fi
+  # The Proton versions that are installed, with the current one marked
+  local current versions=() version versions_field=
+  current=$(getv PROTONPATH "${all[@]}")
+  for version in "$TOOLS"/*/; do
+    if [ -d "$version" ]; then versions+=("$(basename "$version")"); fi
   done
   if [ -n "$current" ] && [[ ! " ${versions[*]} " == *" $current "* ]]; then versions+=("$current"); fi
-  [ ${#versions[@]} -gt 0 ] || die "no Proton found in $TOOLS. Install one with ezproton."
-  for dir in "${versions[@]}"; do
-    if [ "$dir" = "$current" ]; then pairs+=("$dir" on); else pairs+=("$dir" off); fi
+  for version in "${versions[@]}"; do
+    if [ "$version" = "$current" ]; then version="^$version"; fi
+    versions_field+="${versions_field:+!}$version"
   done
-  version=$(ask_radio "Proton version for $name" "${pairs[@]}")
 
-  { grep -v '^PROTONPATH=' "$cfg" || true; } >"$cfg.new"
-  # Only a version other than the default is saved for the game
-  if [ "$version" != "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")" ]; then
-    echo "PROTONPATH=$version" >>"$cfg.new"
+  local current_exe current_icon custom_in
+  current_exe=$(getv EZLAUNCH_EXE "$cfg")
+  current_icon=$(icon_for "$dir")
+  if [ ! -f "$current_icon" ]; then current_icon=; fi
+  # yad takes line breaks in a text field as \n
+  custom_in=$({ grep -Ev "^($managed)=" "$cfg" || true; })
+  custom_in=${custom_in//$'\n'/\\n}
+
+  local out
+  out=$(yad --form --title ezlaunch --text "Settings for $name" --width 600 \
+    --file-filter "Programs | *.exe *.EXE" \
+    --file-filter "Images and icons | *.png *.svg *.ico *.xpm *.exe *.EXE" \
+    --file-filter "All files | *" \
+    "${fields[@]}" \
+    --field "Proton version:CB" "$versions_field" \
+    --field "Executable:FL" "$current_exe" \
+    --field "Icon:FL" "$current_icon" \
+    --field "Custom variables, KEY=value one per line:TXT" "$custom_in" \
+    --button Save:0 --button Cancel:1 --separator '|') || exit 0
+
+  # One value per field, in order. The custom variables come last and may hold a |.
+  local parts=() n=${#KNOWN[@]} i selected='' exe icon custom
+  IFS='|' read -ra parts <<<"$out"
+  for ((i = 0; i < n; i++)); do
+    IFS='|' read -r key _ <<<"${KNOWN[i]}"
+    if [ "${parts[i]:-}" = TRUE ]; then selected+="$key"$'\n'; fi
+  done
+  version=${parts[n]:-}
+  exe=${parts[n + 1]:-}
+  icon=${parts[n + 2]:-}
+  custom=$(
+    IFS='|'
+    echo "${parts[*]:n+3}"
+  )
+  custom=${custom//\\n/$'\n'}
+  # yad ends the text with a line break, which would add a blank line at every save
+  custom=$(printf '%s' "$custom")
+
+  apply_options "$name" "$selected" "$custom"
+  if [ -n "$version" ]; then apply_proton "$name" "$version"; fi
+  if [ -n "$exe" ] && [ "$exe" != "$current_exe" ]; then
+    [ -f "$exe" ] || die "not a file: $exe"
+    apply_exe "$name" "$exe"
   fi
-  mv "$cfg.new" "$cfg"
-  info "$name now uses $version."
-}
-
-cmd_settings() { # [name]
-  local name=${1:-} choice
-  if [ -z "$name" ]; then name=$(pick_game); fi
-  check_name "$name"
-  [ -f "$GAMES/$name/config" ] || die "unknown game: $name"
-  [ -n "$GUI" ] || die "settings needs a graphical session. Edit $GAMES/$name/config instead."
-
-  choice=$(ask_radio "Settings for $name" "Options" on "Proton version" off "Change executable" off "Change icon" off)
-  case $choice in
-    "Proton version") settings_proton "$name" ;;
-    "Change executable") cmd_exe "$name" ;;
-    "Change icon") cmd_icon "$name" ;;
-    *) settings_options "$name" ;;
-  esac
+  if [ -n "$icon" ] && [ "$icon" != "$current_icon" ]; then
+    [ -f "$icon" ] || die "not a file: $icon"
+    apply_icon "$name" "$icon"
+  fi
+  write_desktop "$name" "$(icon_for "$dir")"
+  info "Saved the settings for $name."
 }
 
 cmd_remove() { # name
@@ -554,7 +549,7 @@ Usage: ezlaunch <command>
 
   add [installer.exe]   run an installer in a new prefix and add the game to the start menu
   run [game] [args]     start a game
-  settings [game]       options, Proton version, executable and icon of a game
+  settings [game]       all settings of a game in one window
   exe [game]            choose another executable for a game
   icon [game]           choose another icon for a game
   remove [game]         delete a game, its prefix and its start menu entry
