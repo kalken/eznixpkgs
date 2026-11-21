@@ -333,40 +333,6 @@ apply_options() { # name, checked keys one per line, custom variables
   mv "$cfg.new" "$cfg"
 }
 
-cmd_exe() { # name
-  local name=${1:-} dir exe
-  if [ -z "$name" ]; then name=$(pick_game); fi
-  check_name "$name"
-  dir="$GAMES/$name"
-  [ -f "$dir/config" ] || die "unknown game: $name"
-  [ -n "$GUI" ] || die "this needs a graphical session. Edit EZLAUNCH_EXE in $dir/config instead."
-
-  exe=$(getv EZLAUNCH_EXE "$dir/config")
-  exe=$(ask_file "Choose the game executable" "$(dirname "${exe:-$dir/prefix/drive_c/x}")/" "$EXE_FILTER")
-  [ -f "$exe" ] || die "not a file: $exe"
-
-  apply_exe "$name" "$exe"
-  # Also gives a game added earlier the current menu actions
-  write_desktop "$name" "$(icon_for "$dir")"
-  info "$name now starts $(basename "$exe")."
-}
-
-cmd_icon() { # name
-  local name=${1:-} dir src
-  if [ -z "$name" ]; then name=$(pick_game); fi
-  check_name "$name"
-  dir="$GAMES/$name"
-  [ -f "$dir/config" ] || die "unknown game: $name"
-  [ -n "$GUI" ] || die "this needs a graphical session"
-
-  src=$(ask_file "Choose an icon (image, .ico or .exe)" "$HOME/")
-  [ -f "$src" ] || die "not a file: $src"
-
-  apply_icon "$name" "$src"
-  write_desktop "$name" "$(icon_for "$dir")"
-  info "Changed the icon of $name."
-}
-
 cmd_run() { # name, args...
   local name=${1:-} dir
   shift || true
@@ -550,14 +516,12 @@ Usage: ezlaunch <command>
   add [installer.exe]   run an installer in a new prefix and add the game to the start menu
   run [game] [args]     start a game
   settings [game]       all settings of a game in one window
-  exe [game]            choose another executable for a game
-  icon [game]           choose another icon for a game
   remove [game]         delete a game, its prefix and its start menu entry
   list                  list the games, marking the ones that are running
   running               list the games that are running
   stop [game]           close a running game
 
-Without a game name, run, settings, exe, icon, remove and stop show a menu to choose from.
+Without a game name, run, settings, remove and stop show a menu to choose from.
 
 Defaults for new games: $SYSTEM_CONF and $USER_CONF (KEY=value lines).
 EOF
@@ -567,8 +531,6 @@ case "${1:-}" in
   add) shift && cmd_add "$@" ;;
   run) shift && cmd_run "$@" ;;
   settings) shift && cmd_settings "$@" ;;
-  exe) shift && cmd_exe "$@" ;;
-  icon) shift && cmd_icon "$@" ;;
   remove) shift && cmd_remove "$@" ;;
   list) cmd_list ;;
   running) cmd_running ;;

@@ -14,7 +14,7 @@ Install and launch Windows games with Proton, without Steam or a launcher app. D
   - a text box for any other variable
 - Right-click **Stop**: closes the game if it is running
 - Right-click **Remove**: deletes the game, its prefix and its menu entry
-- In a terminal, leave out the game name (`ezlaunch run`, `settings`, `exe`, `remove`) to choose it from an arrow-key menu (fzf)
+- In a terminal, leave out the game name (`ezlaunch run`, `settings`, `remove`, `stop`) to choose it from an arrow-key menu (fzf)
 - `ezlaunch list` shows the games and marks the running ones, `ezlaunch running` lists only those, `ezlaunch stop` closes one (it finds a game's processes by its prefix)
 - A tray icon shows the running game (its icon and name) with **Stop** and **Settings** in its menu, and disappears when the game ends. Nothing runs in the background otherwise.
 
@@ -62,7 +62,7 @@ Settings are layered, later wins: `/etc/ezlaunch/config`, `~/.config/ezlaunch/co
 - Set `EZLAUNCH_TRAY=0` to turn the tray icon off. It needs `yad` (bundled, run through XWayland on Wayland) and a desktop with a system tray: KDE works, GNOME needs the AppIndicator extension.
 - Special variables in a game's `config`: `EZLAUNCH_EXE` (the game's exe), `EZLAUNCH_ARGS` (arguments for the game) and `EZLAUNCH_WRAPPER` (a command prefix, such as `gamemoderun`).
 - Dialogs use `kdialog` on KDE and `zenity` otherwise. zenity is bundled; kdialog is used if it is installed.
-- Command line: `ezlaunch add [setup.exe]`, `run <game>`, `settings <game>`, `exe <game>`, `icon <game>`, `remove <game>`, `list`, `running`, `stop <game>`.
+- Command line: `ezlaunch add [setup.exe]`, `run <game>`, `settings <game>`, `remove <game>`, `list`, `running`, `stop <game>`.
 - Start menu entries are `~/.local/share/applications/ezlaunch-<name>.desktop`. Right-click actions need a desktop that supports them (KDE, GNOME, XFCE, ...); some launchers such as rofi ignore them.
 - Installers run through Proton. Nothing is extracted by hand, so registry entries and redistributables work as usual.
 
