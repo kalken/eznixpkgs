@@ -15,7 +15,7 @@ in
 
     user = lib.mkOption {
       type = lib.types.str;
-      description = "User account to run ezproton as (must have a Steam installation).";
+      description = "User account to run ezproton as.";
       example = "alice";
     };
 

@@ -9,7 +9,7 @@ Automatically downloads and installs the latest [Proton-GE](https://github.com/G
 - SHA-512 checksum verification before installing
 - Skips download if the current version is already installed
 - Caches each variant's tarball under `/tmp/ezproton` for the session — interrupted downloads are detected and re-fetched
-- Exits early with a clear message if Steam is not installed for the user
+- Works without Steam installed: creates the directory itself, and Steam finds the builds on its first start
 
 ## 🚀 Quick Start
 
@@ -99,7 +99,7 @@ services.ezproton = {
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `services.ezproton.enable` | bool | `false` | Enable the ezproton service |
-| `services.ezproton.user` | str | — | User account to run as — must have Steam installed |
+| `services.ezproton.user` | str | — | User account to run as |
 | `services.ezproton.variants` | list of `"ge"` \| `"cachyos"` | `[ "ge" "cachyos" ]` | Which Proton variant(s) to install and keep updated |
 | `services.ezproton.versions.ge` | list of str | `[]` | Specific Proton-GE tags to install (e.g. `"GE-Proton10-5"`), next to the `*-Latest` builds |
 | `services.ezproton.versions.cachyos` | list of str | `[]` | Specific CachyOS Proton tags to install |
@@ -108,8 +108,7 @@ services.ezproton = {
 
 ## 📝 Notes
 
-- Steam must be installed and have been launched at least once for `~/.steam/root` to exist.
-- Installs are placed at `~/.steam/root/compatibilitytools.d/GE-Proton-Latest` and/or `~/.steam/root/compatibilitytools.d/Proton-CachyOS-Latest`.
+- Installs are placed at `~/.local/share/Steam/compatibilitytools.d/GE-Proton-Latest` and/or `~/.local/share/Steam/compatibilitytools.d/Proton-CachyOS-Latest` (the same place `~/.steam/root` points to).
 - The internal tool key is pinned to the `*-Latest` name so Steam selections survive upgrades; the installed tag is recorded in `.ezproton-version` inside the install directory.
 - `ezproton --list` (optionally with `--variant`) prints the 30 most recent release tags.
 - To install a specific release from the command line, use `ezproton --variant ge --release GE-Proton10-5`. It is installed next to the `*-Latest` build under its own tag name.

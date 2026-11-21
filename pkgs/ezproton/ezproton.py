@@ -334,10 +334,9 @@ def main():
         return
 
     home = os.environ.get("HOME") or error("HOME environment variable not set.")
-    steam_dir = os.path.join(home, ".steam")
-    if not os.path.isdir(steam_dir):
-        error(f"Steam directory not found at {steam_dir} — is Steam installed for this user?")
-    install_dir = os.path.join(steam_dir, "root", "compatibilitytools.d")
+    # ~/.steam/root is a symlink Steam creates to this directory; using the real path
+    # works before Steam is installed, and Steam picks the builds up on first start.
+    install_dir = os.path.join(home, ".local", "share", "Steam", "compatibilitytools.d")
 
     for variant in variants:
         install_variant(variant, install_dir, args.release)
