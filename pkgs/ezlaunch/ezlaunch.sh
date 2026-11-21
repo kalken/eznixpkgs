@@ -65,7 +65,7 @@ info() {
 ask_text() { # prompt, default
   local reply
   case $GUI in
-    zenity) zenity --entry --title ezlaunch --text "$1" --entry-text "$2" ;;
+    zenity) zenity --entry --title ezlaunch --width 480 --text "$1" --entry-text "$2" ;;
     kdialog) kdialog --title ezlaunch --inputbox "$1" "$2" ;;
     *)
       read -r -p "$1 [$2] " reply
@@ -104,8 +104,8 @@ ask_yesno() { # question
 
 ask_edit() { # title, text
   case $GUI in
-    zenity) printf '%s\n' "$2" | zenity --text-info --editable --title "$1" --width 500 --height 300 ;;
-    kdialog) kdialog --title ezlaunch --textinputbox "$1" "$2" 500 300 ;;
+    zenity) printf '%s\n' "$2" | zenity --text-info --editable --title "$1" --width 700 --height 450 ;;
+    kdialog) kdialog --title ezlaunch --textinputbox "$1" "$2" 700 450 ;;
     *) die "this needs a graphical session" ;;
   esac
 }
@@ -121,7 +121,7 @@ ask_checklist() {
         if [ "$3" = on ]; then args+=(TRUE "$1" "$2"); else args+=(FALSE "$1" "$2"); fi
         shift 3
       done
-      zenity --list --checklist --title ezlaunch --text "$prompt" --width 360 --height 440 \
+      zenity --list --checklist --title ezlaunch --text "$prompt" --width 640 --height 640 \
         --column "" --column Key --column Setting --hide-column 2 --print-column 2 \
         --separator $'\n' "${args[@]}"
       ;;
@@ -141,7 +141,7 @@ ask_radio() {
         if [ "$2" = on ]; then args+=(TRUE "$1"); else args+=(FALSE "$1"); fi
         shift 2
       done
-      zenity --list --radiolist --title ezlaunch --text "$prompt" --width 360 --height 300 \
+      zenity --list --radiolist --title ezlaunch --text "$prompt" --width 520 --height 480 \
         --column "" --column Choice "${args[@]}"
       ;;
     kdialog)
@@ -388,29 +388,14 @@ settings_options() { # name
   local selected
   selected=$(ask_checklist "Settings for $name" "${items[@]}")
 
-  local version current versions=() dir pairs=()
-  current=$(getv PROTONPATH "${all[@]}")
-  for dir in "$TOOLS"/*/; do
-    if [ -d "$dir" ]; then versions+=("$(basename "$dir")"); fi
-  done
-  if [ -n "$current" ] && [[ ! " ${versions[*]} " == *" $current "* ]]; then versions+=("$current"); fi
-  version=$current
-  if [ ${#versions[@]} -gt 0 ]; then
-    for dir in "${versions[@]}"; do
-      if [ "$dir" = "$current" ]; then pairs+=("$dir" on); else pairs+=("$dir" off); fi
-    done
-    version=$(ask_radio "Proton version" "${pairs[@]}")
-  fi
-
   local custom
   custom=$({ grep -Ev "^($managed)=" "$cfg" || true; })
   custom=$(ask_edit "Custom variables (KEY=value, one per line)" "$custom")
 
   {
     echo "EZLAUNCH_EXE=$(getv EZLAUNCH_EXE "$cfg")"
-    if [ -n "$version" ] && [ "$version" != "$(getv PROTONPATH "${inherited[@]}")" ]; then
-      echo "PROTONPATH=$version"
-    fi
+    # The Proton version is set in its own dialog, keep it
+    if grep -q '^PROTONPATH=' "$cfg"; then echo "PROTONPATH=$(getv PROTONPATH "$cfg")"; fi
     for entry in "${KNOWN[@]}"; do
       IFS='|' read -r key on off label <<<"$entry"
       if grep -qx "$key" <<<"$selected"; then
@@ -425,6 +410,28 @@ settings_options() { # name
   info "Saved the settings for $name."
 }
 
+settings_proton() { # name
+  local name=$1 cfg="$GAMES/$1/config" current version dir versions=() pairs=()
+  current=$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF" "$cfg")
+  for dir in "$TOOLS"/*/; do
+    if [ -d "$dir" ]; then versions+=("$(basename "$dir")"); fi
+  done
+  if [ -n "$current" ] && [[ ! " ${versions[*]} " == *" $current "* ]]; then versions+=("$current"); fi
+  [ ${#versions[@]} -gt 0 ] || die "no Proton found in $TOOLS. Install one with ezproton."
+  for dir in "${versions[@]}"; do
+    if [ "$dir" = "$current" ]; then pairs+=("$dir" on); else pairs+=("$dir" off); fi
+  done
+  version=$(ask_radio "Proton version for $name" "${pairs[@]}")
+
+  { grep -v '^PROTONPATH=' "$cfg" || true; } >"$cfg.new"
+  # Only a version other than the default is saved for the game
+  if [ "$version" != "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")" ]; then
+    echo "PROTONPATH=$version" >>"$cfg.new"
+  fi
+  mv "$cfg.new" "$cfg"
+  info "$name now uses $version."
+}
+
 cmd_settings() { # [name]
   local name=${1:-} choice
   if [ -z "$name" ]; then name=$(pick_game); fi
@@ -432,8 +439,9 @@ cmd_settings() { # [name]
   [ -f "$GAMES/$name/config" ] || die "unknown game: $name"
   [ -n "$GUI" ] || die "settings needs a graphical session. Edit $GAMES/$name/config instead."
 
-  choice=$(ask_radio "Settings for $name" "Options" on "Change executable" off "Change icon" off)
+  choice=$(ask_radio "Settings for $name" "Options" on "Proton version" off "Change executable" off "Change icon" off)
   case $choice in
+    "Proton version") settings_proton "$name" ;;
     "Change executable") cmd_exe "$name" ;;
     "Change icon") cmd_icon "$name" ;;
     *) settings_options "$name" ;;

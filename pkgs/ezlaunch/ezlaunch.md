@@ -8,7 +8,8 @@ Install and launch Windows games with Proton, without Steam or a launcher app. D
 - One prefix per game, in `~/.local/share/ezlaunch/games/<name>/`
 - Any Proton option works: settings are plain `KEY=value` environment variables
 - Right-click **Settings** opens a small menu:
-  - **Options**: checklist of common options (HDR, Wayland, NTSync, NVAPI, MangoHud, GameMode, ...), Proton version, and a free-text field for any other variable
+  - **Options**: checklist of common options (HDR, Wayland, NTSync, NVAPI, MangoHud, GameMode, ...) and a free-text field for any other variable
+  - **Proton version**: choose from the versions installed in `~/.local/share/Steam/compatibilitytools.d`
   - **Change executable**: pick another exe for the game (refreshes the icon and the menu entry)
   - **Change icon**: pick an image (png, svg), an `.ico` or an `.exe` to take the icon from
 - Right-click **Stop**: closes the game if it is running
