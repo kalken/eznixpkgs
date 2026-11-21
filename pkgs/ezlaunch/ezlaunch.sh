@@ -216,9 +216,10 @@ launch() { # program, args...
   fi
   # With a tray icon, stay alive while the game runs and remove the icon when it ends.
   # The icon has no WINEPREFIX, so its menu commands are not counted as the game.
+  # yad has no tray icon on Wayland, so it runs through XWayland.
   if [ -n "${TRAY_NAME:-}" ]; then
     local status=0
-    env -u WINEPREFIX yad --notification --image "$TRAY_ICON" --text "$TRAY_NAME" --command menu \
+    env -u WINEPREFIX GDK_BACKEND=x11 yad --notification --image "$TRAY_ICON" --text "$TRAY_NAME" --command menu \
       --menu "Stop!ezlaunch stop \"$TRAY_NAME\"|Settings!ezlaunch settings \"$TRAY_NAME\"" &
     TRAY_PID=$!
     trap 'kill "$TRAY_PID" 2>/dev/null || true' EXIT
