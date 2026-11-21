@@ -16,7 +16,7 @@ Install and launch Windows games with Proton, without Steam or a launcher app. D
 - Right-click **Remove**: deletes the game, its prefix and its menu entry
 - In a terminal, leave out the game name (`ezlaunch run`, `settings`, `exe`, `remove`) to choose it from an arrow-key menu (fzf)
 - `ezlaunch list` shows the games and marks the running ones, `ezlaunch running` lists only those, `ezlaunch stop` closes one (it finds a game's processes by its prefix)
-- Nothing runs in the background: the menu entry starts a short script that hands over to `umu-run`
+- A tray icon shows the running game (its icon and name) with **Stop** and **Settings** in its menu, and disappears when the game ends. Nothing runs in the background otherwise.
 
 ## 🚀 Quick Start
 
@@ -59,6 +59,7 @@ Settings are layered, later wins: `/etc/ezlaunch/config`, `~/.config/ezlaunch/co
 
 - `PROTONPATH` can be a name from `~/.local/share/Steam/compatibilitytools.d` (what ezproton installs), a full path, or a version umu downloads itself.
 - The screen is kept awake while a game runs, since a controller does not count as activity for the idle timer: `kde-inhibit` on KDE, `systemd-inhibit` elsewhere (used if installed). Set `EZLAUNCH_INHIBIT=0` in the defaults or a game's custom variables to turn it off.
+- Set `EZLAUNCH_TRAY=0` to turn the tray icon off. It needs `yad` (bundled) and a desktop with a system tray: KDE works, GNOME needs the AppIndicator extension.
 - Special variables in a game's `config`: `EZLAUNCH_EXE` (the game's exe), `EZLAUNCH_ARGS` (arguments for the game) and `EZLAUNCH_WRAPPER` (a command prefix, such as `gamemoderun`).
 - Dialogs use `kdialog` on KDE and `zenity` otherwise. zenity is bundled; kdialog is used if it is installed.
 - Command line: `ezlaunch add [setup.exe]`, `run <game>`, `settings <game>`, `exe <game>`, `icon <game>`, `remove <game>`, `list`, `running`, `stop <game>`.

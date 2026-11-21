@@ -5,6 +5,7 @@
   umu-launcher,
   zenity,
   fzf,
+  yad,
   icoutils,
   xdg-utils,
   desktop-file-utils,
@@ -21,6 +22,7 @@ writeShellApplication {
     umu-launcher
     zenity
     fzf
+    yad
     icoutils
     xdg-utils
     desktop-file-utils

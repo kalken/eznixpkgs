@@ -214,7 +214,20 @@ launch() { # program, args...
       inhibit=(systemd-inhibit --what=idle --who=ezlaunch "--why=Playing a game")
     fi
   fi
-  # EZLAUNCH_WRAPPER is a command prefix, such as gamemoderun
+  # With a tray icon, stay alive while the game runs and remove the icon when it ends.
+  # The icon has no WINEPREFIX, so its menu commands are not counted as the game.
+  if [ -n "${TRAY_NAME:-}" ]; then
+    local status=0
+    env -u WINEPREFIX yad --notification --image "$TRAY_ICON" --text "$TRAY_NAME" --command menu \
+      --menu "Stop!ezlaunch stop \"$TRAY_NAME\"|Settings!ezlaunch settings \"$TRAY_NAME\"" &
+    TRAY_PID=$!
+    trap 'kill "$TRAY_PID" 2>/dev/null || true' EXIT
+    trap 'exit 143' TERM INT HUP
+    # EZLAUNCH_WRAPPER is a command prefix, such as gamemoderun
+    # shellcheck disable=SC2086
+    "${inhibit[@]}" ${EZLAUNCH_WRAPPER:-} umu-run "$@" || status=$?
+    exit "$status"
+  fi
   # shellcheck disable=SC2086
   exec "${inhibit[@]}" ${EZLAUNCH_WRAPPER:-} umu-run "$@"
 }
@@ -373,6 +386,11 @@ cmd_run() { # name, args...
   load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
   [ -n "${EZLAUNCH_EXE:-}" ] || die "$name has no executable set"
   WINEPREFIX="$dir/prefix"
+  # launch shows the game in the tray with these
+  if [ "${EZLAUNCH_TRAY:-1}" != 0 ] && [ -n "$GUI" ] && command -v yad >/dev/null; then
+    TRAY_NAME=$name
+    TRAY_ICON=$(icon_for "$dir")
+  fi
   cd "$(dirname "$EZLAUNCH_EXE")" || exit 1
   # EZLAUNCH_ARGS is a list of arguments for the game
   # shellcheck disable=SC2086
