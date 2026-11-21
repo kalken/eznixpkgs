@@ -13,11 +13,10 @@ Install and launch Windows games with Proton, without Steam or a launcher app. D
   - the Proton version, chosen from the versions installed in `~/.local/share/Steam/compatibilitytools.d`
   - the game's executable and its icon (an image, an `.ico` or an `.exe`), each with a file chooser
   - a text box for any other variable
-- Right-click **Stop**: closes the game if it is running
 - Right-click **Remove**: deletes the game, its prefix and its menu entry
 - In a terminal, leave out the game name (`ezlaunch run`, `settings`, `remove`, `stop`) to choose it from an arrow-key menu (fzf)
 - `ezlaunch list` shows the games and marks the running ones, `ezlaunch running` lists only those, `ezlaunch stop` closes one (it finds a game's processes by its prefix)
-- A tray icon shows the running game (its icon and name) with **Stop** and **Settings** in its menu, and disappears when the game ends. Nothing runs in the background otherwise.
+- A tray icon shows the running game (its icon and name) with **Stop** and **Settings** in its menu (without a tray, `ezlaunch stop` in a terminal closes a game), and disappears when the game ends. Nothing runs in the background otherwise.
 
 ## 🚀 Quick Start
 
