@@ -86,23 +86,44 @@ ask_yesno() { # question
   fi
 }
 
-# Installer or a game that is already installed? Prints install or installed.
-ask_mode() { # question
-  local reply rc=0
+# The installed Proton versions as a yad combo box list, the current one first
+proton_choices() { # current
+  local list="${1:+^$1}" version
+  for version in "$TOOLS"/*/; do
+    [ -d "$version" ] || continue
+    version=$(basename "$version")
+    if [ "$version" != "$1" ]; then list+="${list:+!}$version"; fi
+  done
+  echo "$list"
+}
+
+# Installer or a game that is already installed? Prints install or installed, then | and the
+# chosen Proton version (empty if there is nothing to choose).
+ask_mode() { # question, current Proton version
+  local reply rc=0 choices
   if [ -n "$GUI" ]; then
-    # yad shows the buttons in the order given, so Install comes first
-    yad --title ezlaunch --text "$1" --no-markup --center --width 420 \
-      --button Install:0 --button "Already installed:2" --button Cancel:1 || rc=$?
+    choices=$(proton_choices "$2")
+    if [ -n "$choices" ]; then
+      # yad shows the buttons in the order given, so Install comes first
+      reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width 460 \
+        --field "Proton version:CB" "$choices" \
+        --button Install:0 --button "Already installed:2" --button Cancel:1) || rc=$?
+      reply=${reply%%|*}
+    else
+      yad --title ezlaunch --text "$1" --no-markup --center --width 420 \
+        --button Install:0 --button "Already installed:2" --button Cancel:1 || rc=$?
+      reply=
+    fi
     case $rc in
-      0) echo install ;;
-      2) echo installed ;;
+      0) echo "install|$reply" ;;
+      2) echo "installed|$reply" ;;
       *) return 1 ;;
     esac
   else
     read -r -p "$1 [i]nstaller or [a]lready installed? " reply
     case $reply in
-      i*) echo install ;;
-      a*) echo installed ;;
+      i*) echo "install|" ;;
+      a*) echo "installed|" ;;
       *) return 1 ;;
     esac
   fi
@@ -250,7 +271,7 @@ ask_proton() { # current
 }
 
 cmd_add() { # [--install | --installed] [exe]
-  local mode='' installer name dir exe icon version
+  local mode='' installer name dir exe icon version='' reply picked=''
   case "${1:-}" in
     --install)
       mode=install
@@ -270,7 +291,11 @@ cmd_add() { # [--install | --installed] [exe]
   installer=$(readlink -f "$installer")
 
   if [ -z "$mode" ]; then
-    mode=$(ask_mode "Is $(basename "$installer") an installer, or a game that is already installed?")
+    reply=$(ask_mode "Is $(basename "$installer") an installer, or a game that is already installed?" \
+      "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")") || exit 1
+    mode=${reply%%|*}
+    version=${reply#*|}
+    picked=1
   fi
 
   name=$(ask_text "Name of the game" "$(basename "$(dirname "$installer")")")
@@ -279,7 +304,10 @@ cmd_add() { # [--install | --installed] [exe]
   dir="$GAMES/$name"
   if grep -qs '^EZLAUNCH_EXE=' "$dir/config"; then die "already added: $name"; fi
 
-  version=$(ask_proton "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")") || exit 1
+  # Without the combined dialog above (--install, --installed) the version is asked on its own
+  if [ -z "$picked" ]; then
+    version=$(ask_proton "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")") || exit 1
+  fi
 
   mkdir -p "$dir/prefix"
   touch "$dir/config"
