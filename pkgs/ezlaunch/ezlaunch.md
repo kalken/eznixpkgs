@@ -5,7 +5,8 @@ Install and launch Windows games with Proton, without Steam or a launcher app. D
 ## ✨ Features
 
 - Double-click a `.exe`: it runs in a new prefix with [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher), then you pick the game's exe and a start menu entry (with the exe's icon) is written
-- A game that is already on the disk: right-click its exe, **Open With**, **Add installed game to ezlaunch**. No installer is run, and the game is started from where it is
+- Double-clicking an exe works out whether it is an installer (by its name, or the mark Inno Setup, NSIS, InstallShield and similar leave in the file) and installs it. If it cannot tell, it asks: Install or Already installed
+- A game that is already on the disk can also skip that: right-click its exe, **Open With**, **Add installed game to ezlaunch**. No installer is run, and the game is started from where it is
 - One prefix per game, in `~/.local/share/ezlaunch/games/<name>/`
 - Any Proton option works: settings are plain `KEY=value` environment variables
 - Right-click **Settings** opens one window with everything for the game, and a Save button:
@@ -63,7 +64,7 @@ Settings are layered, later wins: `/etc/ezlaunch/config`, `~/.config/ezlaunch/co
 - Set `EZLAUNCH_TRAY=0` to turn the tray icon off. It needs `yad` (bundled, run through XWayland on Wayland) and a desktop with a system tray: KDE works, GNOME needs the AppIndicator extension.
 - Special variables in a game's `config`: `EZLAUNCH_EXE` (the game's exe), `EZLAUNCH_ARGS` (arguments for the game) and `EZLAUNCH_WRAPPER` (a command prefix, such as `gamemoderun`).
 - Dialogs use `kdialog` on KDE and `zenity` otherwise. zenity is bundled; kdialog is used if it is installed.
-- Command line: `ezlaunch add [setup.exe]`, `add --installed [game.exe]`, `run <game>`, `settings <game>`, `remove <game>`, `list`, `running`, `stop <game>`.
+- Command line: `ezlaunch add [file.exe]` (with `--install` or `--installed` to say which kind), `run <game>`, `settings <game>`, `remove <game>`, `list`, `running`, `stop <game>`.
 - Start menu entries are `~/.local/share/applications/ezlaunch-<name>.desktop`. Right-click actions need a desktop that supports them (KDE, GNOME, XFCE, ...); some launchers such as rofi ignore them.
 - Installers run through Proton. Nothing is extracted by hand, so registry entries and redistributables work as usual.
 

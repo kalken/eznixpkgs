@@ -102,6 +102,41 @@ ask_yesno() { # question
   esac
 }
 
+# Installer or a game that is already installed? Prints install or installed.
+ask_mode() { # question
+  local reply rc=0
+  case $GUI in
+    zenity)
+      reply=$(zenity --question --no-markup --title ezlaunch --text "$1" --ok-label Install \
+        --cancel-label Cancel --extra-button "Already installed") || rc=$?
+      if [ "$rc" = 0 ]; then
+        echo install
+      elif [ "$reply" = "Already installed" ]; then
+        echo installed
+      else
+        return 1
+      fi
+      ;;
+    kdialog)
+      kdialog --title ezlaunch --yes-label Install --no-label "Already installed" \
+        --cancel-label Cancel --yesnocancel "$1" || rc=$?
+      case $rc in
+        0) echo install ;;
+        1) echo installed ;;
+        *) return 1 ;;
+      esac
+      ;;
+    *)
+      read -r -p "$1 [i]nstaller or [a]lready installed? " reply
+      case $reply in
+        i*) echo install ;;
+        a*) echo installed ;;
+        *) return 1 ;;
+      esac
+      ;;
+  esac
+}
+
 # Arrow-key menu of the games, for commands given no name
 pick_game() { # [list of games, default all]
   local games=${1:-}
@@ -232,22 +267,45 @@ EOF
   refresh_menu
 }
 
-cmd_add() { # [--installed] [exe]
-  local installed=false installer name dir exe icon
-  if [ "${1:-}" = --installed ]; then
-    installed=true
-    shift
-  fi
+# Whether a file is recognisably an installer: by its name, or by the mark an installer
+# maker leaves near the start of the file. A game's own exe leaves no sure sign.
+looks_like_installer() { # file
+  local name=${1##*/}
+  name=${name,,}
+  case $name in
+    unins* | *uninstall*) return 1 ;;
+    *setup* | *install*) return 0 ;;
+  esac
+  grep -aqE 'InnoSetupLdrWindow|Inno Setup Setup Data|Nullsoft Install System|NullsoftInst|InstallShield|Wise Installation|WixBundle' < <(head -c 8388608 "$1")
+}
+
+cmd_add() { # [--install | --installed] [exe]
+  local mode='' installer name dir exe icon
+  case "${1:-}" in
+    --install)
+      mode=install
+      shift
+      ;;
+    --installed)
+      mode=installed
+      shift
+      ;;
+    *) ;;
+  esac
   installer=${1:-}
   if [ -z "$installer" ]; then
-    if $installed; then
-      installer=$(ask_file "Choose the game executable" "$HOME/" "$EXE_FILTER")
-    else
-      installer=$(ask_file "Choose the installer" "$HOME/")
-    fi
+    installer=$(ask_file "Choose the installer or the game executable" "$HOME/" "$EXE_FILTER")
   fi
   [ -f "$installer" ] || die "not a file: $installer"
   installer=$(readlink -f "$installer")
+
+  if [ -z "$mode" ]; then
+    if looks_like_installer "$installer"; then
+      mode=install
+    else
+      mode=$(ask_mode "Is $(basename "$installer") an installer, or a game that is already installed?")
+    fi
+  fi
 
   name=$(ask_text "Name of the game" "$(basename "$(dirname "$installer")")")
   name=$(printf '%s' "$name" | tr -cd 'A-Za-z0-9 ._-' | sed 's/^[ .]*//; s/ *$//')
@@ -258,7 +316,7 @@ cmd_add() { # [--installed] [exe]
   mkdir -p "$dir/prefix"
   touch "$dir/config"
 
-  if $installed; then
+  if [ "$mode" = installed ]; then
     # A game that is already on the disk is run from where it is
     exe=$installer
   else
@@ -529,9 +587,11 @@ usage() {
   cat <<EOF
 Usage: ezlaunch <command>
 
-  add [installer.exe]   run an installer in a new prefix and add the game to the start menu
-  add --installed [game.exe]
-                        add a game that is already on the disk, without an installer
+  add [file.exe]        add a game: an installer is run in a new prefix, a game that is
+                        already installed is added as it is. It asks if it cannot tell.
+  add --install [file]  treat the file as an installer
+  add --installed [file]
+                        treat the file as an installed game, without an installer
   run [game] [args]     start a game
   settings [game]       all settings of a game in one window
   remove [game]         delete a game, its prefix and its start menu entry
