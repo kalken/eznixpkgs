@@ -107,11 +107,11 @@ ask_mode() { # question, current Proton version
       # yad shows the buttons in the order given: Cancel on the left, Install on the right
       reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width 460 \
         --field "Proton version:CB" "$choices" \
-        --button Cancel:1 --button Add:2 --button Install:0) || rc=$?
+        --buttons-layout edge --button Cancel:1 --button Add:2 --button Install:0) || rc=$?
       reply=${reply%%|*}
     else
       yad --title ezlaunch --text "$1" --no-markup --center --width 420 \
-        --button Cancel:1 --button Add:2 --button Install:0 || rc=$?
+        --buttons-layout edge --button Cancel:1 --button Add:2 --button Install:0 || rc=$?
       reply=
     fi
     case $rc in
