@@ -10,6 +10,9 @@ SYSTEM_CONF=/etc/ezlaunch/config
 # Where ezproton installs Proton
 TOOLS="$HOME/.local/share/Steam/compatibilitytools.d"
 
+# Shown first when choosing a game's executable. The file dialog also offers all files.
+EXE_FILTER='*.exe *.EXE'
+
 # KEY|value when on|value when off|label, the options in the settings dialog
 KNOWN=(
   "PROTON_ENABLE_HDR|1|0|HDR"
@@ -71,11 +74,15 @@ ask_text() { # prompt, default
   esac
 }
 
-ask_file() { # prompt, start folder
-  local reply
+ask_file() { # prompt, start folder, [glob patterns to list first]
+  local reply filter=() kfilter=()
+  if [ -n "${3:-}" ]; then
+    filter=(--file-filter "Windows programs | $3" --file-filter "All files | *")
+    kfilter=("$3|Windows programs"$'\n'"*|All files")
+  fi
   case $GUI in
-    zenity) zenity --file-selection --title "$1" --filename "$2" ;;
-    kdialog) kdialog --title "$1" --getopenfilename "$2" ;;
+    zenity) zenity --file-selection --title "$1" --filename "$2" "${filter[@]}" ;;
+    kdialog) kdialog --title "$1" --getopenfilename "$2" "${kfilter[@]}" ;;
     *)
       read -r -p "$1: " reply
       echo "$reply"
@@ -279,7 +286,7 @@ cmd_add() { # [installer]
     touch "$dir/.installed"
   fi
 
-  exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/")
+  exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/" "$EXE_FILTER")
   [ -f "$exe" ] || die "not a file: $exe"
 
   icon=applications-games
@@ -300,7 +307,7 @@ cmd_exe() { # name
   [ -n "$GUI" ] || die "this needs a graphical session. Edit EZLAUNCH_EXE in $dir/config instead."
 
   exe=$(getv EZLAUNCH_EXE "$dir/config")
-  exe=$(ask_file "Choose the game executable" "$(dirname "${exe:-$dir/prefix/drive_c/x}")/")
+  exe=$(ask_file "Choose the game executable" "$(dirname "${exe:-$dir/prefix/drive_c/x}")/" "$EXE_FILTER")
   [ -f "$exe" ] || die "not a file: $exe"
 
   rm -f "$dir"/icon.*
