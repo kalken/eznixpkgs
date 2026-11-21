@@ -267,18 +267,6 @@ EOF
   refresh_menu
 }
 
-# Whether a file is recognisably an installer: by its name, or by the mark an installer
-# maker leaves near the start of the file. A game's own exe leaves no sure sign.
-looks_like_installer() { # file
-  local name=${1##*/}
-  name=${name,,}
-  case $name in
-    unins* | *uninstall*) return 1 ;;
-    *setup* | *install*) return 0 ;;
-  esac
-  grep -aqE 'InnoSetupLdrWindow|Inno Setup Setup Data|Nullsoft Install System|NullsoftInst|InstallShield|Wise Installation|WixBundle' < <(head -c 8388608 "$1")
-}
-
 cmd_add() { # [--install | --installed] [exe]
   local mode='' installer name dir exe icon
   case "${1:-}" in
@@ -300,11 +288,7 @@ cmd_add() { # [--install | --installed] [exe]
   installer=$(readlink -f "$installer")
 
   if [ -z "$mode" ]; then
-    if looks_like_installer "$installer"; then
-      mode=install
-    else
-      mode=$(ask_mode "Is $(basename "$installer") an installer, or a game that is already installed?")
-    fi
+    mode=$(ask_mode "Is $(basename "$installer") an installer, or a game that is already installed?")
   fi
 
   name=$(ask_text "Name of the game" "$(basename "$(dirname "$installer")")")
@@ -588,7 +572,7 @@ usage() {
 Usage: ezlaunch <command>
 
   add [file.exe]        add a game: an installer is run in a new prefix, a game that is
-                        already installed is added as it is. It asks if it cannot tell.
+                        already installed is added as it is. It asks which.
   add --install [file]  treat the file as an installer
   add --installed [file]
                         treat the file as an installed game, without an installer
