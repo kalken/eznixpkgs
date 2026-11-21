@@ -204,9 +204,19 @@ launch() { # program, args...
   if [ -n "${PROTONPATH:-}" ] && [[ "$PROTONPATH" != */* ]] && [ -d "$TOOLS/$PROTONPATH" ]; then
     export PROTONPATH="$TOOLS/$PROTONPATH"
   fi
+  # A controller does not count as activity for the idle timer, so keep the screen awake
+  # while the game runs. kde-inhibit on KDE, which ignores systemd's idle lock.
+  local inhibit=()
+  if [ "${EZLAUNCH_INHIBIT:-1}" != 0 ]; then
+    if [[ "${XDG_CURRENT_DESKTOP:-}" == *KDE* ]] && command -v kde-inhibit >/dev/null; then
+      inhibit=(kde-inhibit --power --screenSaver)
+    elif command -v systemd-inhibit >/dev/null; then
+      inhibit=(systemd-inhibit --what=idle --who=ezlaunch "--why=Playing a game")
+    fi
+  fi
   # EZLAUNCH_WRAPPER is a command prefix, such as gamemoderun
   # shellcheck disable=SC2086
-  exec ${EZLAUNCH_WRAPPER:-} umu-run "$@"
+  exec "${inhibit[@]}" ${EZLAUNCH_WRAPPER:-} umu-run "$@"
 }
 
 ico_to_png() { # ico, output png

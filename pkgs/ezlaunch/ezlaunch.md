@@ -58,6 +58,7 @@ Settings are layered, later wins: `/etc/ezlaunch/config`, `~/.config/ezlaunch/co
 ## 📝 Notes
 
 - `PROTONPATH` can be a name from `~/.local/share/Steam/compatibilitytools.d` (what ezproton installs), a full path, or a version umu downloads itself.
+- The screen is kept awake while a game runs, since a controller does not count as activity for the idle timer: `kde-inhibit` on KDE, `systemd-inhibit` elsewhere (used if installed). Set `EZLAUNCH_INHIBIT=0` in the defaults or a game's custom variables to turn it off.
 - Special variables in a game's `config`: `EZLAUNCH_EXE` (the game's exe), `EZLAUNCH_ARGS` (arguments for the game) and `EZLAUNCH_WRAPPER` (a command prefix, such as `gamemoderun`).
 - Dialogs use `kdialog` on KDE and `zenity` otherwise. zenity is bundled; kdialog is used if it is installed.
 - Command line: `ezlaunch add [setup.exe]`, `run <game>`, `settings <game>`, `exe <game>`, `icon <game>`, `remove <game>`, `list`, `running`, `stop <game>`.
