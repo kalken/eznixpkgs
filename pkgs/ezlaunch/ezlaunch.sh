@@ -27,25 +27,16 @@ KNOWN=(
   "EZLAUNCH_WRAPPER|gamemoderun||GameMode"
 )
 
-# The dialog tool: kdialog on KDE, otherwise zenity, otherwise whichever exists
+# Dialogs are yad. Without a display the questions are asked in the terminal.
 GUI=
-if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
-  if [[ "${XDG_CURRENT_DESKTOP:-}" == *KDE* ]] && command -v kdialog >/dev/null; then
-    GUI=kdialog
-  elif command -v zenity >/dev/null; then
-    GUI=zenity
-  elif command -v kdialog >/dev/null; then
-    GUI=kdialog
-  fi
-fi
+if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v yad >/dev/null; then GUI=yad; fi
 
 msg() {
   echo "ezlaunch: $*" >&2
-  case $GUI in
-    zenity) zenity --error --no-markup --text "$*" || true ;;
-    kdialog) kdialog --error "$*" || true ;;
-    *) ;;
-  esac
+  if [ -n "$GUI" ]; then
+    yad --title ezlaunch --text "$*" --no-markup --image dialog-error --center --width 420 \
+      --button OK:0 || true
+  fi
 }
 
 die() {
@@ -55,57 +46,50 @@ die() {
 
 info() {
   echo "ezlaunch: $*"
-  case $GUI in
-    zenity) zenity --info --no-markup --text "$*" || true ;;
-    kdialog) kdialog --msgbox "$*" || true ;;
-    *) ;;
-  esac
+  if [ -n "$GUI" ]; then
+    yad --title ezlaunch --text "$*" --no-markup --image dialog-information --center --width 420 \
+      --button OK:0 || true
+  fi
 }
 
 ask_text() { # prompt, default
   local reply
-  case $GUI in
-    zenity) zenity --entry --title ezlaunch --width 480 --text "$1" --entry-text "$2" ;;
-    kdialog) kdialog --title ezlaunch --inputbox "$1" "$2" ;;
-    *)
-      read -r -p "$1 [$2] " reply
-      echo "${reply:-$2}"
-      ;;
-  esac
+  if [ -n "$GUI" ]; then
+    yad --entry --title ezlaunch --text "$1" --no-markup --entry-text "$2" --center --width 480 \
+      --button OK:0 --button Cancel:1
+  else
+    read -r -p "$1 [$2] " reply
+    echo "${reply:-$2}"
+  fi
 }
 
 ask_file() { # prompt, start folder, [glob patterns to list first]
-  local reply filter=() kfilter=()
+  local reply filter=()
   if [ -n "${3:-}" ]; then
     filter=(--file-filter "Windows programs | $3" --file-filter "All files | *")
-    kfilter=("$3|Windows programs"$'\n'"*|All files")
   fi
-  case $GUI in
-    zenity) zenity --file-selection --title "$1" --filename "$2" "${filter[@]}" ;;
-    kdialog) kdialog --title "$1" --getopenfilename "$2" "${kfilter[@]}" ;;
-    *)
-      read -r -p "$1: " reply
-      echo "$reply"
-      ;;
-  esac
+  if [ -n "$GUI" ]; then
+    yad --file --title "$1" --filename "$2" --center --width 900 --height 600 "${filter[@]}"
+  else
+    read -r -p "$1: " reply
+    echo "$reply"
+  fi
 }
 
 ask_yesno() { # question
   local reply
-  case $GUI in
-    zenity) zenity --question --no-markup --text "$1" ;;
-    kdialog) kdialog --yesno "$1" ;;
-    *)
-      read -r -p "$1 [y/N] " reply
-      [ "$reply" = y ]
-      ;;
-  esac
+  if [ -n "$GUI" ]; then
+    yad --title ezlaunch --text "$1" --no-markup --center --width 420 --button Yes:0 --button No:1
+  else
+    read -r -p "$1 [y/N] " reply
+    [ "$reply" = y ]
+  fi
 }
 
 # Installer or a game that is already installed? Prints install or installed.
 ask_mode() { # question
   local reply rc=0
-  if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v yad >/dev/null; then
+  if [ -n "$GUI" ]; then
     # yad shows the buttons in the order given, so Install comes first
     yad --title ezlaunch --text "$1" --no-markup --center --width 420 \
       --button Install:0 --button "Already installed:2" --button Cancel:1 || rc=$?
@@ -114,38 +98,14 @@ ask_mode() { # question
       2) echo installed ;;
       *) return 1 ;;
     esac
-    return 0
+  else
+    read -r -p "$1 [i]nstaller or [a]lready installed? " reply
+    case $reply in
+      i*) echo install ;;
+      a*) echo installed ;;
+      *) return 1 ;;
+    esac
   fi
-  case $GUI in
-    zenity)
-      reply=$(zenity --question --no-markup --title ezlaunch --text "$1" --ok-label Install \
-        --cancel-label Cancel --extra-button "Already installed") || rc=$?
-      if [ "$rc" = 0 ]; then
-        echo install
-      elif [ "$reply" = "Already installed" ]; then
-        echo installed
-      else
-        return 1
-      fi
-      ;;
-    kdialog)
-      kdialog --title ezlaunch --yes-label Install --no-label "Already installed" \
-        --cancel-label Cancel --yesnocancel "$1" || rc=$?
-      case $rc in
-        0) echo install ;;
-        1) echo installed ;;
-        *) return 1 ;;
-      esac
-      ;;
-    *)
-      read -r -p "$1 [i]nstaller or [a]lready installed? " reply
-      case $reply in
-        i*) echo install ;;
-        a*) echo installed ;;
-        *) return 1 ;;
-      esac
-      ;;
-  esac
 }
 
 # Arrow-key menu of the games, for commands given no name
@@ -277,15 +237,16 @@ EOF
 # Pick one of the installed Proton versions, the default marked. Prints nothing without a choice.
 ask_proton() { # current
   local rows=() version
-  [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || return 0
+  [ -n "$GUI" ] || return 0
   for version in "$TOOLS"/*/; do
     [ -d "$version" ] || continue
     version=$(basename "$version")
     if [ "$version" = "$1" ]; then rows+=(TRUE "$version"); else rows+=(FALSE "$version"); fi
   done
   [ "${#rows[@]}" -gt 0 ] || return 0
-  zenity --list --radiolist --title ezlaunch --text "Proton version" --width 420 --height 360 \
-    --column "" --column Version "${rows[@]}" || return 1
+  yad --list --radiolist --title ezlaunch --text "Proton version" --center --width 420 \
+    --height 360 --column "" --column Version --print-column 2 --separator '' \
+    --button OK:0 --button Cancel:1 "${rows[@]}"
 }
 
 cmd_add() { # [--install | --installed] [exe]

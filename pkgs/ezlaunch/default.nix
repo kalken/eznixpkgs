@@ -3,7 +3,6 @@
   lib,
   writeShellApplication,
   umu-launcher,
-  zenity,
   fzf,
   yad,
   icoutils,
@@ -20,7 +19,6 @@ writeShellApplication {
 
   runtimeInputs = [
     umu-launcher
-    zenity
     fzf
     yad
     icoutils
