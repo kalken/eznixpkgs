@@ -105,6 +105,17 @@ ask_yesno() { # question
 # Installer or a game that is already installed? Prints install or installed.
 ask_mode() { # question
   local reply rc=0
+  if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v yad >/dev/null; then
+    # yad shows the buttons in the order given, so Install comes first
+    yad --title ezlaunch --text "$1" --no-markup --center --width 420 \
+      --button Install:0 --button "Already installed:2" --button Cancel:1 || rc=$?
+    case $rc in
+      0) echo install ;;
+      2) echo installed ;;
+      *) return 1 ;;
+    esac
+    return 0
+  fi
   case $GUI in
     zenity)
       reply=$(zenity --question --no-markup --title ezlaunch --text "$1" --ok-label Install \
