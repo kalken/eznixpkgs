@@ -161,7 +161,8 @@ pick_game() { # [list of games, default all]
   if [ -z "$games" ]; then games=$(game_names); fi
   [ -n "$games" ] || die "no games to choose from"
   { [ -t 0 ] && [ -t 2 ]; } || die "game name missing"
-  fzf --height 40% --reverse --prompt "game> " <<<"$games"
+  fzf --height 40% --reverse --border rounded --no-info --pointer ">" --prompt "> " \
+    --header "Choose a game (arrows to move, Enter to select)" <<<"$games"
 }
 
 check_name() {
