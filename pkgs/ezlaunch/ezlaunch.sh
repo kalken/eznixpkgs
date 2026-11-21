@@ -151,7 +151,7 @@ ask_radio() {
 # Arrow-key menu of the games, for commands given no name
 pick_game() { # [list of games, default all]
   local games=${1:-}
-  if [ -z "$games" ]; then games=$(cmd_list); fi
+  if [ -z "$games" ]; then games=$(game_names); fi
   [ -n "$games" ] || die "no games to choose from"
   { [ -t 0 ] && [ -t 2 ]; } || die "game name missing"
   fzf --height 40% --reverse --prompt "game> " <<<"$games"
@@ -459,7 +459,7 @@ cmd_running() {
   local name
   while IFS= read -r name; do
     if [ -n "$(game_pids "$name")" ]; then echo "$name"; fi
-  done < <(cmd_list)
+  done < <(game_names)
 }
 
 cmd_stop() { # [name]
@@ -489,11 +489,18 @@ cmd_stop() { # [name]
   echo "ezlaunch: stopped $name"
 }
 
-cmd_list() {
+game_names() {
   local dir
   for dir in "$GAMES"/*/; do
     if [ -f "$dir/config" ]; then basename "$dir"; fi
   done
+}
+
+cmd_list() {
+  local name
+  while IFS= read -r name; do
+    if [ -n "$(game_pids "$name")" ]; then echo "$name (running)"; else echo "$name"; fi
+  done < <(game_names)
 }
 
 usage() {
@@ -506,7 +513,7 @@ Usage: ezlaunch <command>
   exe [game]            choose another executable for a game
   icon [game]           choose another icon for a game
   remove [game]         delete a game, its prefix and its start menu entry
-  list                  list the games
+  list                  list the games, marking the ones that are running
   running               list the games that are running
   stop [game]           close a running game
 
