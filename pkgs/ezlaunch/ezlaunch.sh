@@ -215,11 +215,15 @@ Exec=ezlaunch run "$1"
 Icon=$2
 Categories=Game;
 Terminal=false
-Actions=settings;remove;
+Actions=settings;exe;remove;
 
 [Desktop Action settings]
 Name=Settings
 Exec=ezlaunch settings "$1"
+
+[Desktop Action exe]
+Name=Change executable
+Exec=ezlaunch exe "$1"
 
 [Desktop Action remove]
 Name=Remove
@@ -264,6 +268,30 @@ cmd_add() { # [installer]
   printf 'EZLAUNCH_EXE=%s\n' "$exe" >>"$dir/config"
   write_desktop "$name" "$icon"
   info "Added $name to the start menu."
+}
+
+cmd_exe() { # name
+  local name=${1:?game name missing} dir exe icon
+  check_name "$name"
+  dir="$GAMES/$name"
+  [ -f "$dir/config" ] || die "unknown game: $name"
+  [ -n "$GUI" ] || die "this needs a graphical session. Edit EZLAUNCH_EXE in $dir/config instead."
+
+  exe=$(getv EZLAUNCH_EXE "$dir/config")
+  exe=$(ask_file "Choose the game executable" "$(dirname "${exe:-$dir/prefix/drive_c/x}")/")
+  [ -f "$exe" ] || die "not a file: $exe"
+
+  rm -f "$dir/icon.png"
+  extract_icon "$exe" "$dir/icon.png"
+  icon=applications-games
+  if [ -f "$dir/icon.png" ]; then icon="$dir/icon.png"; fi
+
+  { grep -v '^EZLAUNCH_EXE=' "$dir/config" || true; } >"$dir/config.new"
+  printf 'EZLAUNCH_EXE=%s\n' "$exe" >>"$dir/config.new"
+  mv "$dir/config.new" "$dir/config"
+  # Also gives a game added earlier the current menu actions
+  write_desktop "$name" "$icon"
+  info "$name now starts $(basename "$exe")."
 }
 
 cmd_run() { # name, args...
@@ -361,6 +389,7 @@ Usage: ezlaunch <command>
   add [installer.exe]   run an installer in a new prefix and add the game to the start menu
   run <game> [args]     start a game
   settings <game>       change Proton version and options for a game
+  exe <game>            choose another executable for a game
   remove <game>         delete a game, its prefix and its start menu entry
   list                  list the games
 
@@ -372,6 +401,7 @@ case "${1:-}" in
   add) shift && cmd_add "$@" ;;
   run) shift && cmd_run "$@" ;;
   settings) shift && cmd_settings "$@" ;;
+  exe) shift && cmd_exe "$@" ;;
   remove) shift && cmd_remove "$@" ;;
   list) cmd_list ;;
   *)
