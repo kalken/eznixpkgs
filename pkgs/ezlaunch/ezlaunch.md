@@ -39,8 +39,9 @@ Then double-click a `setup.exe`.
 ```nix
 programs.ezlaunch.defaults = {
   PROTONPATH = "GE-Proton-Latest"; # the default
-  PROTON_ENABLE_WAYLAND = true;
-  MANGOHUD = true;
+  PROTON_ENABLE_WAYLAND = true;    # native Wayland instead of XWayland
+  PROTON_ENABLE_HDR = true;        # HDR, needs Wayland and an HDR screen
+  MANGOHUD = true;                 # performance overlay
 };
 ```
 
