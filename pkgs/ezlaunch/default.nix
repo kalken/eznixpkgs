@@ -4,6 +4,7 @@
   writeShellApplication,
   umu-launcher,
   zenity,
+  fzf,
   icoutils,
   xdg-utils,
   desktop-file-utils,
@@ -19,6 +20,7 @@ writeShellApplication {
   runtimeInputs = [
     umu-launcher
     zenity
+    fzf
     icoutils
     xdg-utils
     desktop-file-utils

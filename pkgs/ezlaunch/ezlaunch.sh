@@ -148,6 +148,15 @@ ask_radio() {
   esac
 }
 
+# Arrow-key menu of the games, for commands given no name
+pick_game() {
+  local games
+  games=$(cmd_list)
+  [ -n "$games" ] || die "no games added yet"
+  { [ -t 0 ] && [ -t 2 ]; } || die "game name missing"
+  fzf --height 40% --reverse --prompt "game> " <<<"$games"
+}
+
 check_name() {
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._\ -]*$ ]] || die "invalid game name: $1"
 }
@@ -271,7 +280,8 @@ cmd_add() { # [installer]
 }
 
 cmd_exe() { # name
-  local name=${1:?game name missing} dir exe icon
+  local name=${1:-} dir exe icon
+  if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
   dir="$GAMES/$name"
   [ -f "$dir/config" ] || die "unknown game: $name"
@@ -295,8 +305,9 @@ cmd_exe() { # name
 }
 
 cmd_run() { # name, args...
-  local name=${1:?game name missing} dir
-  shift
+  local name=${1:-} dir
+  shift || true
+  if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
   dir="$GAMES/$name"
   [ -f "$dir/config" ] || die "unknown game: $name"
@@ -310,7 +321,8 @@ cmd_run() { # name, args...
 }
 
 cmd_settings() { # name
-  local name=${1:?game name missing} cfg
+  local name=${1:-} cfg
+  if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
   cfg="$GAMES/$name/config"
   [ -f "$cfg" ] || die "unknown game: $name"
@@ -366,7 +378,8 @@ cmd_settings() { # name
 }
 
 cmd_remove() { # name
-  local name=${1:?game name missing}
+  local name=${1:-}
+  if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
   [ -f "$GAMES/$name/config" ] || die "unknown game: $name"
   ask_yesno "Remove $name? Its prefix, with saved games inside it, is deleted." || exit 0
@@ -387,11 +400,13 @@ usage() {
 Usage: ezlaunch <command>
 
   add [installer.exe]   run an installer in a new prefix and add the game to the start menu
-  run <game> [args]     start a game
-  settings <game>       change Proton version and options for a game
-  exe <game>            choose another executable for a game
-  remove <game>         delete a game, its prefix and its start menu entry
+  run [game] [args]     start a game
+  settings [game]       change Proton version and options for a game
+  exe [game]            choose another executable for a game
+  remove [game]         delete a game, its prefix and its start menu entry
   list                  list the games
+
+Without a game name, run, settings, exe and remove show a menu to choose from.
 
 Defaults for new games: $SYSTEM_CONF and $USER_CONF (KEY=value lines).
 EOF
