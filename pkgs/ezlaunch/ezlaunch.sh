@@ -56,7 +56,7 @@ ask_text() { # prompt, default
   local reply
   if [ -n "$GUI" ]; then
     yad --entry --title ezlaunch --text "$1" --no-markup --entry-text "$2" --center --width 480 \
-      --button OK:0 --button Cancel:1
+      --button Cancel:1 --button OK:0
   else
     read -r -p "$1 [$2] " reply
     echo "${reply:-$2}"
@@ -79,7 +79,7 @@ ask_file() { # prompt, start folder, [glob patterns to list first]
 ask_yesno() { # question
   local reply
   if [ -n "$GUI" ]; then
-    yad --title ezlaunch --text "$1" --no-markup --center --width 420 --button Yes:0 --button No:1
+    yad --title ezlaunch --text "$1" --no-markup --center --width 420 --button No:1 --button Yes:0
   else
     read -r -p "$1 [y/N] " reply
     [ "$reply" = y ]
@@ -104,14 +104,14 @@ ask_mode() { # question, current Proton version
   if [ -n "$GUI" ]; then
     choices=$(proton_choices "$2")
     if [ -n "$choices" ]; then
-      # yad shows the buttons in the order given, so Install comes first
+      # yad shows the buttons in the order given: Cancel on the left, Install on the right
       reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width 460 \
         --field "Proton version:CB" "$choices" \
-        --button Install:0 --button "Already installed:2" --button Cancel:1) || rc=$?
+        --button Cancel:1 --button "Already installed:2" --button Install:0) || rc=$?
       reply=${reply%%|*}
     else
       yad --title ezlaunch --text "$1" --no-markup --center --width 420 \
-        --button Install:0 --button "Already installed:2" --button Cancel:1 || rc=$?
+        --button Cancel:1 --button "Already installed:2" --button Install:0 || rc=$?
       reply=
     fi
     case $rc in
@@ -267,7 +267,7 @@ ask_proton() { # current
   [ "${#rows[@]}" -gt 0 ] || return 0
   yad --list --radiolist --title ezlaunch --text "Proton version" --center --width 420 \
     --height 360 --column "" --column Version --print-column 2 --separator '' \
-    --button OK:0 --button Cancel:1 "${rows[@]}"
+    --button Cancel:1 --button OK:0 "${rows[@]}"
 }
 
 cmd_add() { # [--install | --installed] [exe]
@@ -476,7 +476,7 @@ cmd_settings() { # [name]
     --field "Executable:FL" "$current_exe" \
     --field "Icon:FL" "$current_icon" \
     --field "Custom variables, KEY=value one per line:TXT" "$custom_in" \
-    --button Save:0 --button Cancel:1 --separator '|') || exit 0
+    --button Cancel:1 --button Save:0 --separator '|') || exit 0
 
   # One value per field, in order. The custom variables come last and may hold a |.
   local parts=() n=${#KNOWN[@]} i selected='' exe icon custom
