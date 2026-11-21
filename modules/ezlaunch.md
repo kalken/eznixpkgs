@@ -11,6 +11,7 @@ Install and launch Windows games with Proton, without Steam or a launcher app. D
 - Right-click **Change executable**: pick another exe for the game (also refreshes the icon and the menu entry)
 - Right-click **Remove**: deletes the game, its prefix and its menu entry
 - In a terminal, leave out the game name (`ezlaunch run`, `settings`, `exe`, `remove`) to choose it from an arrow-key menu (fzf)
+- `ezlaunch running` lists the games that are running, `ezlaunch stop` closes one (it finds a game's processes by its prefix)
 - Nothing runs in the background: the menu entry starts a short script that hands over to `umu-run`
 
 ## 🚀 Quick Start
@@ -55,7 +56,7 @@ Settings are layered, later wins: `/etc/ezlaunch/config`, `~/.config/ezlaunch/co
 - `PROTONPATH` can be a name from `~/.local/share/Steam/compatibilitytools.d` (what ezproton installs), a full path, or a version umu downloads itself.
 - Special variables in a game's `config`: `EZLAUNCH_EXE` (the game's exe), `EZLAUNCH_ARGS` (arguments for the game) and `EZLAUNCH_WRAPPER` (a command prefix, such as `gamemoderun`).
 - Dialogs use `kdialog` on KDE and `zenity` otherwise. zenity is bundled; kdialog is used if it is installed.
-- Command line: `ezlaunch add [setup.exe]`, `run <game>`, `settings <game>`, `exe <game>`, `remove <game>`, `list`.
+- Command line: `ezlaunch add [setup.exe]`, `run <game>`, `settings <game>`, `exe <game>`, `remove <game>`, `list`, `running`, `stop <game>`.
 - Start menu entries are `~/.local/share/applications/ezlaunch-<name>.desktop`. Right-click actions need a desktop that supports them (KDE, GNOME, XFCE, ...); some launchers such as rofi ignore them.
 - Installers run through Proton. Nothing is extracted by hand, so registry entries and redistributables work as usual.
 

@@ -149,10 +149,10 @@ ask_radio() {
 }
 
 # Arrow-key menu of the games, for commands given no name
-pick_game() {
-  local games
-  games=$(cmd_list)
-  [ -n "$games" ] || die "no games added yet"
+pick_game() { # [list of games, default all]
+  local games=${1:-}
+  if [ -z "$games" ]; then games=$(cmd_list); fi
+  [ -n "$games" ] || die "no games to choose from"
   { [ -t 0 ] && [ -t 2 ]; } || die "game name missing"
   fzf --height 40% --reverse --prompt "game> " <<<"$games"
 }
@@ -388,6 +388,51 @@ cmd_remove() { # name
   refresh_menu
 }
 
+# Process IDs whose environment holds the prefix of a game, which is every process it started
+game_pids() { # name
+  local prefix="$GAMES/$1/prefix" file
+  for file in /proc/[0-9]*/environ; do
+    if grep -zqxF -- "WINEPREFIX=$prefix" "$file" 2>/dev/null; then
+      file=${file#/proc/}
+      echo "${file%/environ}"
+    fi
+  done
+}
+
+cmd_running() {
+  local name
+  while IFS= read -r name; do
+    if [ -n "$(game_pids "$name")" ]; then echo "$name"; fi
+  done < <(cmd_list)
+}
+
+cmd_stop() { # [name]
+  local name=${1:-} pids running
+  if [ -z "$name" ]; then
+    running=$(cmd_running)
+    [ -n "$running" ] || die "no games running"
+    name=$(pick_game "$running")
+  fi
+  check_name "$name"
+  [ -f "$GAMES/$name/config" ] || die "unknown game: $name"
+  pids=$(game_pids "$name")
+  [ -n "$pids" ] || die "$name is not running"
+
+  # Ask nicely, then kill what is left after five seconds
+  # shellcheck disable=SC2086
+  kill $pids 2>/dev/null || true
+  for _ in 1 2 3 4 5; do
+    sleep 1
+    pids=$(game_pids "$name")
+    if [ -z "$pids" ]; then break; fi
+  done
+  if [ -n "$pids" ]; then
+    # shellcheck disable=SC2086
+    kill -9 $pids 2>/dev/null || true
+  fi
+  echo "ezlaunch: stopped $name"
+}
+
 cmd_list() {
   local dir
   for dir in "$GAMES"/*/; do
@@ -405,8 +450,10 @@ Usage: ezlaunch <command>
   exe [game]            choose another executable for a game
   remove [game]         delete a game, its prefix and its start menu entry
   list                  list the games
+  running               list the games that are running
+  stop [game]           close a running game
 
-Without a game name, run, settings, exe and remove show a menu to choose from.
+Without a game name, run, settings, exe, remove and stop show a menu to choose from.
 
 Defaults for new games: $SYSTEM_CONF and $USER_CONF (KEY=value lines).
 EOF
@@ -419,6 +466,8 @@ case "${1:-}" in
   exe) shift && cmd_exe "$@" ;;
   remove) shift && cmd_remove "$@" ;;
   list) cmd_list ;;
+  running) cmd_running ;;
+  stop) shift && cmd_stop "$@" ;;
   *)
     usage
     exit 1
