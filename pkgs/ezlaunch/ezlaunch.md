@@ -34,16 +34,18 @@ Then double-click a `setup.exe`.
 
 ## ⚙️ Defaults
 
-`programs.ezlaunch.defaults` is written to `/etc/ezlaunch/config`. Every game starts with these variables:
+`programs.ezlaunch.defaults` is written to `/etc/ezlaunch/config`. Every game starts with these variables. Out of the box only `PROTONPATH = "GE-Proton-Latest"` is set. Everything else is off until you add it, for example:
 
 ```nix
 programs.ezlaunch.defaults = {
-  PROTONPATH = "GE-Proton-Latest"; # the default
-  PROTON_ENABLE_WAYLAND = true;    # native Wayland instead of XWayland
-  PROTON_ENABLE_HDR = true;        # HDR, needs Wayland and an HDR screen
-  MANGOHUD = true;                 # performance overlay
+  PROTONPATH = "GE-Proton-Latest"; # set by default
+  PROTON_ENABLE_WAYLAND = true;    # not set by default: native Wayland instead of XWayland
+  PROTON_ENABLE_HDR = true;        # not set by default: HDR, needs Wayland and an HDR screen
+  MANGOHUD = true;                 # not set by default: performance overlay
 };
 ```
+
+Setting `defaults` replaces the built-in one, so keep the `PROTONPATH` line if you want it. Without it, umu picks its own Proton (UMU-Proton).
 
 Settings are layered, later wins: `/etc/ezlaunch/config`, `~/.config/ezlaunch/config`, then the game's own `config`. A change in the defaults applies to every game that does not set the variable itself.
 
