@@ -135,7 +135,7 @@ ask_radio() {
         shift 2
       done
       zenity --list --radiolist --title ezlaunch --text "$prompt" --width 360 --height 300 \
-        --column "" --column Version "${args[@]}"
+        --column "" --column Choice "${args[@]}"
       ;;
     kdialog)
       while [ $# -gt 0 ]; do
@@ -201,17 +201,29 @@ launch() { # program, args...
   exec ${EZLAUNCH_WRAPPER:-} umu-run "$@"
 }
 
+ico_to_png() { # ico, output png
+  local tmp png
+  tmp=$(mktemp -d)
+  icotool -x -o "$tmp" "$1" 2>/dev/null || true
+  png=$(find "$tmp" -name '*.png' -printf '%s %p\n' | sort -rn | sed -n 1p | cut -d' ' -f2-)
+  if [ -n "$png" ]; then cp "$png" "$2"; fi
+  rm -rf "$tmp"
+}
+
 extract_icon() { # exe, output png
-  local tmp ico png
+  local tmp ico
   tmp=$(mktemp -d)
   wrestool -x -t14 -o "$tmp" "$1" 2>/dev/null || true
   ico=$(find "$tmp" -name '*.ico' | sort | sed -n 1p)
-  if [ -n "$ico" ]; then
-    icotool -x -o "$tmp" "$ico" 2>/dev/null || true
-    png=$(find "$tmp" -name '*.png' -printf '%s %p\n' | sort -rn | sed -n 1p | cut -d' ' -f2-)
-    if [ -n "$png" ]; then cp "$png" "$2"; fi
-  fi
+  if [ -n "$ico" ]; then ico_to_png "$ico" "$2"; fi
   rm -rf "$tmp"
+}
+
+# The game's icon file, or a generic icon name if it has none
+icon_for() { # game dir
+  local file
+  file=$(find "$1" -maxdepth 1 -name 'icon.*' | sed -n 1p)
+  echo "${file:-applications-games}"
 }
 
 write_desktop() { # name, icon
@@ -224,15 +236,11 @@ Exec=ezlaunch run "$1"
 Icon=$2
 Categories=Game;
 Terminal=false
-Actions=settings;exe;remove;
+Actions=settings;remove;
 
 [Desktop Action settings]
 Name=Settings
 Exec=ezlaunch settings "$1"
-
-[Desktop Action exe]
-Name=Change executable
-Exec=ezlaunch exe "$1"
 
 [Desktop Action remove]
 Name=Remove
@@ -291,17 +299,46 @@ cmd_exe() { # name
   exe=$(ask_file "Choose the game executable" "$(dirname "${exe:-$dir/prefix/drive_c/x}")/")
   [ -f "$exe" ] || die "not a file: $exe"
 
-  rm -f "$dir/icon.png"
+  rm -f "$dir"/icon.*
   extract_icon "$exe" "$dir/icon.png"
-  icon=applications-games
-  if [ -f "$dir/icon.png" ]; then icon="$dir/icon.png"; fi
 
   { grep -v '^EZLAUNCH_EXE=' "$dir/config" || true; } >"$dir/config.new"
   printf 'EZLAUNCH_EXE=%s\n' "$exe" >>"$dir/config.new"
   mv "$dir/config.new" "$dir/config"
   # Also gives a game added earlier the current menu actions
-  write_desktop "$name" "$icon"
+  write_desktop "$name" "$(icon_for "$dir")"
   info "$name now starts $(basename "$exe")."
+}
+
+cmd_icon() { # name
+  local name=${1:-} dir src new
+  if [ -z "$name" ]; then name=$(pick_game); fi
+  check_name "$name"
+  dir="$GAMES/$name"
+  [ -f "$dir/config" ] || die "unknown game: $name"
+  [ -n "$GUI" ] || die "this needs a graphical session"
+
+  src=$(ask_file "Choose an icon (image, .ico or .exe)" "$HOME/")
+  [ -f "$src" ] || die "not a file: $src"
+  case "${src,,}" in
+    *.png | *.svg | *.xpm)
+      new="$dir/new-icon.${src##*.}"
+      cp "$src" "$new"
+      ;;
+    *.ico)
+      new="$dir/new-icon.png"
+      ico_to_png "$src" "$new"
+      ;;
+    *)
+      new="$dir/new-icon.png"
+      extract_icon "$src" "$new"
+      ;;
+  esac
+  [ -f "$new" ] || die "no icon found in $src"
+  rm -f "$dir"/icon.*
+  mv "$new" "$dir/icon.${new##*.}"
+  write_desktop "$name" "$(icon_for "$dir")"
+  info "Changed the icon of $name."
 }
 
 cmd_run() { # name, args...
@@ -320,7 +357,7 @@ cmd_run() { # name, args...
   launch "$EZLAUNCH_EXE" ${EZLAUNCH_ARGS:-} "$@"
 }
 
-cmd_settings() { # name
+settings_options() { # name
   local name=${1:-} cfg
   if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
@@ -375,6 +412,21 @@ cmd_settings() { # name
   } >"$cfg.new"
   mv "$cfg.new" "$cfg"
   info "Saved the settings for $name."
+}
+
+cmd_settings() { # [name]
+  local name=${1:-} choice
+  if [ -z "$name" ]; then name=$(pick_game); fi
+  check_name "$name"
+  [ -f "$GAMES/$name/config" ] || die "unknown game: $name"
+  [ -n "$GUI" ] || die "settings needs a graphical session. Edit $GAMES/$name/config instead."
+
+  choice=$(ask_radio "Settings for $name" "Options" on "Change executable" off "Change icon" off)
+  case $choice in
+    "Change executable") cmd_exe "$name" ;;
+    "Change icon") cmd_icon "$name" ;;
+    *) settings_options "$name" ;;
+  esac
 }
 
 cmd_remove() { # name
@@ -446,14 +498,15 @@ Usage: ezlaunch <command>
 
   add [installer.exe]   run an installer in a new prefix and add the game to the start menu
   run [game] [args]     start a game
-  settings [game]       change Proton version and options for a game
+  settings [game]       options, Proton version, executable and icon of a game
   exe [game]            choose another executable for a game
+  icon [game]           choose another icon for a game
   remove [game]         delete a game, its prefix and its start menu entry
   list                  list the games
   running               list the games that are running
   stop [game]           close a running game
 
-Without a game name, run, settings, exe, remove and stop show a menu to choose from.
+Without a game name, run, settings, exe, icon, remove and stop show a menu to choose from.
 
 Defaults for new games: $SYSTEM_CONF and $USER_CONF (KEY=value lines).
 EOF
@@ -464,6 +517,7 @@ case "${1:-}" in
   run) shift && cmd_run "$@" ;;
   settings) shift && cmd_settings "$@" ;;
   exe) shift && cmd_exe "$@" ;;
+  icon) shift && cmd_icon "$@" ;;
   remove) shift && cmd_remove "$@" ;;
   list) cmd_list ;;
   running) cmd_running ;;
