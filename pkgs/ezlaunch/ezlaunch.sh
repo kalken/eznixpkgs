@@ -236,11 +236,15 @@ Exec=ezlaunch run "$1"
 Icon=$2
 Categories=Game;
 Terminal=false
-Actions=settings;remove;
+Actions=settings;stop;remove;
 
 [Desktop Action settings]
 Name=Settings
 Exec=ezlaunch settings "$1"
+
+[Desktop Action stop]
+Name=Stop
+Exec=ezlaunch stop "$1"
 
 [Desktop Action remove]
 Name=Remove
