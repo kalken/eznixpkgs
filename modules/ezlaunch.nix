@@ -26,6 +26,15 @@ let
     mimeTypes = exeTypes;
     noDisplay = true;
   };
+
+  # Under Open With in the file manager, for a game that is already on the disk
+  addInstalled = pkgs.makeDesktopItem {
+    name = "ezlaunch-add-installed";
+    desktopName = "Add installed game to ezlaunch";
+    comment = "Add a Windows game that is already on the disk, without an installer";
+    exec = "ezlaunch add --installed %f";
+    mimeTypes = exeTypes;
+  };
 in
 {
   options.programs.ezlaunch = {
@@ -72,7 +81,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ cfg.package ] ++ lib.optional cfg.exeHandler handler;
+    environment.systemPackages = [
+      cfg.package
+    ]
+    ++ lib.optionals cfg.exeHandler [
+      handler
+      addInstalled
+    ];
 
     environment.etc."ezlaunch/config".text = lib.concatStrings (
       lib.mapAttrsToList (k: v: "${k}=${toValue v}\n") cfg.defaults

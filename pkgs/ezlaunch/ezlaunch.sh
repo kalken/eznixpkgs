@@ -232,9 +232,20 @@ EOF
   refresh_menu
 }
 
-cmd_add() { # [installer]
-  local installer=${1:-} name dir exe icon
-  if [ -z "$installer" ]; then installer=$(ask_file "Choose the installer" "$HOME/"); fi
+cmd_add() { # [--installed] [exe]
+  local installed=false installer name dir exe icon
+  if [ "${1:-}" = --installed ]; then
+    installed=true
+    shift
+  fi
+  installer=${1:-}
+  if [ -z "$installer" ]; then
+    if $installed; then
+      installer=$(ask_file "Choose the game executable" "$HOME/" "$EXE_FILTER")
+    else
+      installer=$(ask_file "Choose the installer" "$HOME/")
+    fi
+  fi
   [ -f "$installer" ] || die "not a file: $installer"
   installer=$(readlink -f "$installer")
 
@@ -247,19 +258,24 @@ cmd_add() { # [installer]
   mkdir -p "$dir/prefix"
   touch "$dir/config"
 
-  # A game that was installed but never got its executable picked skips the installer
-  if [ ! -f "$dir/.installed" ]; then
-    (
-      load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
-      WINEPREFIX="$dir/prefix"
-      cd "$(dirname "$installer")" || exit 1
-      launch "$installer"
-    ) || true
-    touch "$dir/.installed"
-  fi
+  if $installed; then
+    # A game that is already on the disk is run from where it is
+    exe=$installer
+  else
+    # A game that was installed but never got its executable picked skips the installer
+    if [ ! -f "$dir/.installed" ]; then
+      (
+        load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
+        WINEPREFIX="$dir/prefix"
+        cd "$(dirname "$installer")" || exit 1
+        launch "$installer"
+      ) || true
+      touch "$dir/.installed"
+    fi
 
-  exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/" "$EXE_FILTER")
-  [ -f "$exe" ] || die "not a file: $exe"
+    exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/" "$EXE_FILTER")
+    [ -f "$exe" ] || die "not a file: $exe"
+  fi
 
   icon=applications-games
   extract_icon "$exe" "$dir/icon.png"
@@ -514,6 +530,8 @@ usage() {
 Usage: ezlaunch <command>
 
   add [installer.exe]   run an installer in a new prefix and add the game to the start menu
+  add --installed [game.exe]
+                        add a game that is already on the disk, without an installer
   run [game] [args]     start a game
   settings [game]       all settings of a game in one window
   remove [game]         delete a game, its prefix and its start menu entry
