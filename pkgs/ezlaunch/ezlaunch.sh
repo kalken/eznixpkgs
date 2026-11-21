@@ -274,8 +274,22 @@ EOF
   refresh_menu
 }
 
+# Pick one of the installed Proton versions, the default marked. Prints nothing without a choice.
+ask_proton() { # current
+  local rows=() version
+  [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || return 0
+  for version in "$TOOLS"/*/; do
+    [ -d "$version" ] || continue
+    version=$(basename "$version")
+    if [ "$version" = "$1" ]; then rows+=(TRUE "$version"); else rows+=(FALSE "$version"); fi
+  done
+  [ "${#rows[@]}" -gt 0 ] || return 0
+  zenity --list --radiolist --title ezlaunch --text "Proton version" --width 420 --height 360 \
+    --column "" --column Version "${rows[@]}" || return 1
+}
+
 cmd_add() { # [--install | --installed] [exe]
-  local mode='' installer name dir exe icon
+  local mode='' installer name dir exe icon version
   case "${1:-}" in
     --install)
       mode=install
@@ -304,8 +318,11 @@ cmd_add() { # [--install | --installed] [exe]
   dir="$GAMES/$name"
   if grep -qs '^EZLAUNCH_EXE=' "$dir/config"; then die "already added: $name"; fi
 
+  version=$(ask_proton "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")") || exit 1
+
   mkdir -p "$dir/prefix"
   touch "$dir/config"
+  if [ -n "$version" ]; then apply_proton "$name" "$version"; fi
 
   if [ "$mode" = installed ]; then
     # A game that is already on the disk is run from where it is

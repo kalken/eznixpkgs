@@ -4,7 +4,7 @@ Install and launch Windows games with Proton, without Steam or a launcher app. D
 
 ## ✨ Features
 
-- Double-click an exe and choose **Install** (runs the installer in a new prefix with [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher), then you pick the game's exe) or **Already installed** (adds a game that is on the disk, started from where it is). Either way a start menu entry, with the exe's icon, is written
+- Double-click an exe and choose **Install** (runs the installer in a new prefix with [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher), then you pick the game's exe) or **Already installed** (adds a game that is on the disk, started from where it is). After the name you pick the Proton version, with the default preselected. Either way a start menu entry, with the exe's icon, is written
 - To skip that question, right-click the exe, **Open With**, **Add installed game to ezlaunch**
 - One prefix per game, in `~/.local/share/ezlaunch/games/<name>/`
 - Any Proton option works: settings are plain `KEY=value` environment variables
