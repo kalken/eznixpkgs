@@ -52,17 +52,6 @@ info() {
   fi
 }
 
-ask_text() { # prompt, default
-  local reply
-  if [ -n "$GUI" ]; then
-    yad --entry --title ezlaunch --text "$1" --no-markup --entry-text "$2" --center --width 480 \
-      --button Cancel:1 --button OK:0
-  else
-    read -r -p "$1 [$2] " reply
-    echo "${reply:-$2}"
-  fi
-}
-
 ask_file() { # prompt, start folder, [glob patterns to list first]
   local reply filter=()
   if [ -n "${3:-}" ]; then
@@ -144,7 +133,9 @@ check_name() {
 }
 
 desktop_file() { # name
-  echo "$APPS/ezlaunch-${1// /_}.desktop"
+  local id
+  id=$(basename "$(game_dir "$1")")
+  echo "$APPS/ezlaunch-${id// /_}.desktop"
 }
 
 refresh_menu() {
@@ -157,6 +148,46 @@ getv() { # key, files...
   local key=$1
   shift
   { grep -hs "^$key=" "$@" || true; } | tail -n1 | cut -d= -f2-
+}
+
+# The name of a game is a line in its config. A game added before that was named by its folder.
+game_label() { # game dir
+  local label
+  label=$(getv EZLAUNCH_NAME "$1/config")
+  echo "${label:-$(basename "$1")}"
+}
+
+# The folder of the game with this name, or fail
+game_dir() { # name
+  local dir
+  for dir in "$GAMES"/*/; do
+    dir=${dir%/}
+    [ -f "$dir/config" ] || continue
+    if [ "$(game_label "$dir")" = "$1" ]; then
+      echo "$dir"
+      return 0
+    fi
+  done
+  return 1
+}
+
+clean_name() {
+  printf '%s' "$1" | tr -cd 'A-Za-z0-9 ._-' | sed 's/^[^A-Za-z0-9]*//; s/ *$//'
+}
+
+# The name, or the name with 2, 3 and so on after it when a game has it already
+unique_name() { # name
+  local name=$1 n=2
+  while game_dir "$name" >/dev/null; do
+    name="$1 $n"
+    n=$((n + 1))
+  done
+  echo "$name"
+}
+
+# The same file always gives the same checksum, wherever it is. Only the start of a big file is read.
+file_checksum() { # file
+  { head -c 16777216 "$1"; stat -c %s "$1"; } | sha256sum | cut -c1-16
 }
 
 # Export the KEY=value lines of the given files, later files winning.
@@ -304,6 +335,17 @@ shortcut_games() { # prefix
     \( -ipath '*/start menu/*' -o -ipath '*/desktop/*' \) -print0 2>/dev/null)
 }
 
+# The name that goes with an exe in lines of name|exe
+shortcut_name() { # lines of name|exe, exe
+  local line
+  while IFS= read -r line; do
+    if [ "${line#*|}" = "$2" ]; then
+      echo "${line%%|*}"
+      return 0
+    fi
+  done <<<"$1"
+}
+
 # Which of the games is the one? Prints its exe, or nothing to pick a file by hand.
 pick_shortcut() { # lines of name|exe
   local rows=() line count
@@ -327,7 +369,7 @@ pick_shortcut() { # lines of name|exe
 }
 
 cmd_add() { # [--install | --installed] [--choose-proton] [exe]
-  local mode='' installer name dir exe icon version='' reply picked='' choose='' games
+  local mode='' installer name dir exe icon version='' reply picked='' choose='' games='' checksum id n
   while true; do
     case "${1:-}" in
       --install) mode=install ;;
@@ -352,51 +394,73 @@ cmd_add() { # [--install | --installed] [--choose-proton] [exe]
     picked=1
   fi
 
-  name=$(ask_text "Name of the game" "$(basename "$(dirname "$installer")")")
-  name=$(printf '%s' "$name" | tr -cd 'A-Za-z0-9 ._-' | sed 's/^[ .]*//; s/ *$//')
-  [ -n "$name" ] || die "empty game name"
-  dir="$GAMES/$name"
-  if grep -qs '^EZLAUNCH_EXE=' "$dir/config"; then die "already added: $name"; fi
+  # The folder of a game is named after its file, so the same file is not added twice. A game
+  # that was renamed does not count, and gets a folder of its own.
+  checksum=$(file_checksum "$installer")
+  id=$checksum
+  n=2
+  while [ -e "$GAMES/$id" ]; do
+    if grep -qs '^EZLAUNCH_SOURCE=' "$GAMES/$id/config"; then
+      die "already added as $(game_label "$GAMES/$id")"
+    fi
+    id="$checksum-$n"
+    n=$((n + 1))
+  done
 
   # Without the combined dialog above the default is used, unless --choose-proton asks for it
   if [ -z "$picked" ] && [ -n "$choose" ]; then
     version=$(ask_proton "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")") || exit 1
   fi
 
+  dir="$GAMES/$id"
   mkdir -p "$dir/prefix"
   touch "$dir/config"
-  if [ -n "$version" ]; then apply_proton "$name" "$version"; fi
+  # A game that did not get as far as having an executable is not kept
+  # shellcheck disable=SC2064
+  trap "if ! grep -qs '^EZLAUNCH_EXE=' '$dir/config'; then rm -rf '$dir'; fi" EXIT
+  if [ -n "$version" ]; then apply_proton "$dir" "$version"; fi
 
+  name=
   if [ "$mode" = installed ]; then
     # A game that is already on the disk is run from where it is
     exe=$installer
   else
-    # A game that was installed but never got its executable picked skips the installer
-    if [ ! -f "$dir/.installed" ]; then
-      (
-        load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
-        WINEPREFIX="$dir/prefix"
-        cd "$(dirname "$installer")" || exit 1
-        launch "$installer"
-      ) || true
-      touch "$dir/.installed"
-    fi
+    (
+      load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
+      WINEPREFIX="$dir/prefix"
+      cd "$(dirname "$installer")" || exit 1
+      launch "$installer"
+    ) || true
 
-    # The shortcuts the installer made tell which file is the game
+    # The shortcuts the installer made tell which file is the game, and what it is called
     exe=
     games=$(shortcut_games "$dir/prefix")
-    if [ -n "$games" ]; then exe=$(pick_shortcut "$games") || exit 1; fi
+    if [ -n "$games" ]; then
+      exe=$(pick_shortcut "$games") || exit 1
+      name=$(shortcut_name "$games" "$exe")
+    fi
     if [ -z "$exe" ]; then
       exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/" "$EXE_FILTER")
     fi
     [ -f "$exe" ] || die "not a file: $exe"
   fi
 
+  # Without a shortcut the game is called after the folder its exe is in
+  if [ -z "$name" ]; then name=$(basename "$(dirname "$exe")"); fi
+  name=$(clean_name "$name")
+  if [ -z "$name" ]; then name=$(clean_name "$(basename "${exe%.*}")"); fi
+  if [ -z "$name" ]; then name=Game; fi
+  name=$(unique_name "$name")
+
   icon=applications-games
   extract_icon "$exe" "$dir/icon.png"
   if [ -f "$dir/icon.png" ]; then icon="$dir/icon.png"; fi
 
-  printf 'EZLAUNCH_EXE=%s\n' "$exe" >>"$dir/config"
+  {
+    printf 'EZLAUNCH_NAME=%s\n' "$name"
+    printf 'EZLAUNCH_SOURCE=%s\n' "$checksum"
+    printf 'EZLAUNCH_EXE=%s\n' "$exe"
+  } >>"$dir/config"
   write_desktop "$name" "$icon"
   info "Added $name to the start menu."
 }
@@ -404,8 +468,8 @@ cmd_add() { # [--install | --installed] [--choose-proton] [exe]
 # The apply_ functions change one part of a game's config. They do not ask anything.
 
 # Make exe the game's executable, with the icon taken from it
-apply_exe() { # name, exe
-  local dir="$GAMES/$1"
+apply_exe() { # game dir, exe
+  local dir=$1
   rm -f "$dir"/icon.*
   extract_icon "$2" "$dir/icon.png"
   { grep -v '^EZLAUNCH_EXE=' "$dir/config" || true; } >"$dir/config.new"
@@ -413,8 +477,8 @@ apply_exe() { # name, exe
   mv "$dir/config.new" "$dir/config"
 }
 
-apply_icon() { # name, an image, .ico or .exe
-  local dir="$GAMES/$1" src=$2 new
+apply_icon() { # game dir, an image, .ico or .exe
+  local dir=$1 src=$2 new
   case "${src,,}" in
     *.png | *.svg | *.xpm)
       new="$dir/new-icon.${src##*.}"
@@ -434,8 +498,8 @@ apply_icon() { # name, an image, .ico or .exe
   mv "$new" "$dir/icon.${new##*.}"
 }
 
-apply_proton() { # name, version
-  local cfg="$GAMES/$1/config"
+apply_proton() { # game dir, version
+  local cfg="$1/config"
   { grep -v '^PROTONPATH=' "$cfg" || true; } >"$cfg.new"
   # Only a version other than the default is saved for the game
   if [ "$2" != "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")" ]; then
@@ -444,11 +508,14 @@ apply_proton() { # name, version
   mv "$cfg.new" "$cfg"
 }
 
-apply_options() { # name, checked keys one per line, custom variables
-  local selected=$2 custom=$3 cfg="$GAMES/$1/config"
+apply_options() { # game dir, checked keys one per line, custom variables
+  local selected=$2 custom=$3 cfg="$1/config"
   local inherited=("$SYSTEM_CONF" "$USER_CONF") entry key on off label
   {
-    echo "EZLAUNCH_EXE=$(getv EZLAUNCH_EXE "$cfg")"
+    # The name, the file it came from and the executable have their own places, keep them
+    for key in EZLAUNCH_NAME EZLAUNCH_SOURCE EZLAUNCH_EXE; do
+      if grep -q "^$key=" "$cfg"; then echo "$key=$(getv "$key" "$cfg")"; fi
+    done
     # The Proton version has its own field, keep it
     if grep -q '^PROTONPATH=' "$cfg"; then echo "PROTONPATH=$(getv PROTONPATH "$cfg")"; fi
     for entry in "${KNOWN[@]}"; do
@@ -464,12 +531,25 @@ apply_options() { # name, checked keys one per line, custom variables
   mv "$cfg.new" "$cfg"
 }
 
+# Give a game another name. It then counts as its own game, not the one its file made.
+apply_name() { # game dir, new name
+  local dir=$1 new cfg="$1/config"
+  new=$(clean_name "$2")
+  [ -n "$new" ] || die "empty game name"
+  if [ "$new" != "$(game_label "$dir")" ]; then
+    if game_dir "$new" >/dev/null; then die "there is already a game called $new"; fi
+    { grep -Ev '^(EZLAUNCH_NAME|EZLAUNCH_SOURCE)=' "$cfg" || true; } >"$cfg.new"
+    echo "EZLAUNCH_NAME=$new" >>"$cfg.new"
+    mv "$cfg.new" "$cfg"
+  fi
+}
+
 # Write the start menu entry of every game again, so they follow this version of ezlaunch
 refresh_entries() {
   local name dir
   NO_REFRESH=1
   while IFS= read -r name; do
-    dir="$GAMES/$name"
+    dir=$(game_dir "$name")
     if grep -qs '^EZLAUNCH_EXE=' "$dir/config"; then write_desktop "$name" "$(icon_for "$dir")"; fi
   done < <(game_names)
   NO_REFRESH=
@@ -491,8 +571,7 @@ cmd_run() { # name, args...
   shift || true
   if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
-  dir="$GAMES/$name"
-  [ -f "$dir/config" ] || die "unknown game: $name"
+  dir=$(game_dir "$name") || die "unknown game: $name"
   refresh_entries_if_new
   load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
   [ -n "${EZLAUNCH_EXE:-}" ] || die "$name has no executable set"
@@ -513,14 +592,13 @@ cmd_settings() { # [name]
   local name=${1:-} dir cfg
   if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
-  dir="$GAMES/$name"
+  dir=$(game_dir "$name") || die "unknown game: $name"
   cfg="$dir/config"
-  [ -f "$cfg" ] || die "unknown game: $name"
   command -v yad >/dev/null || die "settings needs yad. Edit $cfg instead."
   [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || die "settings needs a graphical session. Edit $cfg instead."
 
   local all=("$SYSTEM_CONF" "$USER_CONF" "$cfg")
-  local fields=() entry key on off label state managed='EZLAUNCH_EXE|PROTONPATH'
+  local fields=() entry key on off label state managed='EZLAUNCH_NAME|EZLAUNCH_SOURCE|EZLAUNCH_EXE|PROTONPATH'
   for entry in "${KNOWN[@]}"; do
     IFS='|' read -r key on off label <<<"$entry"
     state=FALSE
@@ -554,6 +632,7 @@ cmd_settings() { # [name]
     --file-filter "Programs | *.exe *.EXE" \
     --file-filter "Images and icons | *.png *.svg *.ico *.xpm *.exe *.EXE" \
     --file-filter "All files | *" \
+    --field "Name:" "$name" \
     "${fields[@]}" \
     --field "Proton version:CB" "$versions_field" \
     --field "Executable:FL" "$current_exe" \
@@ -562,51 +641,57 @@ cmd_settings() { # [name]
     --button Cancel:1 --button Save:0 --separator '|') || exit 0
 
   # One value per field, in order. The custom variables come last and may hold a |.
-  local parts=() n=${#KNOWN[@]} i selected='' exe icon custom
+  local parts=() n=${#KNOWN[@]} i selected='' exe icon custom new_name
   IFS='|' read -ra parts <<<"$out"
+  new_name=${parts[0]:-}
   for ((i = 0; i < n; i++)); do
     IFS='|' read -r key _ <<<"${KNOWN[i]}"
-    if [ "${parts[i]:-}" = TRUE ]; then selected+="$key"$'\n'; fi
+    if [ "${parts[i + 1]:-}" = TRUE ]; then selected+="$key"$'\n'; fi
   done
-  version=${parts[n]:-}
-  exe=${parts[n + 1]:-}
-  icon=${parts[n + 2]:-}
+  version=${parts[n + 1]:-}
+  exe=${parts[n + 2]:-}
+  icon=${parts[n + 3]:-}
   custom=$(
     IFS='|'
-    echo "${parts[*]:n+3}"
+    echo "${parts[*]:n+4}"
   )
   custom=${custom//\\n/$'\n'}
   # yad ends the text with a line break, which would add a blank line at every save
   custom=$(printf '%s' "$custom")
 
-  apply_options "$name" "$selected" "$custom"
-  if [ -n "$version" ]; then apply_proton "$name" "$version"; fi
+  apply_name "$dir" "$new_name"
+  name=$(game_label "$dir")
+  apply_options "$dir" "$selected" "$custom"
+  if [ -n "$version" ]; then apply_proton "$dir" "$version"; fi
   if [ -n "$exe" ] && [ "$exe" != "$current_exe" ]; then
     [ -f "$exe" ] || die "not a file: $exe"
-    apply_exe "$name" "$exe"
+    apply_exe "$dir" "$exe"
   fi
   if [ -n "$icon" ] && [ "$icon" != "$current_icon" ]; then
     [ -f "$icon" ] || die "not a file: $icon"
-    apply_icon "$name" "$icon"
+    apply_icon "$dir" "$icon"
   fi
   write_desktop "$name" "$(icon_for "$dir")"
   info "Saved the settings for $name."
 }
 
 cmd_remove() { # name
-  local name=${1:-}
+  local name=${1:-} dir entry
   if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
-  [ -f "$GAMES/$name/config" ] || die "unknown game: $name"
+  dir=$(game_dir "$name") || die "unknown game: $name"
   ask_yesno "Remove $name? Its prefix, with saved games inside it, is deleted." || exit 0
-  rm -rf "${GAMES:?}/$name"
-  rm -f "$(desktop_file "$name")"
+  entry=$(desktop_file "$name")
+  rm -rf "${dir:?}"
+  rm -f "$entry"
   refresh_menu
 }
 
 # Process IDs whose environment holds the prefix of a game, which is every process it started
 game_pids() { # name
-  local prefix="$GAMES/$1/prefix" file
+  local prefix file
+  prefix=$(game_dir "$1") || return 0
+  prefix="$prefix/prefix"
   for file in /proc/[0-9]*/environ; do
     if grep -zqxF -- "WINEPREFIX=$prefix" "$file" 2>/dev/null; then
       file=${file#/proc/}
@@ -620,8 +705,7 @@ cmd_exec() { # name, [file]
   local name=${1:-} file=${2:-} dir
   if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
-  dir="$GAMES/$name"
-  [ -f "$dir/config" ] || die "unknown game: $name"
+  dir=$(game_dir "$name") || die "unknown game: $name"
   if [ -z "$file" ]; then
     file=$(ask_file "Choose the program to run in the prefix of $name" "$HOME/" '*.exe *.EXE *.msi *.MSI')
   fi
@@ -648,7 +732,7 @@ cmd_stop() { # [name]
     name=$(pick_game "$running")
   fi
   check_name "$name"
-  [ -f "$GAMES/$name/config" ] || die "unknown game: $name"
+  game_dir "$name" >/dev/null || die "unknown game: $name"
   pids=$(game_pids "$name")
   [ -n "$pids" ] || die "$name is not running"
 
@@ -670,7 +754,8 @@ cmd_stop() { # [name]
 game_names() {
   local dir
   for dir in "$GAMES"/*/; do
-    if [ -f "$dir/config" ]; then basename "$dir"; fi
+    dir=${dir%/}
+    if [ -f "$dir/config" ]; then game_label "$dir"; fi
   done
 }
 
