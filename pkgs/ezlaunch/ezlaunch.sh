@@ -408,7 +408,7 @@ shortcut_games() { # prefix
 # argument is the lines to choose from. A second one, even an empty one, is the exes that start
 # ticked, and also means there is no "Other file" button. Prints nothing to pick a file by hand.
 pick_shortcuts() { # lines of name|exe, [exes that start ticked, one per line]
-  local rows=() line rc=0 reply picked= state buttons=(--button Cancel:1)
+  local rows=() line rc=0 reply picked='' state buttons=(--button Cancel:1)
   [ -n "$1" ] || return 0
   if [ -z "$GUI" ]; then
     printf '%s\n' "$1"
