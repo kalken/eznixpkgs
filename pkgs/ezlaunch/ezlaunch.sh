@@ -850,10 +850,54 @@ cmd_list() {
   done < <(game_names)
 }
 
+# One window with the games and a button for each thing the commands do
+cmd_gui() {
+  [ -n "$GUI" ] || die "the window needs a graphical session"
+  local name rc rows status
+  while true; do
+    rows=()
+    while IFS= read -r name; do
+      status=
+      if [ -n "$(game_pids "$name")" ]; then status=running; fi
+      rows+=("$name" "$status" "$(getv EZLAUNCH_EXE "$GAMES/$name/config")")
+    done < <(game_names)
+    rc=0
+    name=$(yad --list --title ezlaunch --text "Choose a game, then a button. Add game works without one." \
+      --center --width 800 --height 460 --column Game --column Status --column Executable \
+      --print-column 1 --separator '' \
+      --button Close:1 --button Refresh:60 --button "Add game:10" --button Remove:20 \
+      --button "Choose shortcuts:30" --button Settings:40 --button Stop:50 --button Run:0 \
+      "${rows[@]}") || rc=$?
+    case $rc in
+      1 | 252) return 0 ;;
+      60) continue ;;
+      10)
+        "$0" add || true
+        continue
+        ;;
+      *) ;;
+    esac
+    if [ -z "$name" ]; then
+      info "Choose a game first."
+      continue
+    fi
+    # Each is a command of its own, so it works the same as in a terminal
+    case $rc in
+      0) nohup "$0" run "$name" >/dev/null 2>&1 & ;;
+      20) "$0" remove "$name" || true ;;
+      30) "$0" shortcuts "$name" || true ;;
+      40) "$0" settings "$name" || true ;;
+      50) "$0" stop "$name" || true ;;
+      *) ;;
+    esac
+  done
+}
+
 usage() {
   cat <<EOF
 Usage: ezlaunch <command>
 
+  gui                   open a window with the games and buttons for all of this
   add [file.exe]        add a game: an installer is run in a new prefix, a game that is
                         already installed is added as it is. It asks which.
   add --install [file]  treat the file as an installer
@@ -874,6 +918,7 @@ EOF
 }
 
 case "${1:-}" in
+  gui) cmd_gui ;;
   add) shift && cmd_add "$@" ;;
   run) shift && cmd_run "$@" ;;
   settings) shift && cmd_settings "$@" ;;

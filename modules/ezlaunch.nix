@@ -17,6 +17,19 @@ let
     "application/vnd.microsoft.portable-executable"
   ];
 
+  # The window with all the games, in the start menu
+  manager = pkgs.makeDesktopItem {
+    name = "ezlaunch-manager";
+    desktopName = "ezlaunch";
+    comment = "Run, change and remove the Windows games added with ezlaunch";
+    exec = "ezlaunch gui";
+    icon = "applications-games";
+    categories = [
+      "Game"
+      "Utility"
+    ];
+  };
+
   # Not shown in the menu: it only exists so a .exe can be opened with ezlaunch add
   handler = pkgs.makeDesktopItem {
     name = "ezlaunch";
@@ -83,6 +96,7 @@ in
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [
       cfg.package
+      manager
     ]
     ++ lib.optionals cfg.exeHandler [
       handler
