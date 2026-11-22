@@ -148,6 +148,7 @@ desktop_file() { # name
 }
 
 refresh_menu() {
+  if [ -n "${NO_REFRESH:-}" ]; then return 0; fi
   update-desktop-database "$APPS" 2>/dev/null || true
 }
 
@@ -463,6 +464,18 @@ apply_options() { # name, checked keys one per line, custom variables
   mv "$cfg.new" "$cfg"
 }
 
+# Write the start menu entry of every game again, so they follow this version of ezlaunch
+refresh_entries() {
+  local name dir
+  NO_REFRESH=1
+  while IFS= read -r name; do
+    dir="$GAMES/$name"
+    if grep -qs '^EZLAUNCH_EXE=' "$dir/config"; then write_desktop "$name" "$(icon_for "$dir")"; fi
+  done < <(game_names)
+  NO_REFRESH=
+  refresh_menu
+}
+
 cmd_run() { # name, args...
   local name=${1:-} dir
   shift || true
@@ -470,6 +483,7 @@ cmd_run() { # name, args...
   check_name "$name"
   dir="$GAMES/$name"
   [ -f "$dir/config" ] || die "unknown game: $name"
+  refresh_entries
   load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
   [ -n "${EZLAUNCH_EXE:-}" ] || die "$name has no executable set"
   WINEPREFIX="$dir/prefix"
@@ -674,6 +688,7 @@ Usage: ezlaunch <command>
   list                  list the games, marking the ones that are running
   running               list the games that are running
   stop [game]           close a running game
+  refresh               write the start menu entries of all games again
 
 Without a game name, run, settings, remove and stop show a menu to choose from.
 
@@ -689,6 +704,7 @@ case "${1:-}" in
   list) cmd_list ;;
   running) cmd_running ;;
   stop) shift && cmd_stop "$@" ;;
+  refresh) refresh_entries ;;
   exec) shift && cmd_exec "$@" ;;
   *)
     usage
