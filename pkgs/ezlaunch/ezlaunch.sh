@@ -5,6 +5,8 @@
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
 GAMES="$DATA/ezlaunch/games"
 APPS="$DATA/applications"
+MENUS="${XDG_CONFIG_HOME:-$HOME/.config}/menus/applications-merged"
+DIRECTORIES="$DATA/desktop-directories"
 USER_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/ezlaunch/config"
 SYSTEM_CONF=/etc/ezlaunch/config
 # Where ezproton installs Proton
@@ -25,6 +27,18 @@ KNOWN=(
   "PROTON_LOG|1|0|Proton log"
   "MANGOHUD|1|0|MangoHud overlay"
   "EZLAUNCH_WRAPPER|gamemoderun||GameMode"
+)
+
+# label|category, where an entry goes in the start menu
+CATEGORIES=(
+  "Game|Game"
+  "Utility|Utility"
+  "Office|Office"
+  "Internet|Network"
+  "Development|Development"
+  "Graphics|Graphics"
+  "Multimedia|AudioVideo"
+  "System|System"
 )
 
 # Dialogs are yad. Without a display the questions are asked in the terminal.
@@ -97,33 +111,66 @@ proton_choices() { # current
   echo "$list"
 }
 
-# Installer or a game that is already installed? Prints install or installed, then | and the
-# chosen Proton version (empty if there is nothing to choose).
-ask_mode() { # question, current Proton version
-  local reply rc=0 choices
+# The categories as a yad combo box list, the current one first
+category_choices() { # current category
+  local entry label value list=
+  for entry in "${CATEGORIES[@]}"; do
+    IFS='|' read -r label value <<<"$entry"
+    if [ "$value" = "$1" ]; then label="^$label"; fi
+    list+="${list:+!}$label"
+  done
+  echo "$list"
+}
+
+# The category that goes with a label from the list
+category_value() { # label
+  local entry label value
+  for entry in "${CATEGORIES[@]}"; do
+    IFS='|' read -r label value <<<"$entry"
+    if [ "$label" = "$1" ]; then
+      echo "$value"
+      return 0
+    fi
+  done
+  echo Game
+}
+
+# The category a game has: its own, else the default, else Game
+game_category() { # game config
+  local category
+  category=$(getv EZLAUNCH_CATEGORY "$SYSTEM_CONF" "$USER_CONF" "$1")
+  echo "${category:-Game}"
+}
+
+# Installer or a game that is already installed? Prints install or installed, then | the chosen
+# Proton version (empty if there is nothing to choose), | and the category.
+ask_mode() { # question, current Proton version, current category
+  local reply rc=0 choices fields=() parts=() version='' category=''
   if [ -n "$GUI" ]; then
     choices=$(proton_choices "$2")
+    if [ -n "$choices" ]; then fields+=(--field "Proton version:CB" "$choices"); fi
+    fields+=(--field "Category:CB" "$(category_choices "$3")")
+    # yad shows the buttons in the order given: Cancel on the left, Install on the right
+    reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width 320 \
+      "${fields[@]}" \
+      --buttons-layout edge --button Cancel:1 --button Add:2 --button Install:0) || rc=$?
+    IFS='|' read -ra parts <<<"$reply"
     if [ -n "$choices" ]; then
-      # yad shows the buttons in the order given: Cancel on the left, Install on the right
-      reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width 320 \
-        --field "Proton version:CB" "$choices" \
-        --buttons-layout edge --button Cancel:1 --button Add:2 --button Install:0) || rc=$?
-      reply=${reply%%|*}
+      version=${parts[0]:-}
+      category=$(category_value "${parts[1]:-}")
     else
-      yad --title ezlaunch --text "$1" --no-markup --center --width 320 \
-        --buttons-layout edge --button Cancel:1 --button Add:2 --button Install:0 || rc=$?
-      reply=
+      category=$(category_value "${parts[0]:-}")
     fi
     case $rc in
-      0) echo "install|$reply" ;;
-      2) echo "installed|$reply" ;;
+      0) echo "install|$version|$category" ;;
+      2) echo "installed|$version|$category" ;;
       *) return 1 ;;
     esac
   else
     read -r -p "$1 [i]nstaller or [a]lready installed? " reply
     case $reply in
-      i*) echo "install|" ;;
-      a*) echo "installed|" ;;
+      i*) echo "install||" ;;
+      a*) echo "installed||" ;;
       *) return 1 ;;
     esac
   fi
@@ -149,6 +196,8 @@ desktop_file() { # name
 
 refresh_menu() {
   update-desktop-database "$APPS" 2>/dev/null || true
+  # KDE keeps its own copy of the menu
+  if command -v kbuildsycoca6 >/dev/null; then kbuildsycoca6 >/dev/null 2>&1 || true; fi
 }
 
 # Last value of a KEY=value line in the given files, empty if there is none.
@@ -233,25 +282,76 @@ icon_for() { # game dir
 }
 
 write_desktop() { # name, icon
+  local name=$1 icon=$2 dir="$GAMES/$1" id category lname lexe licon n=0
+  id=${name// /_}
   mkdir -p "$APPS"
-  cat >"$(desktop_file "$1")" <<EOF
+  # A game with more than one shortcut gets a menu folder of its own. Otherwise it goes under
+  # its category.
+  if [ -s "$dir/links" ]; then category="X-ezlaunch-$id"; else category=$(game_category "$dir/config"); fi
+  cat >"$(desktop_file "$name")" <<EOF
 [Desktop Entry]
 Type=Application
-Name=$1
-Exec=ezlaunch run "$1"
-Icon=$2
-Categories=Game;
+Name=$name
+Exec=ezlaunch run "$name"
+Icon=$icon
+Categories=$category;
 Terminal=false
 Actions=settings;remove;
 
 [Desktop Action settings]
 Name=Settings
-Exec=ezlaunch settings "$1"
+Exec=ezlaunch settings "$name"
 
 [Desktop Action remove]
 Name=Remove
-Exec=ezlaunch remove "$1"
+Exec=ezlaunch remove "$name"
 EOF
+  # The other shortcuts of the same install, started with their own exe in the same prefix
+  rm -f "$APPS/ezlaunch-$id.link-"*.desktop
+  if [ -s "$dir/links" ]; then
+    while IFS='|' read -r lname lexe; do
+      n=$((n + 1))
+      licon="$dir/link-$n.png"
+      if [ ! -f "$licon" ]; then licon=applications-games; fi
+      cat >"$APPS/ezlaunch-$id.link-$n.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=$lname
+Exec=ezlaunch run "$name" --exe "${lexe//%/%%}"
+Icon=$licon
+Categories=$category;
+Terminal=false
+Actions=settings;
+
+[Desktop Action settings]
+Name=Settings
+Exec=ezlaunch settings "$name"
+EOF
+    done <"$dir/links"
+    mkdir -p "$MENUS" "$DIRECTORIES"
+    cat >"$MENUS/ezlaunch-$id.menu" <<EOF
+<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN"
+ "http://www.freedesktop.org/standards/menu-spec/menu-1.0.dtd">
+<Menu>
+  <Name>Applications</Name>
+  <Menu>
+    <Name>ezlaunch-$id</Name>
+    <Directory>ezlaunch-$id.directory</Directory>
+    <Include>
+      <Category>X-ezlaunch-$id</Category>
+    </Include>
+  </Menu>
+</Menu>
+EOF
+    cat >"$DIRECTORIES/ezlaunch-$id.directory" <<EOF
+[Desktop Entry]
+Type=Directory
+Name=$name
+Icon=$icon
+EOF
+  else
+    rm -f "$MENUS/ezlaunch-$id.menu" "$DIRECTORIES/ezlaunch-$id.directory"
+  fi
   refresh_menu
 }
 
@@ -270,8 +370,68 @@ ask_proton() { # current
     --button Cancel:1 --button OK:0 "${rows[@]}"
 }
 
+# The games an installer left shortcuts for, as lines of name|exe. The shortcuts are the .lnk
+# files in the prefix's Start Menu and on its desktop. Uninstallers are left out.
+shortcut_games() { # prefix
+  local prefix=$1 lnk name target drive base exe seen=$'\n'
+  while IFS= read -r -d '' lnk; do
+    name=$(basename "$lnk")
+    name=${name%.[Ll][Nn][Kk]}
+    if [[ "${name,,}" == *uninstall* ]]; then continue; fi
+    # The target is stored as a plain Windows path, such as C:\Games\Some Game\game.exe
+    target=$(LC_ALL=C grep -aoE '[A-Za-z]:\\([^\\/:*?"<>|[:cntrl:]]+\\)*[^\\/:*?"<>|[:cntrl:]]+\.[Ee][Xx][Ee]' "$lnk" | head -n1) || true
+    [ -n "$target" ] || continue
+    drive=${target:0:1}
+    base="$prefix/dosdevices/${drive,,}:"
+    exe="$base/${target:3}"
+    exe=${exe//\\//}
+    # Windows paths do not care about upper and lower case
+    if [ ! -f "$exe" ]; then
+      exe=$(find -L "$base" -ipath "$exe" -print -quit 2>/dev/null) || true
+    fi
+    [ -f "$exe" ] || continue
+    exe=$(readlink -f "$exe")
+    if [[ "$(basename "${exe,,}")" == unins*.exe ]]; then continue; fi
+    if [[ "$seen" == *$'\n'"$exe"$'\n'* ]]; then continue; fi
+    seen+="$exe"$'\n'
+    printf '%s|%s\n' "$name" "$exe"
+  done < <(find "$prefix/drive_c/ProgramData" "$prefix/drive_c/users" -iname '*.lnk' \
+    \( -ipath '*/start menu/*' -o -ipath '*/desktop/*' \) -print0 2>/dev/null)
+}
+
+
+# Which of the shortcuts get a start menu entry? Prints the chosen lines of name|exe, the
+# first one is the game itself. Prints nothing to pick a file by hand.
+pick_shortcuts() { # lines of name|exe
+  local rows=() line rc=0 reply picked=
+  [ -n "$1" ] || return 0
+  if [ -z "$GUI" ]; then
+    printf '%s\n' "$1"
+    return 0
+  fi
+  while IFS= read -r line; do
+    rows+=(TRUE "${line%%|*}" "${line#*|}")
+  done <<<"$1"
+  reply=$(yad --list --checklist --title ezlaunch \
+    --text "These shortcuts were made. Which ones go in the start menu?" \
+    --center --width 560 --height 320 --column "" --column Name --column Executable \
+    --separator '|' --button Cancel:1 --button "Other file:3" --button OK:0 "${rows[@]}") || rc=$?
+  case $rc in
+    0) ;;
+    3) return 0 ;;
+    *) return 1 ;;
+  esac
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    line=${line#TRUE|}
+    line=${line%|}
+    picked+="$line"$'\n'
+  done <<<"$reply"
+  printf '%s' "$picked"
+}
+
 cmd_add() { # [--install | --installed] [exe]
-  local mode='' installer name dir exe icon version='' reply picked=''
+  local mode='' installer name dir exe icon version='' category='' reply picked='' picks n=0 lname lexe
   case "${1:-}" in
     --install)
       mode=install
@@ -292,9 +452,12 @@ cmd_add() { # [--install | --installed] [exe]
 
   if [ -z "$mode" ]; then
     reply=$(ask_mode "Is $(basename "$installer") an installer or a game to add?" \
-      "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")") || exit 1
+      "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")" \
+      "$(game_category /dev/null)") || exit 1
     mode=${reply%%|*}
-    version=${reply#*|}
+    reply=${reply#*|}
+    version=${reply%%|*}
+    category=${reply#*|}
     picked=1
   fi
 
@@ -312,6 +475,7 @@ cmd_add() { # [--install | --installed] [exe]
   mkdir -p "$dir/prefix"
   touch "$dir/config"
   if [ -n "$version" ]; then apply_proton "$name" "$version"; fi
+  if [ -n "$category" ]; then apply_category "$name" "$category"; fi
 
   if [ "$mode" = installed ]; then
     # A game that is already on the disk is run from where it is
@@ -328,7 +492,16 @@ cmd_add() { # [--install | --installed] [exe]
       touch "$dir/.installed"
     fi
 
-    exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/" "$EXE_FILTER")
+    # The shortcuts the installer made tell which files are the game and its programs
+    exe=
+    picks=$(pick_shortcuts "$(shortcut_games "$dir/prefix")") || exit 1
+    if [ -n "$picks" ]; then
+      exe=$(sed -n 1p <<<"$picks" | cut -d'|' -f2-)
+      sed -n '2,$p' <<<"$picks" >"$dir/links"
+    fi
+    if [ -z "$exe" ]; then
+      exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/" "$EXE_FILTER")
+    fi
     [ -f "$exe" ] || die "not a file: $exe"
   fi
 
@@ -337,6 +510,13 @@ cmd_add() { # [--install | --installed] [exe]
   if [ -f "$dir/icon.png" ]; then icon="$dir/icon.png"; fi
 
   printf 'EZLAUNCH_EXE=%s\n' "$exe" >>"$dir/config"
+  # An icon for each of the other shortcuts
+  if [ -s "$dir/links" ]; then
+    while IFS='|' read -r lname lexe; do
+      n=$((n + 1))
+      extract_icon "$lexe" "$dir/link-$n.png"
+    done <"$dir/links"
+  fi
   write_desktop "$name" "$icon"
   info "Added $name to the start menu."
 }
@@ -384,11 +564,23 @@ apply_proton() { # name, version
   mv "$cfg.new" "$cfg"
 }
 
+apply_category() { # name, category
+  local cfg="$GAMES/$1/config"
+  { grep -v '^EZLAUNCH_CATEGORY=' "$cfg" || true; } >"$cfg.new"
+  # Only a category other than the default is saved for the game
+  if [ "$2" != "$(game_category /dev/null)" ]; then
+    echo "EZLAUNCH_CATEGORY=$2" >>"$cfg.new"
+  fi
+  mv "$cfg.new" "$cfg"
+}
+
 apply_options() { # name, checked keys one per line, custom variables
   local selected=$2 custom=$3 cfg="$GAMES/$1/config"
   local inherited=("$SYSTEM_CONF" "$USER_CONF") entry key on off label
   {
     echo "EZLAUNCH_EXE=$(getv EZLAUNCH_EXE "$cfg")"
+    # The category has its own field, keep it
+    if grep -q '^EZLAUNCH_CATEGORY=' "$cfg"; then echo "EZLAUNCH_CATEGORY=$(getv EZLAUNCH_CATEGORY "$cfg")"; fi
     # The Proton version has its own field, keep it
     if grep -q '^PROTONPATH=' "$cfg"; then echo "PROTONPATH=$(getv PROTONPATH "$cfg")"; fi
     for entry in "${KNOWN[@]}"; do
@@ -412,6 +604,11 @@ cmd_run() { # name, args...
   dir="$GAMES/$name"
   [ -f "$dir/config" ] || die "unknown game: $name"
   load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
+  # --exe starts another program of the same prefix, from its start menu entry
+  if [ "${1:-}" = --exe ]; then
+    EZLAUNCH_EXE=${2:-}
+    shift 2 || true
+  fi
   [ -n "${EZLAUNCH_EXE:-}" ] || die "$name has no executable set"
   WINEPREFIX="$dir/prefix"
   # launch shows the game in the tray with these
@@ -437,7 +634,7 @@ cmd_settings() { # [name]
   [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || die "settings needs a graphical session. Edit $cfg instead."
 
   local all=("$SYSTEM_CONF" "$USER_CONF" "$cfg")
-  local fields=() entry key on off label state managed='EZLAUNCH_EXE|PROTONPATH'
+  local fields=() entry key on off label state managed='EZLAUNCH_EXE|PROTONPATH|EZLAUNCH_CATEGORY'
   for entry in "${KNOWN[@]}"; do
     IFS='|' read -r key on off label <<<"$entry"
     state=FALSE
@@ -473,24 +670,26 @@ cmd_settings() { # [name]
     --file-filter "All files | *" \
     "${fields[@]}" \
     --field "Proton version:CB" "$versions_field" \
+    --field "Category:CB" "$(category_choices "$(game_category "$cfg")")" \
     --field "Executable:FL" "$current_exe" \
     --field "Icon:FL" "$current_icon" \
     --field "Custom variables, KEY=value one per line:TXT" "$custom_in" \
     --button Cancel:1 --button Save:0 --separator '|') || exit 0
 
   # One value per field, in order. The custom variables come last and may hold a |.
-  local parts=() n=${#KNOWN[@]} i selected='' exe icon custom
+  local parts=() n=${#KNOWN[@]} i selected='' exe icon custom category
   IFS='|' read -ra parts <<<"$out"
   for ((i = 0; i < n; i++)); do
     IFS='|' read -r key _ <<<"${KNOWN[i]}"
     if [ "${parts[i]:-}" = TRUE ]; then selected+="$key"$'\n'; fi
   done
   version=${parts[n]:-}
-  exe=${parts[n + 1]:-}
-  icon=${parts[n + 2]:-}
+  category=$(category_value "${parts[n + 1]:-}")
+  exe=${parts[n + 2]:-}
+  icon=${parts[n + 3]:-}
   custom=$(
     IFS='|'
-    echo "${parts[*]:n+3}"
+    echo "${parts[*]:n+4}"
   )
   custom=${custom//\\n/$'\n'}
   # yad ends the text with a line break, which would add a blank line at every save
@@ -498,6 +697,7 @@ cmd_settings() { # [name]
 
   apply_options "$name" "$selected" "$custom"
   if [ -n "$version" ]; then apply_proton "$name" "$version"; fi
+  apply_category "$name" "$category"
   if [ -n "$exe" ] && [ "$exe" != "$current_exe" ]; then
     [ -f "$exe" ] || die "not a file: $exe"
     apply_exe "$name" "$exe"
@@ -517,7 +717,8 @@ cmd_remove() { # name
   [ -f "$GAMES/$name/config" ] || die "unknown game: $name"
   ask_yesno "Remove $name? Its prefix, with saved games inside it, is deleted." || exit 0
   rm -rf "${GAMES:?}/$name"
-  rm -f "$(desktop_file "$name")"
+  rm -f "$(desktop_file "$name")" "$APPS/ezlaunch-${name// /_}.link-"*.desktop \
+    "$MENUS/ezlaunch-${name// /_}.menu" "$DIRECTORIES/ezlaunch-${name// /_}.directory"
   refresh_menu
 }
 
