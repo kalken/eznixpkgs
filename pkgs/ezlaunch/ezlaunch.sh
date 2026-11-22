@@ -850,10 +850,37 @@ cmd_list() {
   done < <(game_names)
 }
 
-# One window with the games and a button for each thing the commands do
+# The game chosen in the window is written to a file, so the buttons know which one it is
+cmd_select() { # file, game, ...
+  printf '%s' "$2" >"$1"
+}
+
+# What a button of the window does with the chosen game
+cmd_do() { # action, file
+  local name
+  name=$(cat "$2" 2>/dev/null || true)
+  if [ -z "$name" ]; then
+    info "Choose a game first."
+    return 0
+  fi
+  case $1 in
+    run) cmd_run "$name" ;;
+    settings) cmd_settings "$name" ;;
+    shortcuts) cmd_shortcuts "$name" ;;
+    stop) cmd_stop "$name" ;;
+    *) ;;
+  esac
+}
+
+# One window with the games and a button for each thing the commands do. Run, Settings, Choose
+# shortcuts and Stop leave the window open. Add game and Remove change the list, so the window
+# closes and opens again with the new list, and so does Refresh.
 cmd_gui() {
   [ -n "$GUI" ] || die "the window needs a graphical session"
-  local name rc rows status
+  local name rc rows status sel self
+  sel=$(mktemp)
+  self=$(readlink -f "$0")
+  trap 'rm -f "$sel"' EXIT
   while true; do
     rows=()
     while IFS= read -r name; do
@@ -861,34 +888,25 @@ cmd_gui() {
       if [ -n "$(game_pids "$name")" ]; then status=running; fi
       rows+=("$name" "$status" "$(getv EZLAUNCH_EXE "$GAMES/$name/config")")
     done < <(game_names)
+    : >"$sel"
     rc=0
-    name=$(yad --list --title ezlaunch --text "Choose a game, then a button. Add game works without one." \
+    yad --list --title ezlaunch --text "Choose a game, then a button. Refresh shows what is running." \
       --center --width 800 --height 460 --column Game --column Status --column Executable \
-      --print-column 1 --separator '' \
+      --select-action "$self _select $sel" --dclick-action "$self _do run $sel" \
       --button Close:1 --button Refresh:60 --button "Add game:10" --button Remove:20 \
-      --button "Choose shortcuts:30" --button Settings:40 --button Stop:50 --button Run:0 \
-      "${rows[@]}") || rc=$?
+      --button "Choose shortcuts:$self _do shortcuts $sel" \
+      --button "Settings:$self _do settings $sel" \
+      --button "Stop:$self _do stop $sel" \
+      --button "Run:$self _do run $sel" \
+      "${rows[@]}" >/dev/null || rc=$?
     case $rc in
-      1 | 252) return 0 ;;
-      60) continue ;;
-      10)
-        "$0" add || true
-        continue
+      10) "$0" add || true ;;
+      20)
+        name=$(cat "$sel" 2>/dev/null || true)
+        if [ -n "$name" ]; then "$0" remove "$name" || true; else info "Choose a game first."; fi
         ;;
-      *) ;;
-    esac
-    if [ -z "$name" ]; then
-      info "Choose a game first."
-      continue
-    fi
-    # Each is a command of its own, so it works the same as in a terminal
-    case $rc in
-      0) nohup "$0" run "$name" >/dev/null 2>&1 & ;;
-      20) "$0" remove "$name" || true ;;
-      30) "$0" shortcuts "$name" || true ;;
-      40) "$0" settings "$name" || true ;;
-      50) "$0" stop "$name" || true ;;
-      *) ;;
+      60) ;;
+      *) return 0 ;;
     esac
   done
 }
@@ -919,6 +937,8 @@ EOF
 
 case "${1:-}" in
   gui) cmd_gui ;;
+  _select) shift && cmd_select "$@" ;;
+  _do) shift && cmd_do "$@" ;;
   add) shift && cmd_add "$@" ;;
   run) shift && cmd_run "$@" ;;
   settings) shift && cmd_settings "$@" ;;
