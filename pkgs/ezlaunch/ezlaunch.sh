@@ -242,11 +242,15 @@ Exec=ezlaunch run "$1"
 Icon=$2
 Categories=Game;
 Terminal=false
-Actions=settings;remove;
+Actions=settings;exec;remove;
 
 [Desktop Action settings]
 Name=Settings
 Exec=ezlaunch settings "$1"
+
+[Desktop Action exec]
+Name=Run a program in this prefix
+Exec=ezlaunch exec "$1"
 
 [Desktop Action remove]
 Name=Remove
@@ -587,6 +591,24 @@ game_pids() { # name
   done
 }
 
+# Run any program in a game's prefix, such as a redistributable installer the game needs
+cmd_exec() { # name, [file]
+  local name=${1:-} file=${2:-} dir
+  if [ -z "$name" ]; then name=$(pick_game); fi
+  check_name "$name"
+  dir="$GAMES/$name"
+  [ -f "$dir/config" ] || die "unknown game: $name"
+  if [ -z "$file" ]; then
+    file=$(ask_file "Choose the program to run in the prefix of $name" "$HOME/" '*.exe *.EXE *.msi *.MSI')
+  fi
+  [ -f "$file" ] || die "not a file: $file"
+  file=$(readlink -f "$file")
+  load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
+  WINEPREFIX="$dir/prefix"
+  cd "$(dirname "$file")" || exit 1
+  launch "$file"
+}
+
 cmd_running() {
   local name
   while IFS= read -r name; do
@@ -640,11 +662,13 @@ usage() {
 Usage: ezlaunch <command>
 
   add [file.exe]        add a game: an installer is run in a new prefix, a game that is
-                        already installed is added as it is. It asks which, unless --install or --installed is given.
+                        already installed is added as it is. It asks which, unless
+                        --install or --installed is given
   add --install [file]  treat the file as an installer
   add --installed [file]
                         treat the file as an installed game, without an installer
   run [game] [args]     start a game
+  exec [game] [file]    run a program in a game's prefix, such as a redistributable
   settings [game]       all settings of a game in one window
   remove [game]         delete a game, its prefix and its start menu entry
   list                  list the games, marking the ones that are running
@@ -665,6 +689,7 @@ case "${1:-}" in
   list) cmd_list ;;
   running) cmd_running ;;
   stop) shift && cmd_stop "$@" ;;
+  exec) shift && cmd_exec "$@" ;;
   *)
     usage
     exit 1
