@@ -296,11 +296,15 @@ Exec=ezlaunch run "$name"
 Icon=$icon
 Categories=$category;
 Terminal=false
-Actions=settings;remove;
+Actions=settings;shortcuts;remove;
 
 [Desktop Action settings]
 Name=Settings
 Exec=ezlaunch settings "$name"
+
+[Desktop Action shortcuts]
+Name=Choose shortcuts
+Exec=ezlaunch shortcuts "$name"
 
 [Desktop Action remove]
 Name=Remove
@@ -400,22 +404,26 @@ shortcut_games() { # prefix
 }
 
 
-# Which of the shortcuts get a start menu entry? Prints the chosen lines of name|exe, the
-# first one is the game itself. Prints nothing to pick a file by hand.
-pick_shortcuts() { # lines of name|exe
-  local rows=() line rc=0 reply picked=
+# Which of the shortcuts get a start menu entry? Prints the chosen lines of name|exe. The first
+# argument is the lines to choose from. A second one, even an empty one, is the exes that start
+# ticked, and also means there is no "Other file" button. Prints nothing to pick a file by hand.
+pick_shortcuts() { # lines of name|exe, [exes that start ticked, one per line]
+  local rows=() line rc=0 reply picked= state buttons=(--button Cancel:1)
   [ -n "$1" ] || return 0
   if [ -z "$GUI" ]; then
     printf '%s\n' "$1"
     return 0
   fi
+  if [ -z "${2+x}" ]; then buttons+=(--button "Other file:3"); fi
   while IFS= read -r line; do
-    rows+=(TRUE "${line%%|*}" "${line#*|}")
+    state=TRUE
+    if [ -n "${2+x}" ] && ! grep -qxF -- "${line#*|}" <<<"$2"; then state=FALSE; fi
+    rows+=("$state" "${line%%|*}" "${line#*|}")
   done <<<"$1"
   reply=$(yad --list --checklist --title ezlaunch \
-    --text "These shortcuts were made. Which ones go in the start menu?" \
+    --text "Which shortcuts go in the start menu?" \
     --center --width 560 --height 320 --column "" --column Name --column Executable \
-    --separator '|' --button Cancel:1 --button "Other file:3" --button OK:0 "${rows[@]}") || rc=$?
+    --separator '|' "${buttons[@]}" --button OK:0 "${rows[@]}") || rc=$?
   case $rc in
     0) ;;
     3) return 0 ;;
@@ -430,8 +438,20 @@ pick_shortcuts() { # lines of name|exe
   printf '%s' "$picked"
 }
 
+# Save the shortcuts of a game besides the game itself, with an icon for each
+set_links() { # game dir, lines of name|exe
+  local dir=$1 lname lexe n=0
+  rm -f "$dir/links" "$dir"/link-*.png
+  if [ -z "$2" ]; then return 0; fi
+  printf '%s\n' "$2" >"$dir/links"
+  while IFS='|' read -r lname lexe; do
+    n=$((n + 1))
+    extract_icon "$lexe" "$dir/link-$n.png"
+  done <"$dir/links"
+}
+
 cmd_add() { # [--install | --installed] [exe]
-  local mode='' installer name dir exe icon version='' category='' reply picked='' picks n=0 lname lexe
+  local mode='' installer name dir exe icon version='' category='' reply picked='' picks links=''
   case "${1:-}" in
     --install)
       mode=install
@@ -497,7 +517,7 @@ cmd_add() { # [--install | --installed] [exe]
     picks=$(pick_shortcuts "$(shortcut_games "$dir/prefix")") || exit 1
     if [ -n "$picks" ]; then
       exe=$(sed -n 1p <<<"$picks" | cut -d'|' -f2-)
-      sed -n '2,$p' <<<"$picks" >"$dir/links"
+      links=$(sed -n '2,$p' <<<"$picks")
     fi
     if [ -z "$exe" ]; then
       exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/" "$EXE_FILTER")
@@ -510,13 +530,7 @@ cmd_add() { # [--install | --installed] [exe]
   if [ -f "$dir/icon.png" ]; then icon="$dir/icon.png"; fi
 
   printf 'EZLAUNCH_EXE=%s\n' "$exe" >>"$dir/config"
-  # An icon for each of the other shortcuts
-  if [ -s "$dir/links" ]; then
-    while IFS='|' read -r lname lexe; do
-      n=$((n + 1))
-      extract_icon "$lexe" "$dir/link-$n.png"
-    done <"$dir/links"
-  fi
+  set_links "$dir" "$links"
   write_desktop "$name" "$icon"
   info "Added $name to the start menu."
 }
@@ -733,6 +747,30 @@ game_pids() { # name
   done
 }
 
+# Choose again which shortcuts of a game are in the start menu
+cmd_shortcuts() { # [name]
+  local name=${1:-} dir found current picks main line
+  if [ -z "$name" ]; then name=$(pick_game); fi
+  check_name "$name"
+  dir="$GAMES/$name"
+  [ -f "$dir/config" ] || die "unknown game: $name"
+  [ -n "$GUI" ] || die "shortcuts needs a graphical session"
+  # The game itself always has its entry
+  main=$(getv EZLAUNCH_EXE "$dir/config")
+  found=
+  while IFS= read -r line; do
+    if [ -n "$line" ] && [ "${line#*|}" != "$main" ]; then found+="$line"$'
+'; fi
+  done < <(shortcut_games "$dir/prefix")
+  found=${found%$'
+'}
+  [ -n "$found" ] || die "no other shortcuts found in the prefix of $name"
+  current=$(cut -d'|' -f2- "$dir/links" 2>/dev/null || true)
+  picks=$(pick_shortcuts "$found" "$current") || exit 0
+  set_links "$dir" "$picks"
+  write_desktop "$name" "$(icon_for "$dir")"
+}
+
 cmd_running() {
   local name
   while IFS= read -r name; do
@@ -792,6 +830,7 @@ Usage: ezlaunch <command>
                         treat the file as an installed game, without an installer
   run [game] [args]     start a game
   settings [game]       all settings of a game in one window
+  shortcuts [game]      choose which of the shortcuts in the game's prefix are in the start menu
   remove [game]         delete a game, its prefix and its start menu entry
   list                  list the games, marking the ones that are running
   running               list the games that are running
@@ -807,6 +846,7 @@ case "${1:-}" in
   add) shift && cmd_add "$@" ;;
   run) shift && cmd_run "$@" ;;
   settings) shift && cmd_settings "$@" ;;
+  shortcuts) shift && cmd_shortcuts "$@" ;;
   remove) shift && cmd_remove "$@" ;;
   list) cmd_list ;;
   running) cmd_running ;;

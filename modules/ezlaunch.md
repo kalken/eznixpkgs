@@ -6,6 +6,7 @@ Install and launch Windows games with Proton, without Steam or a launcher app. D
 
 - Double-click an exe and choose **Install** (runs the installer in a new prefix with [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher), then you pick the game's exe) or **Add** (adds a game that is on the disk, started from where it is). The same dialog has a Proton version list, with the default preselected, and a category (Game, Utility, Office, Internet, ...) that decides where the entry goes in the start menu. Either way a start menu entry, with the exe's icon, is written
 - If the installer made more than one shortcut (the game, an editor, a launcher, ...), you tick which ones go in the start menu. The first is the game. With more than one, they are grouped in a start menu folder named after the game, on desktops with a classic menu (KDE, XFCE, Cinnamon, MATE; GNOME shows them flat). They all run in the same prefix and share its settings
+- Right-click **Choose shortcuts** shows that list again later, for example after you install an addon in the same prefix. Ticked ones have an entry, unticking one removes it
 - To skip that question, right-click the exe, **Open With**, **Add installed game to ezlaunch**
 - One prefix per game, in `~/.local/share/ezlaunch/games/<name>/`
 - Any Proton option works: settings are plain `KEY=value` environment variables
@@ -67,7 +68,7 @@ Settings are layered, later wins: `/etc/ezlaunch/config`, `~/.config/ezlaunch/co
 - Set `EZLAUNCH_TRAY=0` to turn the tray icon off. It needs `yad` (bundled, run through XWayland on Wayland) and a desktop with a system tray: KDE works, GNOME needs the AppIndicator extension.
 - Special variables in a game's `config`: `EZLAUNCH_EXE` (the game's exe), `EZLAUNCH_CATEGORY` (the start menu category, `Game` by default; it can also be set in the defaults), `EZLAUNCH_ARGS` (arguments for the game) and `EZLAUNCH_WRAPPER` (a command prefix, such as `gamemoderun`).
 - All dialogs are yad, which is bundled. Without a display the questions are asked in the terminal.
-- Command line: `ezlaunch add [file.exe]` (with `--install` or `--installed` to say which kind), `run <game>`, `settings <game>`, `remove <game>`, `list`, `running`, `stop <game>`.
+- Command line: `ezlaunch add [file.exe]` (with `--install` or `--installed` to say which kind), `run <game>`, `settings <game>`, `shortcuts <game>`, `remove <game>`, `list`, `running`, `stop <game>`.
 - Start menu entries are `~/.local/share/applications/ezlaunch-<name>.desktop`. Right-click actions need a desktop that supports them (KDE, GNOME, XFCE, ...); some launchers such as rofi ignore them.
 - Installers run through Proton. Nothing is extracted by hand, so registry entries and redistributables work as usual.
 
