@@ -321,19 +321,17 @@ pick_shortcut() { # lines of name|exe
   esac
 }
 
-cmd_add() { # [--install | --installed] [exe]
-  local mode='' installer name dir exe icon version='' reply picked='' games
-  case "${1:-}" in
-    --install)
-      mode=install
-      shift
-      ;;
-    --installed)
-      mode=installed
-      shift
-      ;;
-    *) ;;
-  esac
+cmd_add() { # [--install | --installed] [--choose-proton] [exe]
+  local mode='' installer name dir exe icon version='' reply picked='' choose='' games
+  while true; do
+    case "${1:-}" in
+      --install) mode=install ;;
+      --installed) mode=installed ;;
+      --choose-proton) choose=1 ;;
+      *) break ;;
+    esac
+    shift
+  done
   installer=${1:-}
   if [ -z "$installer" ]; then
     installer=$(ask_file "Choose the installer or the game executable" "$HOME/" "$EXE_FILTER")
@@ -355,8 +353,8 @@ cmd_add() { # [--install | --installed] [exe]
   dir="$GAMES/$name"
   if grep -qs '^EZLAUNCH_EXE=' "$dir/config"; then die "already added: $name"; fi
 
-  # Without the combined dialog above (--install, --installed) the version is asked on its own
-  if [ -z "$picked" ]; then
+  # Without the combined dialog above the default is used, unless --choose-proton asks for it
+  if [ -z "$picked" ] && [ -n "$choose" ]; then
     version=$(ask_proton "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")") || exit 1
   fi
 
@@ -642,7 +640,7 @@ usage() {
 Usage: ezlaunch <command>
 
   add [file.exe]        add a game: an installer is run in a new prefix, a game that is
-                        already installed is added as it is. It asks which.
+                        already installed is added as it is. It asks which, unless --install or --installed is given.
   add --install [file]  treat the file as an installer
   add --installed [file]
                         treat the file as an installed game, without an installer
