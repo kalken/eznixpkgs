@@ -759,11 +759,15 @@ cmd_shortcuts() { # [name]
   main=$(getv EZLAUNCH_EXE "$dir/config")
   found=
   while IFS= read -r line; do
-    if [ -n "$line" ] && [ "${line#*|}" != "$main" ]; then found+="$line"$'
-'; fi
+    if [ -n "$line" ] && [ "${line#*|}" != "$main" ]; then found+="$line"$'\n'; fi
   done < <(shortcut_games "$dir/prefix")
-  found=${found%$'
-'}
+  # The entries it has already are always in the list, so each can be removed
+  if [ -s "$dir/links" ]; then
+    while IFS= read -r line; do
+      if ! grep -qxF -- "$line" <<<"$found"; then found+="$line"$'\n'; fi
+    done <"$dir/links"
+  fi
+  found=${found%$'\n'}
   [ -n "$found" ] || die "no other shortcuts found in the prefix of $name"
   current=$(cut -d'|' -f2- "$dir/links" 2>/dev/null || true)
   picks=$(pick_shortcuts "$found" "$current") || exit 0
