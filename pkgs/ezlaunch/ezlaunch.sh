@@ -749,29 +749,43 @@ game_pids() { # name
 
 # Choose again which shortcuts of a game are in the start menu
 cmd_shortcuts() { # [name]
-  local name=${1:-} dir found current picks main line
+  local name=${1:-} dir found current picks main keep links line listed=
   if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
   dir="$GAMES/$name"
   [ -f "$dir/config" ] || die "unknown game: $name"
   [ -n "$GUI" ] || die "shortcuts needs a graphical session"
-  # The game itself always has its entry
   main=$(getv EZLAUNCH_EXE "$dir/config")
+
+  # Every shortcut in the prefix, and the entries the game has even if no shortcut is found
   found=
   while IFS= read -r line; do
-    if [ -n "$line" ] && [ "${line#*|}" != "$main" ]; then found+="$line"$'\n'; fi
+    [ -n "$line" ] || continue
+    found+="$line"$'\n'
+    if [ "${line#*|}" = "$main" ]; then listed=1; fi
   done < <(shortcut_games "$dir/prefix")
-  # The entries it has already are always in the list, so each can be removed
+  if [ -z "$listed" ]; then found="$name|$main"$'\n'"$found"; fi
   if [ -s "$dir/links" ]; then
     while IFS= read -r line; do
       if ! grep -qxF -- "$line" <<<"$found"; then found+="$line"$'\n'; fi
     done <"$dir/links"
   fi
   found=${found%$'\n'}
-  [ -n "$found" ] || die "no other shortcuts found in the prefix of $name"
-  current=$(cut -d'|' -f2- "$dir/links" 2>/dev/null || true)
+  current="$main"$'\n'$(cut -d'|' -f2- "$dir/links" 2>/dev/null || true)
+
   picks=$(pick_shortcuts "$found" "$current") || exit 0
-  set_links "$dir" "$picks"
+  [ -n "$picks" ] || die "A game needs at least one shortcut. Use Remove to delete the whole game."
+
+  # The game stays what it was if it is still ticked, otherwise the first ticked one takes over
+  keep=$main
+  if ! grep -qF -- "|$main" <<<"$picks"; then keep=$(sed -n 1p <<<"$picks" | cut -d'|' -f2-); fi
+  links=
+  while IFS= read -r line; do
+    if [ -n "$line" ] && [ "${line#*|}" != "$keep" ]; then links+="$line"$'\n'; fi
+  done <<<"$picks"
+  links=${links%$'\n'}
+  if [ "$keep" != "$main" ]; then apply_exe "$name" "$keep"; fi
+  set_links "$dir" "$links"
   write_desktop "$name" "$(icon_for "$dir")"
 }
 
