@@ -17,23 +17,14 @@ let
     "application/vnd.microsoft.portable-executable"
   ];
 
-  # Not shown in the menu: it only exists so a double-clicked .exe runs as an installer
+  # Not shown in the menu: it only exists so a .exe can be opened with ezlaunch add
   handler = pkgs.makeDesktopItem {
     name = "ezlaunch";
     desktopName = "ezlaunch";
     comment = "Install a Windows game with Proton";
-    exec = "ezlaunch add --install %f";
+    exec = "ezlaunch add %f";
     mimeTypes = exeTypes;
     noDisplay = true;
-  };
-
-  # Under Open With in the file manager, to pick the Proton version for the installer
-  installProton = pkgs.makeDesktopItem {
-    name = "ezlaunch-install-proton";
-    desktopName = "Install with another Proton version in ezlaunch";
-    comment = "Run the installer with a Proton version you choose";
-    exec = "ezlaunch add --install --choose-proton %f";
-    mimeTypes = exeTypes;
   };
 
   # Under Open With in the file manager, for a game that is already on the disk
@@ -85,7 +76,7 @@ in
     exeHandler = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Open .exe files with `ezlaunch add --install` when they are double-clicked.";
+      description = "Open .exe files with `ezlaunch add` when they are double-clicked.";
     };
   };
 
@@ -95,21 +86,8 @@ in
     ]
     ++ lib.optionals cfg.exeHandler [
       handler
-      installProton
       addInstalled
     ];
-
-    # Writes the start menu entries again when ezlaunch was updated, checked at login
-    systemd.user.services.ezlaunch-refresh = {
-      description = "Update the ezlaunch start menu entries";
-      wantedBy = [ "default.target" ];
-      restartTriggers = [ cfg.package ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStart = "${lib.getExe cfg.package} refresh --if-new";
-      };
-    };
 
     environment.etc."ezlaunch/config".text = lib.concatStrings (
       lib.mapAttrsToList (k: v: "${k}=${toValue v}\n") cfg.defaults

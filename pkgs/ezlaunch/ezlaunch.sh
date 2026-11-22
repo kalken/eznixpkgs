@@ -148,7 +148,6 @@ desktop_file() { # name
 }
 
 refresh_menu() {
-  if [ -n "${NO_REFRESH:-}" ]; then return 0; fi
   update-desktop-database "$APPS" 2>/dev/null || true
 }
 
@@ -243,15 +242,11 @@ Exec=ezlaunch run "$1"
 Icon=$2
 Categories=Game;
 Terminal=false
-Actions=settings;exec;remove;
+Actions=settings;remove;
 
 [Desktop Action settings]
 Name=Settings
 Exec=ezlaunch settings "$1"
-
-[Desktop Action exec]
-Name=Run a program in this prefix
-Exec=ezlaunch exec "$1"
 
 [Desktop Action remove]
 Name=Remove
@@ -275,68 +270,19 @@ ask_proton() { # current
     --button Cancel:1 --button OK:0 "${rows[@]}"
 }
 
-# The games an installer left shortcuts for, as lines of name|exe. The shortcuts are the .lnk
-# files in the prefix's Start Menu and on its desktop. Uninstallers are left out.
-shortcut_games() { # prefix
-  local prefix=$1 lnk name target drive base exe seen=$'\n'
-  while IFS= read -r -d '' lnk; do
-    name=$(basename "$lnk")
-    name=${name%.[Ll][Nn][Kk]}
-    if [[ "${name,,}" == *uninstall* ]]; then continue; fi
-    # The target is stored as a plain Windows path, such as C:\Games\Some Game\game.exe
-    target=$(LC_ALL=C grep -aoE '[A-Za-z]:\\([^\\/:*?"<>|[:cntrl:]]+\\)*[^\\/:*?"<>|[:cntrl:]]+\.[Ee][Xx][Ee]' "$lnk" | head -n1) || true
-    [ -n "$target" ] || continue
-    drive=${target:0:1}
-    base="$prefix/dosdevices/${drive,,}:"
-    exe="$base/${target:3}"
-    exe=${exe//\\//}
-    # Windows paths do not care about upper and lower case
-    if [ ! -f "$exe" ]; then
-      exe=$(find -L "$base" -ipath "$exe" -print -quit 2>/dev/null) || true
-    fi
-    [ -f "$exe" ] || continue
-    exe=$(readlink -f "$exe")
-    if [[ "$(basename "${exe,,}")" == unins*.exe ]]; then continue; fi
-    if [[ "$seen" == *$'\n'"$exe"$'\n'* ]]; then continue; fi
-    seen+="$exe"$'\n'
-    printf '%s|%s\n' "$name" "$exe"
-  done < <(find "$prefix/drive_c/ProgramData" "$prefix/drive_c/users" -iname '*.lnk' \
-    \( -ipath '*/start menu/*' -o -ipath '*/desktop/*' \) -print0 2>/dev/null)
-}
-
-# Which of the games is the one? Prints its exe, or nothing to pick a file by hand.
-pick_shortcut() { # lines of name|exe
-  local rows=() line count
-  count=$(printf '%s\n' "$1" | wc -l)
-  if [ "$count" = 1 ] || [ -z "$GUI" ]; then
-    printf '%s\n' "$1" | head -n1 | cut -d'|' -f2-
-    return 0
-  fi
-  while IFS= read -r line; do
-    rows+=("${line%%|*}" "${line#*|}")
-  done <<<"$1"
-  local rc=0 reply
-  reply=$(yad --list --title ezlaunch --text "Which one is the game?" --center --width 560 \
-    --height 320 --column Name --column Executable --print-column 2 --separator '' \
-    --button Cancel:1 --button "Other file:3" --button OK:0 "${rows[@]}") || rc=$?
-  case $rc in
-    0) echo "$reply" ;;
-    3) ;;
-    *) return 1 ;;
+cmd_add() { # [--install | --installed] [exe]
+  local mode='' installer name dir exe icon version='' reply picked=''
+  case "${1:-}" in
+    --install)
+      mode=install
+      shift
+      ;;
+    --installed)
+      mode=installed
+      shift
+      ;;
+    *) ;;
   esac
-}
-
-cmd_add() { # [--install | --installed] [--choose-proton] [exe]
-  local mode='' installer name dir exe icon version='' reply picked='' choose='' games
-  while true; do
-    case "${1:-}" in
-      --install) mode=install ;;
-      --installed) mode=installed ;;
-      --choose-proton) choose=1 ;;
-      *) break ;;
-    esac
-    shift
-  done
   installer=${1:-}
   if [ -z "$installer" ]; then
     installer=$(ask_file "Choose the installer or the game executable" "$HOME/" "$EXE_FILTER")
@@ -358,8 +304,8 @@ cmd_add() { # [--install | --installed] [--choose-proton] [exe]
   dir="$GAMES/$name"
   if grep -qs '^EZLAUNCH_EXE=' "$dir/config"; then die "already added: $name"; fi
 
-  # Without the combined dialog above the default is used, unless --choose-proton asks for it
-  if [ -z "$picked" ] && [ -n "$choose" ]; then
+  # Without the combined dialog above (--install, --installed) the version is asked on its own
+  if [ -z "$picked" ]; then
     version=$(ask_proton "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")") || exit 1
   fi
 
@@ -382,13 +328,7 @@ cmd_add() { # [--install | --installed] [--choose-proton] [exe]
       touch "$dir/.installed"
     fi
 
-    # The shortcuts the installer made tell which file is the game
-    exe=
-    games=$(shortcut_games "$dir/prefix")
-    if [ -n "$games" ]; then exe=$(pick_shortcut "$games") || exit 1; fi
-    if [ -z "$exe" ]; then
-      exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/" "$EXE_FILTER")
-    fi
+    exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/" "$EXE_FILTER")
     [ -f "$exe" ] || die "not a file: $exe"
   fi
 
@@ -464,28 +404,6 @@ apply_options() { # name, checked keys one per line, custom variables
   mv "$cfg.new" "$cfg"
 }
 
-# Write the start menu entry of every game again, so they follow this version of ezlaunch
-refresh_entries() {
-  local name dir
-  NO_REFRESH=1
-  while IFS= read -r name; do
-    dir="$GAMES/$name"
-    if grep -qs '^EZLAUNCH_EXE=' "$dir/config"; then write_desktop "$name" "$(icon_for "$dir")"; fi
-  done < <(game_names)
-  NO_REFRESH=
-  refresh_menu
-  mkdir -p "$DATA/ezlaunch"
-  readlink -f "$0" >"$DATA/ezlaunch/refreshed-by"
-}
-
-# Only when this is not the build that wrote the entries last
-refresh_entries_if_new() {
-  if [ "$(cat "$DATA/ezlaunch/refreshed-by" 2>/dev/null || true)" = "$(readlink -f "$0")" ]; then
-    return 0
-  fi
-  refresh_entries
-}
-
 cmd_run() { # name, args...
   local name=${1:-} dir
   shift || true
@@ -493,7 +411,6 @@ cmd_run() { # name, args...
   check_name "$name"
   dir="$GAMES/$name"
   [ -f "$dir/config" ] || die "unknown game: $name"
-  refresh_entries_if_new
   load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
   [ -n "${EZLAUNCH_EXE:-}" ] || die "$name has no executable set"
   WINEPREFIX="$dir/prefix"
@@ -615,24 +532,6 @@ game_pids() { # name
   done
 }
 
-# Run any program in a game's prefix, such as a redistributable installer the game needs
-cmd_exec() { # name, [file]
-  local name=${1:-} file=${2:-} dir
-  if [ -z "$name" ]; then name=$(pick_game); fi
-  check_name "$name"
-  dir="$GAMES/$name"
-  [ -f "$dir/config" ] || die "unknown game: $name"
-  if [ -z "$file" ]; then
-    file=$(ask_file "Choose the program to run in the prefix of $name" "$HOME/" '*.exe *.EXE *.msi *.MSI')
-  fi
-  [ -f "$file" ] || die "not a file: $file"
-  file=$(readlink -f "$file")
-  load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
-  WINEPREFIX="$dir/prefix"
-  cd "$(dirname "$file")" || exit 1
-  launch "$file"
-}
-
 cmd_running() {
   local name
   while IFS= read -r name; do
@@ -686,20 +585,16 @@ usage() {
 Usage: ezlaunch <command>
 
   add [file.exe]        add a game: an installer is run in a new prefix, a game that is
-                        already installed is added as it is. It asks which, unless
-                        --install or --installed is given
+                        already installed is added as it is. It asks which.
   add --install [file]  treat the file as an installer
   add --installed [file]
                         treat the file as an installed game, without an installer
   run [game] [args]     start a game
-  exec [game] [file]    run a program in a game's prefix, such as a redistributable
   settings [game]       all settings of a game in one window
   remove [game]         delete a game, its prefix and its start menu entry
   list                  list the games, marking the ones that are running
   running               list the games that are running
   stop [game]           close a running game
-  refresh [--if-new]    write the start menu entries of all games again (--if-new: only
-                        when ezlaunch was updated since they were last written)
 
 Without a game name, run, settings, remove and stop show a menu to choose from.
 
@@ -715,10 +610,6 @@ case "${1:-}" in
   list) cmd_list ;;
   running) cmd_running ;;
   stop) shift && cmd_stop "$@" ;;
-  refresh)
-    if [ "${2:-}" = --if-new ]; then refresh_entries_if_new; else refresh_entries; fi
-    ;;
-  exec) shift && cmd_exec "$@" ;;
   *)
     usage
     exit 1
