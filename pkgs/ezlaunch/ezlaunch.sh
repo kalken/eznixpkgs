@@ -474,6 +474,16 @@ refresh_entries() {
   done < <(game_names)
   NO_REFRESH=
   refresh_menu
+  mkdir -p "$DATA/ezlaunch"
+  readlink -f "$0" >"$DATA/ezlaunch/refreshed-by"
+}
+
+# Only when this is not the build that wrote the entries last
+refresh_entries_if_new() {
+  if [ "$(cat "$DATA/ezlaunch/refreshed-by" 2>/dev/null || true)" = "$(readlink -f "$0")" ]; then
+    return 0
+  fi
+  refresh_entries
 }
 
 cmd_run() { # name, args...
@@ -483,7 +493,7 @@ cmd_run() { # name, args...
   check_name "$name"
   dir="$GAMES/$name"
   [ -f "$dir/config" ] || die "unknown game: $name"
-  refresh_entries
+  refresh_entries_if_new
   load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
   [ -n "${EZLAUNCH_EXE:-}" ] || die "$name has no executable set"
   WINEPREFIX="$dir/prefix"
@@ -688,7 +698,8 @@ Usage: ezlaunch <command>
   list                  list the games, marking the ones that are running
   running               list the games that are running
   stop [game]           close a running game
-  refresh               write the start menu entries of all games again
+  refresh [--if-new]    write the start menu entries of all games again (--if-new: only
+                        when ezlaunch was updated since they were last written)
 
 Without a game name, run, settings, remove and stop show a menu to choose from.
 
@@ -704,7 +715,9 @@ case "${1:-}" in
   list) cmd_list ;;
   running) cmd_running ;;
   stop) shift && cmd_stop "$@" ;;
-  refresh) refresh_entries ;;
+  refresh)
+    if [ "${2:-}" = --if-new ]; then refresh_entries_if_new; else refresh_entries; fi
+    ;;
   exec) shift && cmd_exec "$@" ;;
   *)
     usage

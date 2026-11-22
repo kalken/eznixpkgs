@@ -99,7 +99,7 @@ in
       addInstalled
     ];
 
-    # Writes the start menu entries again at login and when the package changes
+    # Writes the start menu entries again when ezlaunch was updated, checked at login
     systemd.user.services.ezlaunch-refresh = {
       description = "Update the ezlaunch start menu entries";
       wantedBy = [ "default.target" ];
@@ -107,7 +107,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = "${lib.getExe cfg.package} refresh";
+        ExecStart = "${lib.getExe cfg.package} refresh --if-new";
       };
     };
 

@@ -16,7 +16,7 @@ Install and launch Windows games with Proton, without Steam or a launcher app. D
 - Right-click **Remove**: deletes the game, its prefix and its menu entry
 - In a terminal, leave out the game name (`ezlaunch run`, `settings`, `remove`, `stop`) to choose it from an arrow-key menu (fzf)
 - `ezlaunch list` shows the games and marks the running ones, `ezlaunch running` lists only those, `ezlaunch stop` closes one (it finds a game's processes by its prefix)
-- The start menu entries are written again at login and when ezlaunch is updated (a user service, `ezlaunch-refresh`), and each time a game starts, so a new version shows its new right-click options without pressing Save
+- The start menu entries are written again once after ezlaunch is updated, checked at login (a user service, `ezlaunch-refresh`) and when a game starts, so a new version shows its new right-click options without pressing Save
 - Right-click **Run a program in this prefix** runs any `.exe` or `.msi` in the game's own prefix, for example a redistributable (`vcredist`, `.NET`) that the game needs
 - A tray icon shows the running game (its icon and name) with **Stop** and **Settings** in its menu (without a tray, `ezlaunch stop` in a terminal closes a game), and disappears when the game ends. Nothing runs in the background otherwise.
 
