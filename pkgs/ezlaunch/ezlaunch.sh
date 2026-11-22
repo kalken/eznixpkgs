@@ -145,15 +145,19 @@ game_category() { # game config
 # Installer or a game that is already installed? Prints install or installed, then | the chosen
 # Proton version (empty if there is nothing to choose), | the category and | the name.
 ask_mode() { # question, current Proton version, current category, suggested name
-  local reply rc=0 choices fields=() parts=() version='' category='' name='' sep=$'\x1f'
+  local reply rc=0 choices fields=() parts=() version='' category='' name='' sep=$'\x1f' width
   if [ -n "$GUI" ]; then
     choices=$(proton_choices "$2")
+    # Wide enough for the whole suggested name
+    width=$((${#4} * 9 + 220))
+    if [ "$width" -lt 520 ]; then width=520; fi
+    if [ "$width" -gt 1600 ]; then width=1600; fi
     fields+=(--field "Name" "$4")
     if [ -n "$choices" ]; then fields+=(--field "Proton version:CB" "$choices"); fi
     fields+=(--field "Category:CB" "$(category_choices "$3")")
     # yad shows the buttons in the order given: Cancel on the left, Install on the right.
     # The fields are told apart by a character nobody types, so a name may hold anything.
-    reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width 360 \
+    reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width "$width" \
       --separator "$sep" "${fields[@]}" \
       --buttons-layout edge --button Cancel:1 --button Add:2 --button Install:0) || rc=$?
     IFS="$sep" read -ra parts <<<"$reply"
