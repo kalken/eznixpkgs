@@ -270,8 +270,59 @@ ask_proton() { # current
     --button Cancel:1 --button OK:0 "${rows[@]}"
 }
 
+# The games an installer left shortcuts for, as lines of name|exe. The shortcuts are the .lnk
+# files in the prefix's Start Menu and on its desktop. Uninstallers are left out.
+shortcut_games() { # prefix
+  local prefix=$1 lnk name target drive base exe seen=$'\n'
+  while IFS= read -r -d '' lnk; do
+    name=$(basename "$lnk")
+    name=${name%.[Ll][Nn][Kk]}
+    if [[ "${name,,}" == *uninstall* ]]; then continue; fi
+    # The target is stored as a plain Windows path, such as C:\Games\Some Game\game.exe
+    target=$(LC_ALL=C grep -aoE '[A-Za-z]:\\([^\\/:*?"<>|[:cntrl:]]+\\)*[^\\/:*?"<>|[:cntrl:]]+\.[Ee][Xx][Ee]' "$lnk" | head -n1) || true
+    [ -n "$target" ] || continue
+    drive=${target:0:1}
+    base="$prefix/dosdevices/${drive,,}:"
+    exe="$base/${target:3}"
+    exe=${exe//\\//}
+    # Windows paths do not care about upper and lower case
+    if [ ! -f "$exe" ]; then
+      exe=$(find -L "$base" -ipath "$exe" -print -quit 2>/dev/null) || true
+    fi
+    [ -f "$exe" ] || continue
+    exe=$(readlink -f "$exe")
+    if [[ "$(basename "${exe,,}")" == unins*.exe ]]; then continue; fi
+    if [[ "$seen" == *$'\n'"$exe"$'\n'* ]]; then continue; fi
+    seen+="$exe"$'\n'
+    printf '%s|%s\n' "$name" "$exe"
+  done < <(find "$prefix/drive_c/ProgramData" "$prefix/drive_c/users" -iname '*.lnk' \
+    \( -ipath '*/start menu/*' -o -ipath '*/desktop/*' \) -print0 2>/dev/null)
+}
+
+# Which of the games is the one? Prints its exe, or nothing to pick a file by hand.
+pick_shortcut() { # lines of name|exe
+  local rows=() line count
+  count=$(printf '%s\n' "$1" | wc -l)
+  if [ "$count" = 1 ] || [ -z "$GUI" ]; then
+    printf '%s\n' "$1" | head -n1 | cut -d'|' -f2-
+    return 0
+  fi
+  while IFS= read -r line; do
+    rows+=("${line%%|*}" "${line#*|}")
+  done <<<"$1"
+  local rc=0 reply
+  reply=$(yad --list --title ezlaunch --text "Which one is the game?" --center --width 560 \
+    --height 320 --column Name --column Executable --print-column 2 --separator '' \
+    --button Cancel:1 --button "Other file:3" --button OK:0 "${rows[@]}") || rc=$?
+  case $rc in
+    0) echo "$reply" ;;
+    3) ;;
+    *) return 1 ;;
+  esac
+}
+
 cmd_add() { # [--install | --installed] [exe]
-  local mode='' installer name dir exe icon version='' reply picked=''
+  local mode='' installer name dir exe icon version='' reply picked='' games
   case "${1:-}" in
     --install)
       mode=install
@@ -328,7 +379,13 @@ cmd_add() { # [--install | --installed] [exe]
       touch "$dir/.installed"
     fi
 
-    exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/" "$EXE_FILTER")
+    # The shortcuts the installer made tell which file is the game
+    exe=
+    games=$(shortcut_games "$dir/prefix")
+    if [ -n "$games" ]; then exe=$(pick_shortcut "$games") || exit 1; fi
+    if [ -z "$exe" ]; then
+      exe=$(ask_file "Choose the game executable" "$dir/prefix/drive_c/" "$EXE_FILTER")
+    fi
     [ -f "$exe" ] || die "not a file: $exe"
   fi
 
