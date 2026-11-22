@@ -143,34 +143,37 @@ game_category() { # game config
 }
 
 # Installer or a game that is already installed? Prints install or installed, then | the chosen
-# Proton version (empty if there is nothing to choose), | and the category.
-ask_mode() { # question, current Proton version, current category
-  local reply rc=0 choices fields=() parts=() version='' category=''
+# Proton version (empty if there is nothing to choose), | the category and | the name.
+ask_mode() { # question, current Proton version, current category, suggested name
+  local reply rc=0 choices fields=() parts=() version='' category='' name='' sep=$'\x1f'
   if [ -n "$GUI" ]; then
     choices=$(proton_choices "$2")
+    fields+=(--field "Name" "$4")
     if [ -n "$choices" ]; then fields+=(--field "Proton version:CB" "$choices"); fi
     fields+=(--field "Category:CB" "$(category_choices "$3")")
-    # yad shows the buttons in the order given: Cancel on the left, Install on the right
-    reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width 320 \
-      "${fields[@]}" \
+    # yad shows the buttons in the order given: Cancel on the left, Install on the right.
+    # The fields are told apart by a character nobody types, so a name may hold anything.
+    reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width 360 \
+      --separator "$sep" "${fields[@]}" \
       --buttons-layout edge --button Cancel:1 --button Add:2 --button Install:0) || rc=$?
-    IFS='|' read -ra parts <<<"$reply"
+    IFS="$sep" read -ra parts <<<"$reply"
+    name=${parts[0]:-}
     if [ -n "$choices" ]; then
-      version=${parts[0]:-}
-      category=$(category_value "${parts[1]:-}")
+      version=${parts[1]:-}
+      category=$(category_value "${parts[2]:-}")
     else
-      category=$(category_value "${parts[0]:-}")
+      category=$(category_value "${parts[1]:-}")
     fi
     case $rc in
-      0) echo "install|$version|$category" ;;
-      2) echo "installed|$version|$category" ;;
+      0) echo "install|$version|$category|$name" ;;
+      2) echo "installed|$version|$category|$name" ;;
       *) return 1 ;;
     esac
   else
     read -r -p "$1 [i]nstaller or [a]lready installed? " reply
     case $reply in
-      i*) echo "install||" ;;
-      a*) echo "installed||" ;;
+      i*) echo "install|||" ;;
+      a*) echo "installed|||" ;;
       *) return 1 ;;
     esac
   fi
@@ -451,7 +454,7 @@ set_links() { # game dir, lines of name|exe
 }
 
 cmd_add() { # [--install | --installed] [exe]
-  local mode='' installer name dir exe icon version='' category='' reply picked='' picks links=''
+  local mode='' installer name='' dir exe icon version='' category='' reply picked='' picks links=''
   case "${1:-}" in
     --install)
       mode=install
@@ -473,15 +476,21 @@ cmd_add() { # [--install | --installed] [exe]
   if [ -z "$mode" ]; then
     reply=$(ask_mode "Is $(basename "$installer") an installer or a game to add?" \
       "$(getv PROTONPATH "$SYSTEM_CONF" "$USER_CONF")" \
-      "$(game_category /dev/null)") || exit 1
+      "$(game_category /dev/null)" \
+      "$(basename "$(dirname "$installer")")") || exit 1
     mode=${reply%%|*}
     reply=${reply#*|}
     version=${reply%%|*}
-    category=${reply#*|}
+    reply=${reply#*|}
+    category=${reply%%|*}
+    name=${reply#*|}
     picked=1
   fi
 
-  name=$(ask_text "Name of the game" "$(basename "$(dirname "$installer")")")
+  # Without the dialog above (--install, --installed) the name is asked on its own
+  if [ -z "$name" ]; then
+    name=$(ask_text "Name of the game" "$(basename "$(dirname "$installer")")")
+  fi
   name=$(printf '%s' "$name" | tr -cd 'A-Za-z0-9 ._-' | sed 's/^[ .]*//; s/ *$//')
   [ -n "$name" ] || die "empty game name"
   dir="$GAMES/$name"
