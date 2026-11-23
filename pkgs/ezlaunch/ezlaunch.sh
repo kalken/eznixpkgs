@@ -145,14 +145,17 @@ game_category() { # game config
 # Installer or a game that is already installed? Prints install or installed, then | the chosen
 # Proton version (empty if there is nothing to choose), | the category and | the name.
 ask_mode() { # question, current Proton version, current category, suggested name
-  local reply rc=0 choices fields=() parts=() version='' category='' name='' sep=$'\x1f' width
+  local reply rc=0 choices fields=() parts=() version='' category='' name='' sep=$'\x1f' width games suggested
   if [ -n "$GUI" ]; then
     choices=$(proton_choices "$2")
     # Wide enough for the whole suggested name
     width=$((${#4} * 9 + 220))
     if [ "$width" -lt 520 ]; then width=520; fi
     if [ "$width" -gt 1600 ]; then width=1600; fi
-    fields+=(--field "Name" "$4")
+    # The name is editable. The existing games are listed too: choosing one installs into its prefix.
+    games=$(game_names | tr -d '!' | paste -sd'!' -)
+    suggested=${4//!/}
+    fields+=(--field "Prefix:CBE" "${suggested}${games:+!$games}")
     if [ -n "$choices" ]; then fields+=(--field "Proton version:CB" "$choices"); fi
     fields+=(--field "Category:CB" "$(category_choices "$3")")
     # yad shows the buttons in the order given: Cancel on the left, Install on the right.
@@ -457,6 +460,27 @@ set_links() { # game dir, lines of name|exe
   done <"$dir/links"
 }
 
+# Run an installer in the prefix of a game that exists, then offer the new shortcuts
+install_in_prefix() { # name, installer
+  local name=$1 installer=$2 dir="$GAMES/$1" before after new='' line
+  before=$(shortcut_games "$dir/prefix" | cut -d'|' -f2-)
+  (
+    load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
+    WINEPREFIX="$dir/prefix"
+    cd "$(dirname "$installer")" || exit 1
+    launch "$installer"
+  ) || true
+  after=$(shortcut_games "$dir/prefix" | cut -d'|' -f2-)
+  while IFS= read -r line; do
+    if [ -n "$line" ] && ! grep -qxF -- "$line" <<<"$before"; then new+="$line"$'\n'; fi
+  done <<<"$after"
+  if [ -z "$GUI" ]; then
+    info "Installed in the prefix of $name. Run: ezlaunch shortcuts \"$name\""
+    return 0
+  fi
+  cmd_shortcuts "$name" "$new"
+}
+
 cmd_add() { # [--install | --installed] [exe]
   local mode='' installer name='' dir exe icon version='' category='' reply picked='' picks links=''
   case "${1:-}" in
@@ -498,7 +522,11 @@ cmd_add() { # [--install | --installed] [exe]
   name=$(printf '%s' "$name" | tr -cd 'A-Za-z0-9 ._-' | sed 's/^[ .]*//; s/ *$//')
   [ -n "$name" ] || die "empty game name"
   dir="$GAMES/$name"
-  if grep -qs '^EZLAUNCH_EXE=' "$dir/config"; then die "already added: $name"; fi
+  if grep -qs '^EZLAUNCH_EXE=' "$dir/config"; then
+    [ "$mode" = install ] || die "already added: $name"
+    install_in_prefix "$name" "$installer"
+    return 0
+  fi
 
   # Without the combined dialog above (--install, --installed) the version is asked on its own
   if [ -z "$picked" ]; then
@@ -761,7 +789,7 @@ game_pids() { # name
 }
 
 # Choose again which shortcuts of a game are in the start menu
-cmd_shortcuts() { # [name]
+cmd_shortcuts() { # [name], [exes to tick besides the current ones]
   local name=${1:-} dir found current picks main keep links line listed=
   if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
@@ -784,7 +812,7 @@ cmd_shortcuts() { # [name]
     done <"$dir/links"
   fi
   found=${found%$'\n'}
-  current="$main"$'\n'$(cut -d'|' -f2- "$dir/links" 2>/dev/null || true)
+  current="$main"$'\n'$(cut -d'|' -f2- "$dir/links" 2>/dev/null || true)$'\n'${2:-}
 
   picks=$(pick_shortcuts "$found" "$current") || exit 0
   [ -n "$picks" ] || die "A game needs at least one shortcut. Use Remove to delete the whole game."
