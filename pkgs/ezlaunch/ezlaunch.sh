@@ -160,7 +160,8 @@ ask_mode() { # question, current Proton version, current category, suggested nam
     fields+=(--field "Category:CB" "$(category_choices "$3")")
     # yad shows the buttons in the order given: Cancel on the left, Install on the right.
     # The fields are told apart by a character nobody types, so a name may hold anything.
-    reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width "$width" \
+    reply=$(yad --form --title ezlaunch --no-markup \
+      --text "$1"$'\n'"An existing prefix keeps its own Proton version and category." --center --width "$width" \
       --separator "$sep" "${fields[@]}" \
       --buttons-layout edge --button Cancel:1 --button Add:2 --button Install:0) || rc=$?
     IFS="$sep" read -ra parts <<<"$reply"
