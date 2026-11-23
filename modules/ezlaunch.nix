@@ -48,6 +48,24 @@ let
     exec = "ezlaunch add --installed %f";
     mimeTypes = exeTypes;
   };
+
+  # Under Open With, to install a program in the prefix of a game that exists
+  installIn = pkgs.makeDesktopItem {
+    name = "ezlaunch-install-in";
+    desktopName = "Install in an existing ezlaunch prefix";
+    comment = "Run a Windows installer in the prefix of a game that is already added";
+    exec = "ezlaunch install-in %f";
+    mimeTypes = exeTypes;
+  };
+
+  # Under Open With, for a program that is on the disk, as another entry of a game
+  addTo = pkgs.makeDesktopItem {
+    name = "ezlaunch-add-to";
+    desktopName = "Add to an existing ezlaunch prefix";
+    comment = "Add a Windows program as another start menu entry of a game that is already added";
+    exec = "ezlaunch add-to %f";
+    mimeTypes = exeTypes;
+  };
 in
 {
   options.programs.ezlaunch = {
@@ -101,6 +119,8 @@ in
     ++ lib.optionals cfg.exeHandler [
       handler
       addInstalled
+      installIn
+      addTo
     ];
 
     environment.etc."ezlaunch/config".text = lib.concatStrings (

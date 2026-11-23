@@ -145,23 +145,19 @@ game_category() { # game config
 # Installer or a game that is already installed? Prints install or installed, then | the chosen
 # Proton version (empty if there is nothing to choose), | the category and | the name.
 ask_mode() { # question, current Proton version, current category, suggested name
-  local reply rc=0 choices fields=() parts=() version='' category='' name='' sep=$'\x1f' width games suggested
+  local reply rc=0 choices fields=() parts=() version='' category='' name='' sep=$'\x1f' width
   if [ -n "$GUI" ]; then
     choices=$(proton_choices "$2")
     # Wide enough for the whole suggested name
     width=$((${#4} * 9 + 220))
     if [ "$width" -lt 520 ]; then width=520; fi
     if [ "$width" -gt 1600 ]; then width=1600; fi
-    # The name is editable. The existing games are listed too: choosing one installs into its prefix.
-    games=$(game_names | tr -d '!' | paste -sd'!' -)
-    suggested=${4//!/}
-    fields+=(--field "Prefix:CBE" "${suggested}${games:+!$games}")
+    fields+=(--field "Prefix" "$4")
     if [ -n "$choices" ]; then fields+=(--field "Proton version:CB" "$choices"); fi
     fields+=(--field "Category:CB" "$(category_choices "$3")")
     # yad shows the buttons in the order given: Cancel on the left, Install on the right.
     # The fields are told apart by a character nobody types, so a name may hold anything.
-    reply=$(yad --form --title ezlaunch --no-markup \
-      --text "$1"$'\n'"An existing prefix keeps its own Proton version and category." --center --width "$width" \
+    reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width "$width" \
       --separator "$sep" "${fields[@]}" \
       --buttons-layout edge --button Cancel:1 --button Add:2 --button Install:0) || rc=$?
     IFS="$sep" read -ra parts <<<"$reply"
@@ -480,6 +476,59 @@ install_in_prefix() { # name, installer
     return 0
   fi
   cmd_shortcuts "$name" "$new"
+}
+
+# Ask which of the games' prefixes to use
+ask_prefix() { # question
+  local name
+  [ -n "$(game_names)" ] || die "no games yet, double-click the exe to make the first prefix"
+  if [ -n "$GUI" ]; then
+    name=$(game_names | yad --list --title ezlaunch --text "$1" --no-markup --center \
+      --width 420 --height 360 --column Prefix --no-headers \
+      --button Cancel:1 --button OK:0) || exit 1
+    name=${name%|}
+  else
+    name=$(pick_game)
+  fi
+  check_name "$name"
+  [ -f "$GAMES/$name/config" ] || die "unknown game: $name"
+  echo "$name"
+}
+
+# Open With: run an installer in the prefix of a game that exists
+cmd_install_in() { # [exe]
+  local installer=${1:-} name
+  if [ -z "$installer" ]; then
+    installer=$(ask_file "Choose the installer" "$HOME/" "$EXE_FILTER")
+  fi
+  [ -f "$installer" ] || die "not a file: $installer"
+  installer=$(readlink -f "$installer")
+  name=$(ask_prefix "Install $(basename "$installer") in which prefix?") || exit 1
+  install_in_prefix "$name" "$installer"
+}
+
+# Open With: a program that is already on the disk becomes another start menu entry of a game
+cmd_add_to() { # [exe]
+  local exe=${1:-} name dir label lines
+  if [ -z "$exe" ]; then
+    exe=$(ask_file "Choose the program" "$HOME/" "$EXE_FILTER")
+  fi
+  [ -f "$exe" ] || die "not a file: $exe"
+  exe=$(readlink -f "$exe")
+  name=$(ask_prefix "Add $(basename "$exe") to which prefix?") || exit 1
+  dir="$GAMES/$name"
+  if [ "$exe" = "$(getv EZLAUNCH_EXE "$dir/config")" ] || grep -qxF -- "|$exe" <(sed 's/^[^|]*//' "$dir/links" 2>/dev/null); then
+    die "already in the start menu: $(basename "$exe")"
+  fi
+  label=$(basename "$exe")
+  label=$(ask_text "Name in the start menu" "${label%.*}")
+  label=$(printf '%s' "$label" | tr -d '|\n')
+  [ -n "$label" ] || die "empty name"
+  lines=$(cat "$dir/links" 2>/dev/null || true)
+  lines+=${lines:+$'\n'}"$label|$exe"
+  set_links "$dir" "$lines"
+  write_desktop "$name" "$(icon_for "$dir")"
+  info "Added $label to the start menu."
 }
 
 cmd_add() { # [--install | --installed] [exe]
@@ -950,6 +999,10 @@ Usage: ezlaunch <command>
   add --install [file]  treat the file as an installer
   add --installed [file]
                         treat the file as an installed game, without an installer
+  install-in [file.exe] run an installer in the prefix of a game that exists, then choose
+                        which of the new shortcuts go in the start menu
+  add-to [file.exe]     add a program that is on the disk as another start menu entry of
+                        a game that exists, in the same prefix
   run [game] [args]     start a game
   settings [game]       all settings of a game in one window
   shortcuts [game]      choose which of the shortcuts in the game's prefix are in the start menu
@@ -969,6 +1022,8 @@ case "${1:-}" in
   _select) shift && cmd_select "$@" ;;
   _do) shift && cmd_do "$@" ;;
   add) shift && cmd_add "$@" ;;
+  install-in) shift && cmd_install_in "$@" ;;
+  add-to) shift && cmd_add_to "$@" ;;
   run) shift && cmd_run "$@" ;;
   settings) shift && cmd_settings "$@" ;;
   shortcuts) shift && cmd_shortcuts "$@" ;;
