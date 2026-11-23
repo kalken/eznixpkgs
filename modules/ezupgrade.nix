@@ -98,6 +98,26 @@ let
     .${elemAt delayParts 1};
 
   target = "path:${cfg.flake}#${cfg.configuration}";
+
+  # Wait until the network answers three times in a row, so a link that is only coming up (Wi-Fi,
+  # VPN, DHCP) does not make the update fail. Gives up when it has not been stable in time.
+  waitForNetwork = curl: ''
+    ok=0
+    deadline=$((SECONDS + ${toString cfg.networkTimeout}))
+    while [ "$ok" -lt 3 ]; do
+      if ${curl} -fsI -o /dev/null --max-time 5 ${escapeShellArg cfg.networkCheckUrl}; then
+        ok=$((ok + 1))
+        if [ "$ok" -lt 3 ]; then sleep 2; fi
+      else
+        ok=0
+        if [ "$SECONDS" -ge "$deadline" ]; then
+          echo "ezupgrade: network not stable after ${toString cfg.networkTimeout}s, giving up" >&2
+          exit 1
+        fi
+        sleep 5
+      fi
+    done
+  '';
 in
 {
   options.services.ezupgrade = {
@@ -150,6 +170,24 @@ in
       description = "macOS only: also update Homebrew and upgrade its packages, before the rebuild. Set `homebrew.onActivation.autoUpdate` and `upgrade` to false in nix-darwin to have it done only here and not on every activation.";
     };
 
+    waitForNetwork = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Wait for the network to be stable before the upgrade: `networkCheckUrl` has to answer three times in a row. If it has not within `networkTimeout`, the upgrade fails (and eznotify tells about it) instead of half-running.";
+    };
+
+    networkCheckUrl = mkOption {
+      type = types.str;
+      default = "https://cache.nixos.org";
+      description = "The address that has to answer for the network to count as up.";
+    };
+
+    networkTimeout = mkOption {
+      type = types.ints.positive;
+      default = 180;
+      description = "How many seconds to wait for a stable network before giving up.";
+    };
+
     notify = mkOption {
       type = types.bool;
       default = true;
@@ -195,12 +233,15 @@ in
           };
 
           # With a flake, nixos-upgrade does not touch the lock file, so it is updated first.
-          systemd.services.nixos-upgrade = mkIf cfg.update {
+          systemd.services.nixos-upgrade = {
             path = [
               pkgs.util-linux
               config.nix.package
             ];
-            preStart = "runuser -u ${escapeShellArg cfg.user} -- nix flake update --flake ${escapeShellArg cfg.flake}";
+            preStart = mkMerge [
+              (mkIf cfg.waitForNetwork (mkBefore (waitForNetwork "${pkgs.curl}/bin/curl")))
+              (mkIf cfg.update "runuser -u ${escapeShellArg cfg.user} -- nix flake update --flake ${escapeShellArg cfg.flake}")
+            ];
           };
         }
       else
@@ -212,6 +253,7 @@ in
               in
               ''
                 ${optionalString (delaySeconds > 0) "/bin/sleep $(/usr/bin/jot -r 1 0 ${toString delaySeconds})"}
+                ${optionalString cfg.waitForNetwork (waitForNetwork "/usr/bin/curl")}
                 # A step that fails is not the end of the others, but the job as a whole has failed
                 rc=0
                 ${optionalString cfg.homebrew "sudo -u ${escapeShellArg cfg.user} ${brew} update && sudo -u ${escapeShellArg cfg.user} ${brew} upgrade || rc=1"}
