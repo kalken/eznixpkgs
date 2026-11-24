@@ -38,6 +38,7 @@ services.ezupgrade = { enable = true; schedule = "*-*-* 04:00"; };   # flake and
 - The message settings (log lines and so on) can be changed under `services.eznotify.units.nixos-upgrade` (NixOS) or `services.eznotify.units.ezupgrade` (macOS).
 - `schedule` is a systemd calendar expression. NixOS takes any (`man systemd.time`). macOS (launchd) takes `hourly`, `daily`, `weekly`, `monthly` and `[WEEKDAYS] [*-MONTH-DAY] HH:MM` (weekdays as `Mon`, `Sat,Sun` or `Mon..Fri`; `*` or a number for month and day); anything else stops the build with a message.
 - macOS has no randomized delay in launchd, so the daemon sleeps for the random time before it starts.
+- macOS: the daemon starts `/run/current-system/sw/bin/ezupgrade-run`, a path that stays the same when the script changes. The daemon's plist then stays the same too, so the rebuild does not restart the daemon (and kill the upgrade) in the middle of the run.
 - To replace a hand-made upgrade daemon, remove it and enable this.
 
 *ezupgrade is part of eznixpkgs.*

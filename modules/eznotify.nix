@@ -210,6 +210,15 @@ let
     }:/usr/bin:/bin:/usr/sbin:/sbin
     ${scriptDarwin}
   '';
+
+  # The daemons start the runner by this path, which stays the same when the runner changes. Their
+  # plist then does not change either, so a rebuild does not restart a daemon that is running it
+  # (nix-darwin restarts a daemon whose plist changed, which kills a job that is rebuilding).
+  runnerPath = "/run/current-system/sw/bin/eznotify-run";
+  runnerPackage = pkgs.runCommand "eznotify-run" { } ''
+    mkdir -p $out/bin
+    ln -s ${runner} $out/bin/eznotify-run
+  '';
 in
 {
   options.services.eznotify = {
@@ -399,12 +408,14 @@ in
           !mail.enable && !desktop.enable
         ) "services.eznotify is enabled but sends nothing: set mail.to or desktop.user (or their enable).";
 
+        environment.systemPackages = [ runnerPackage ];
+
         # The daemon keeps its own settings; only what it starts changes: the runner starts it.
         launchd.daemons = mapAttrs (name: _: {
           serviceConfig.ProgramArguments = mkForce [
             "/bin/sh"
             "-c"
-            "/bin/wait4path /nix/store && exec ${runner} ${escapeShellArg name} ${
+            "/bin/wait4path ${runnerPath} && exec ${runnerPath} ${escapeShellArg name} ${
               config.launchd.daemons.${name}.command
             }"
           ];

@@ -102,6 +102,25 @@ let
     optional (cfg.gc.keep != null) "nix-collect-garbage --delete-older-than ${cfg.gc.keep}"
     ++ optional cfg.gc.optimise "nix-store --optimise";
 
+  # macOS: what the launchd daemon runs
+  upgradeScript = pkgs.writeShellScriptBin "ezupgrade-run" (
+    let
+      brew = "${config.homebrew.prefix}/bin/brew";
+    in
+    ''
+      ${optionalString (delaySeconds > 0) "/bin/sleep $(/usr/bin/jot -r 1 0 ${toString delaySeconds})"}
+      ${optionalString cfg.waitForNetwork (waitForNetwork "/usr/bin/curl")}
+      # A step that fails is not the end of the others, but the job as a whole has failed
+      rc=0
+      ${optionalString cfg.homebrew "sudo -u ${escapeShellArg cfg.user} ${brew} update && sudo -u ${escapeShellArg cfg.user} ${brew} upgrade || rc=1"}
+      { ${optionalString cfg.update "sudo -u ${escapeShellArg cfg.user} /nix/var/nix/profiles/default/bin/nix flake update --flake ${escapeShellArg cfg.flake} &&"}
+        /run/current-system/sw/bin/darwin-rebuild switch --flake ${escapeShellArg target}${
+          concatMapStrings (c: " && ${c}") postCommands
+        }; } || rc=1
+      exit $rc
+    ''
+  );
+
   target = "path:${cfg.flake}#${cfg.configuration}";
 
   # Wait until the network answers three times in a row, so a link that is only coming up (Wi-Fi,
@@ -265,23 +284,13 @@ in
         }
       else
         {
+          # The script is in the system's PATH and the daemon starts it by that path, which does not
+          # change with the script. A daemon whose plist changes is restarted by the rebuild, and
+          # that would kill the upgrade in the middle of it.
+          environment.systemPackages = [ upgradeScript ];
+
           launchd.daemons.ezupgrade = {
-            script =
-              let
-                brew = "${config.homebrew.prefix}/bin/brew";
-              in
-              ''
-                ${optionalString (delaySeconds > 0) "/bin/sleep $(/usr/bin/jot -r 1 0 ${toString delaySeconds})"}
-                ${optionalString cfg.waitForNetwork (waitForNetwork "/usr/bin/curl")}
-                # A step that fails is not the end of the others, but the job as a whole has failed
-                rc=0
-                ${optionalString cfg.homebrew "sudo -u ${escapeShellArg cfg.user} ${brew} update && sudo -u ${escapeShellArg cfg.user} ${brew} upgrade || rc=1"}
-                { ${optionalString cfg.update "sudo -u ${escapeShellArg cfg.user} /nix/var/nix/profiles/default/bin/nix flake update --flake ${escapeShellArg cfg.flake} &&"}
-                  /run/current-system/sw/bin/darwin-rebuild switch --flake ${escapeShellArg target}${
-                    concatMapStrings (c: " && ${c}") postCommands
-                  }; } || rc=1
-                exit $rc
-              '';
+            command = "/run/current-system/sw/bin/ezupgrade-run";
             serviceConfig = {
               StartCalendarInterval = launchdEntries;
               EnvironmentVariables.PATH = "/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin";
