@@ -350,7 +350,26 @@ else
   mode=(--pipe --wait)
 fi
 
-exec systemd-run --quiet --collect "${mode[@]}" \
+# The cage sees /nix/store live, but its system mounts and PATH are fixed when it
+# starts. After an upgrade, garbage collection would delete the old system and the
+# programs the cage runs from under it. A garbage collection root on each of them,
+# named after this process, keeps them while the cage runs.
+roots=/nix/var/nix/gcroots/ezcage
+mkdir -p "$roots"
+for r in "$roots"/*; do # roots left by an ezcage that was killed
+  [ -L "$r" ] || continue
+  b=${r##*/}
+  kill -0 "${b%%-*}" 2>/dev/null || rm -f "$r"
+done
+i=0
+for p in /run/current-system /etc/static "$exe" "${paths[@]+"${paths[@]}"}"; do
+  [ -e "$p" ] && ln -sfn "$(realpath -e -- "$p")" "$roots/$$-$((i++))"
+done
+trap 'rm -f "$roots/$$"-*' EXIT
+
+rc=0
+systemd-run --quiet --collect "${mode[@]}" \
   --description="ezcage ${name:-(temporary)}: ${cmd[0]}" \
   "${props[@]}" "${env[@]}" "${wd[@]+"${wd[@]}"}" \
-  "${run[@]}"
+  "${run[@]}" || rc=$?
+exit "$rc"

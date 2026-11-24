@@ -58,6 +58,12 @@ ezcage [OPTIONS]... PROFILE [ARGS]...
   points in it (unit fails with `226/NAMESPACE`).
 - **Always read-only**: `/nix/store`, `/run/current-system`, `/etc/static`, `/etc/ssl`,
   `/etc/passwd`, `/etc/group`, `/etc/hosts`.
+- **Kept through upgrades**: the mounts of `/run/current-system` and `/etc/static` and the
+  cage's `PATH` are fixed when the cage starts, while `/nix/store` is seen live. So that
+  an upgrade and its garbage collection cannot delete the old system under a running cage,
+  ezcage puts a garbage collection root on the system, the command and the `--path`
+  packages in `/nix/var/nix/gcroots/ezcage/`, and removes it when the cage exits. The cage
+  keeps the old system until restarted.
 - **Granted paths**: `--rw` → `BindPaths`, `--ro` → `BindReadOnlyPaths`.
 - **User**: a static system user, never root, with `SupplementaryGroups=ezcage`.
   Profiles get their own `ezcage-<name>` user from the module; ad-hoc runs use
