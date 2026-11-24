@@ -215,6 +215,10 @@ trap cleanup EXIT
   "com.apple.cfprefsd.daemon" "com.apple.cfprefsd.agent"
   "com.apple.FSEvents"))
 
+; Crashpad (used by Nix and Chromium-based programs) hands a port to its child
+; process under this name. Only the name is opened, no files or network.
+(allow mach-register (global-name-prefix "org.chromium.crashpad.child_port_handshake."))
+
 ; Names and metadata of every path are visible; contents only where allowed
 (allow file-read-metadata)
 (allow file-read* (literal "/")
