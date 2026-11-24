@@ -22,6 +22,7 @@ services.ezupgrade = { enable = true; schedule = "*-*-* 04:00"; };   # flake and
 | `services.ezupgrade.schedule` | str | required | When it runs, as a systemd calendar expression: `weekly`, `Sat 04:00`, `Mon..Fri 02:30`, `*-*-* 05:00` (every night at 5) |
 | `services.ezupgrade.randomizedDelay` | str | `"0"` | Wait a random time, up to this long, after the scheduled time before it starts: `30s`, `45m`, `1h` or seconds |
 | `services.ezupgrade.update` | bool | true | Update the inputs first. Off, it rebuilds what the lock file says |
+| `services.ezupgrade.commitLockFile` | bool | true | Commit the updated lock file with git. Needs a git identity for `user`; nothing is committed without a git repository |
 | `services.ezupgrade.gc.keep` | null or str | null | After a successful rebuild, delete generations older than this (`14d`) and collect garbage. Null: no garbage collection |
 | `services.ezupgrade.gc.optimise` | bool | true | After a successful rebuild (and garbage collection), deduplicate the store with hard links (`nix-store --optimise`) |
 | `services.ezupgrade.waitForNetwork` | bool | true | Wait until the network answers three times in a row before starting. If it has not in time, the upgrade fails (and eznotify tells) |

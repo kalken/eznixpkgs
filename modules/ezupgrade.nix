@@ -114,7 +114,7 @@ let
       # A step that fails is not the end of the others, but the job as a whole has failed
       rc=0
       ${optionalString cfg.homebrew "sudo -u ${escapeShellArg cfg.user} ${brew} update && sudo -u ${escapeShellArg cfg.user} ${brew} upgrade || rc=1"}
-      { ${optionalString cfg.update "sudo -u ${escapeShellArg cfg.user} /nix/var/nix/profiles/default/bin/nix flake update --flake ${escapeShellArg cfg.flake} &&"}
+      { ${optionalString cfg.update "sudo -u ${escapeShellArg cfg.user} /nix/var/nix/profiles/default/bin/nix flake update${lockFlag} --flake ${escapeShellArg cfg.flake} &&"}
         /run/current-system/sw/bin/darwin-rebuild switch --flake ${escapeShellArg target}${
           concatMapStrings (c: " && ${c}") postCommands
         }; } || rc=1
@@ -123,6 +123,7 @@ let
   );
 
   target = "path:${cfg.flake}#${cfg.configuration}";
+  lockFlag = optionalString cfg.commitLockFile " --commit-lock-file";
 
   # Wait until the network answers three times in a row, so a link that is only coming up (Wi-Fi,
   # VPN, DHCP) does not make the update fail. Gives up when it has not been stable in time.
@@ -187,6 +188,12 @@ in
       type = types.bool;
       default = true;
       description = "Update the flake's inputs before the rebuild. Off, it only rebuilds what the lock file says.";
+    };
+
+    commitLockFile = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Commit the updated lock file with git (`nix flake update --commit-lock-file`). Needs a git identity for the user; without a git repository nothing is committed.";
     };
 
     homebrew = mkOption {
@@ -279,7 +286,7 @@ in
             postStart = mkIf (postCommands != [ ]) (concatStringsSep "\n" postCommands);
             preStart = mkMerge [
               (mkIf cfg.waitForNetwork (mkBefore (waitForNetwork "${pkgs.curl}/bin/curl")))
-              (mkIf cfg.update "runuser -u ${escapeShellArg cfg.user} -- nix flake update --flake ${escapeShellArg cfg.flake}")
+              (mkIf cfg.update "runuser -u ${escapeShellArg cfg.user} -- nix flake update${lockFlag} --flake ${escapeShellArg cfg.flake}")
             ];
           };
         }
