@@ -97,6 +97,11 @@ let
     }
     .${elemAt delayParts 1};
 
+  # Run after a successful rebuild
+  postCommands =
+    optional (cfg.gc.keep != null) "nix-collect-garbage --delete-older-than ${cfg.gc.keep}"
+    ++ optional cfg.gc.optimise "nix-store --optimise";
+
   target = "path:${cfg.flake}#${cfg.configuration}";
 
   # Wait until the network answers three times in a row, so a link that is only coming up (Wi-Fi,
@@ -170,6 +175,19 @@ in
       description = "macOS only: also update Homebrew and upgrade its packages, before the rebuild. Set `homebrew.onActivation.autoUpdate` and `upgrade` to false in nix-darwin to have it done only here and not on every activation.";
     };
 
+    gc.keep = mkOption {
+      type = types.nullOr (types.strMatching "[0-9]+d");
+      default = null;
+      example = "14d";
+      description = "After a successful rebuild, delete generations older than this (`nix-collect-garbage --delete-older-than`) and collect the garbage. Null does no garbage collection.";
+    };
+
+    gc.optimise = mkOption {
+      type = types.bool;
+      default = true;
+      description = "After a successful rebuild (and the garbage collection, if any), deduplicate the store with hard links (`nix-store --optimise`).";
+    };
+
     waitForNetwork = mkOption {
       type = types.bool;
       default = true;
@@ -238,6 +256,7 @@ in
               pkgs.util-linux
               config.nix.package
             ];
+            postStart = mkIf (postCommands != [ ]) (concatStringsSep "\n" postCommands);
             preStart = mkMerge [
               (mkIf cfg.waitForNetwork (mkBefore (waitForNetwork "${pkgs.curl}/bin/curl")))
               (mkIf cfg.update "runuser -u ${escapeShellArg cfg.user} -- nix flake update --flake ${escapeShellArg cfg.flake}")
@@ -258,7 +277,9 @@ in
                 rc=0
                 ${optionalString cfg.homebrew "sudo -u ${escapeShellArg cfg.user} ${brew} update && sudo -u ${escapeShellArg cfg.user} ${brew} upgrade || rc=1"}
                 { ${optionalString cfg.update "sudo -u ${escapeShellArg cfg.user} /nix/var/nix/profiles/default/bin/nix flake update --flake ${escapeShellArg cfg.flake} &&"}
-                  /run/current-system/sw/bin/darwin-rebuild switch --flake ${escapeShellArg target}; } || rc=1
+                  /run/current-system/sw/bin/darwin-rebuild switch --flake ${escapeShellArg target}${
+                    concatMapStrings (c: " && ${c}") postCommands
+                  }; } || rc=1
                 exit $rc
               '';
             serviceConfig = {
