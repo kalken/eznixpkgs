@@ -951,7 +951,18 @@ in
 
     # Names of static leases, answered by the DNS server from the hosts file
     networking.hosts = mkMerge (
-      map (lease: { ${lease.address} = [ lease.name ]; }) (
+      [
+        # NixOS maps the host name to 127.0.0.2, which the DNS server would hand to clients.
+        # Point it at the bridge address instead
+        { "127.0.0.2" = mkForce [ ]; }
+        {
+          ${cfg.bridge.address} = unique [
+            config.networking.fqdnOrHostName
+            config.networking.hostName
+          ];
+        }
+      ]
+      ++ map (lease: { ${lease.address} = [ lease.name ]; }) (
         filter (lease: lease.name != null) allStaticLeases
       )
     );
