@@ -77,7 +77,7 @@ try it after a rebuild: `sudo systemctl start eznotify@nixos-upgrade.service`.
 ### macOS (nix-darwin)
 
 - `units.<name>` is a `launchd.daemons.<name>` with a `command` or `script`. Its program is wrapped in a script that runs it, lets its output go to the usual log, and sends the message when it ends. A failure is a nonzero exit code; the log lines are the last lines it printed in that run.
-- `desktop.user` gets a banner, shown only while that user is logged in at the console. It comes from `terminal-notifier`, so macOS lists it under terminal-notifier in System Settings → Notifications; allow it there once. A click on the banner opens the daemon's log (`StandardOutPath`, as `ezupgrade` sets it), if it has one.
+- `desktop.user` gets a banner, shown only while that user is logged in at the console. It comes from `terminal-notifier`, so macOS lists it under terminal-notifier in System Settings → Notifications; allow it there once. A click on the banner opens `/var/log/<name>.last.log`, the output of that run alone (overwritten by the next run).
 - Use it from `darwinModules.eznotify`. There is no `launchd.user.agents` support, and a daemon with only `ProgramArguments` is refused.
 
 *eznotify is part of eznixpkgs.*

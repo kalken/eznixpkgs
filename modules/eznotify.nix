@@ -99,17 +99,6 @@ let
     fi
   '';
 
-  # macOS: where each daemon's log is, so a click on its banner can open it
-  logFiles = concatStrings (
-    mapAttrsToList (
-      name: _:
-      let
-        path = config.launchd.daemons.${name}.serviceConfig.StandardOutPath or null;
-      in
-      optionalString (path != null) "${escapeShellArg name}) logfile=${escapeShellArg path} ;;\n"
-    ) cfg.units
-  );
-
   # macOS: the popup is shown inside the GUI session of the user at the console. With the user
   # not logged in there is no session and nothing is shown.
   desktopScriptDarwin = ''
@@ -121,15 +110,10 @@ let
       if [ "$outcome" = Failure ]; then
         popup=$(logs ${toString desktop.logLines})
       fi
-      # A click on the banner opens the job's log, when the daemon has one
-      logfile=
-      case "$name" in
-      ${logFiles}esac
-      open=
-      if [ -n "$logfile" ]; then open="file://$logfile"; fi
+      # A click on the banner opens the log of this run alone
       /bin/launchctl asuser "$(id -u "$user")" /usr/bin/sudo -u "$user" \
         ${pkgs.terminal-notifier}/bin/terminal-notifier -group "$name" -title "$subject" -message "$popup" \
-        ''${open:+-open "$open"} >/dev/null || true
+        ''${lastlog:+-open "file://$lastlog"} >/dev/null || true
     fi
   '';
 
@@ -199,6 +183,9 @@ let
     logs() { tail -n "$1" "$tmp/log"; }
 
     subject="[$(uname -n)] $name $word"
+    # This run's output, for the banner to open
+    lastlog="/var/log/$name.last.log"
+    cp "$tmp/log" "$lastlog" 2>/dev/null && chmod 644 "$lastlog" || lastlog=
     ${optionalString desktop.enable desktopScriptDarwin}
     ${optionalString mail.enable (mailScript ''echo "$name $word"'')}
     # What the job itself returned is what launchd sees
