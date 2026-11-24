@@ -962,6 +962,7 @@ in
             source,
             settings,
             pattern,
+            ...
           }:
           {
             description = "New WireGuard config for ${dev} in ${name}";
