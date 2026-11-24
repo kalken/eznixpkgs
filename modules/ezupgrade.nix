@@ -97,10 +97,11 @@ let
     }
     .${elemAt delayParts 1};
 
-  # Run after a successful rebuild
+  # Run after a successful rebuild. On macOS the PATH is the runner's (eznotify), without Nix.
+  nixBin = optionalString (!isNixOS) "/nix/var/nix/profiles/default/bin/";
   postCommands =
-    optional (cfg.gc.keep != null) "nix-collect-garbage --delete-older-than ${cfg.gc.keep}"
-    ++ optional cfg.gc.optimise "nix-store --optimise";
+    optional (cfg.gc.keep != null) "${nixBin}nix-collect-garbage --delete-older-than ${cfg.gc.keep}"
+    ++ optional cfg.gc.optimise "${nixBin}nix-store --optimise";
 
   # macOS: what the launchd daemon runs
   upgradeScript = pkgs.writeShellScriptBin "ezupgrade-run" (
