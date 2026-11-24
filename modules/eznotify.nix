@@ -115,8 +115,9 @@ let
   desktopScriptDarwin = ''
     user=${escapeShellArg desktop.user}
     if [ "$(/usr/bin/stat -f %Su /dev/console)" = "$user" ]; then
-      # A log helps to find what went wrong, not to read that it went well
-      popup=" "
+      # A log helps to find what went wrong, not to read that it went well. The text can not be
+      # empty or blank: terminal-notifier takes that as no message and shows nothing.
+      popup="Finished at $(date +%H:%M)"
       if [ "$outcome" = Failure ]; then
         popup=$(logs ${toString desktop.logLines})
       fi
