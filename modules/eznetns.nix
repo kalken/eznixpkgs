@@ -951,59 +951,62 @@ in
           ) cfg.instances
         );
 
-        # WireGuard config rotation, also usable manually with systemctl start
-        rotateServices = map (
+        # WireGuard config rotation, also usable manually with systemctl start.
+        # Each interface gets eznetns-<netns>-rotate-<dev>.service (with the timer) and the template
+        # eznetns-<netns>-rotate-<dev>@.service, where the instance is the pattern to pick templates
+        # by: systemctl start eznetns-surf-rotate-wg0-surf@se-
+        rotateService =
           {
             name,
             dev,
             source,
             settings,
             pattern,
-            interval,
           }:
-          nameValuePair "eznetns-${name}-rotate-${dev}" (
-            {
-              description = "New WireGuard config for ${dev} in ${name}";
-              unitConfig = {
-                Requires = [ "eznetns-${name}.service" ];
-                After = [ "eznetns-${name}.service" ];
-              };
-              serviceConfig = {
-                Type = "oneshot";
-                ExecStartPre = escapeShellArgs (
-                  [
-                    "${cfg.package}/bin/ezwgen"
-                    "--source"
-                    source
-                    "--netns"
-                    name
-                    "--dev"
-                    dev
-                    "--pattern"
-                    pattern
-                  ]
-                  ++ optionals (settings != null) [
-                    "--settings"
-                    settings
-                  ]
-                );
-                ExecStart = escapeShellArgs [
-                  "${cfg.package}/bin/eznetns"
+          {
+            description = "New WireGuard config for ${dev} in ${name}";
+            unitConfig = {
+              Requires = [ "eznetns-${name}.service" ];
+              After = [ "eznetns-${name}.service" ];
+            };
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStartPre = escapeShellArgs (
+                [
+                  "${cfg.package}/bin/ezwgen"
+                  "--source"
+                  source
+                  "--netns"
                   name
-                  "wg.reload"
+                  "--dev"
                   dev
-                ];
-              }
-              // optionalAttrs (hasRoute cfg.instances.${name}) {
-                # The new config may name another DNS server
-                ExecStartPost = natUp name cfg.instances.${name};
-              };
+                  "--pattern"
+                  pattern
+                ]
+                ++ optionals (settings != null) [
+                  "--settings"
+                  settings
+                ]
+              );
+              ExecStart = escapeShellArgs [
+                "${cfg.package}/bin/eznetns"
+                name
+                "wg.reload"
+                dev
+              ];
             }
-            // optionalAttrs (interval != null) {
-              startAt = interval;
-            }
-          )
-        ) rotations;
+            // optionalAttrs (hasRoute cfg.instances.${name}) {
+              # The new config may name another DNS server
+              ExecStartPost = natUp name cfg.instances.${name};
+            };
+          };
+
+        rotateServices = concatMap (r: [
+          (nameValuePair "eznetns-${r.name}-rotate-${r.dev}" (
+            rotateService r // optionalAttrs (r.interval != null) { startAt = r.interval; }
+          ))
+          (nameValuePair "eznetns-${r.name}-rotate-${r.dev}@" (rotateService (r // { pattern = "%i"; })))
+        ]) rotations;
 
       in
       (mainServices // netnsServices) // (listToAttrs forwardServices) // (listToAttrs rotateServices);
