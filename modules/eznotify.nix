@@ -99,6 +99,17 @@ let
     fi
   '';
 
+  # macOS: where each daemon's log is, so a click on its banner can open it
+  logFiles = concatStrings (
+    mapAttrsToList (
+      name: _:
+      let
+        path = config.launchd.daemons.${name}.serviceConfig.StandardOutPath or null;
+      in
+      optionalString (path != null) "${escapeShellArg name}) logfile=${escapeShellArg path} ;;\n"
+    ) cfg.units
+  );
+
   # macOS: the popup is shown inside the GUI session of the user at the console. With the user
   # not logged in there is no session and nothing is shown.
   desktopScriptDarwin = ''
@@ -109,10 +120,15 @@ let
       if [ "$outcome" = Failure ]; then
         popup=$(logs ${toString desktop.logLines})
       fi
-      # Title and text go in as arguments, so no quoting of either is needed
-      /bin/launchctl asuser "$(id -u "$user")" /usr/bin/sudo -u "$user" /usr/bin/osascript \
-        -e 'on run argv' -e 'display notification (item 2 of argv) with title (item 1 of argv)' -e 'end run' \
-        "$subject" "$popup" || true
+      # A click on the banner opens the job's log, when the daemon has one
+      logfile=
+      case "$name" in
+      ${logFiles}esac
+      open=
+      if [ -n "$logfile" ]; then open="file://$logfile"; fi
+      /bin/launchctl asuser "$(id -u "$user")" /usr/bin/sudo -u "$user" \
+        ${pkgs.terminal-notifier}/bin/terminal-notifier -group "$name" -title "$subject" -message "$popup" \
+        ''${open:+-open "$open"} >/dev/null || true
     fi
   '';
 
