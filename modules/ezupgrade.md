@@ -28,7 +28,7 @@ services.ezupgrade = { enable = true; schedule = "*-*-* 04:00"; };   # flake and
 | `services.ezupgrade.waitForNetwork` | bool | true | Wait until the network answers three times in a row before starting. If it has not in time, the upgrade fails (and eznotify tells) |
 | `services.ezupgrade.networkCheckUrl` | str | `"https://cache.nixos.org"` | The address that has to answer |
 | `services.ezupgrade.networkTimeout` | positive int | `180` | Seconds to wait for a stable network before giving up |
-| `services.ezupgrade.homebrew` | bool | false | macOS only: update Homebrew and upgrade its packages before the rebuild |
+| `services.ezupgrade.homebrew` | bool | false | macOS only (the option does not exist on NixOS): update Homebrew and upgrade its packages before the rebuild |
 | `services.ezupgrade.notify` | bool | true | Tell about it through eznotify, when that is enabled |
 | `services.ezupgrade.notifyOnSuccess` | bool | true | Also a message when it worked, not only when it failed |
 

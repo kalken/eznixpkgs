@@ -196,12 +196,6 @@ in
       description = "Commit the updated lock file with git (`nix flake update --commit-lock-file`). Needs a git identity for the user; without a git repository nothing is committed.";
     };
 
-    homebrew = mkOption {
-      type = types.bool;
-      default = false;
-      description = "macOS only: also update Homebrew and upgrade its packages, before the rebuild. Set `homebrew.onActivation.autoUpdate` and `upgrade` to false in nix-darwin to have it done only here and not on every activation.";
-    };
-
     gc.keep = mkOption {
       type = types.nullOr (types.strMatching "[0-9]+d");
       default = null;
@@ -243,6 +237,14 @@ in
       type = types.bool;
       default = true;
       description = "Also send a message when the upgrade worked, not only when it failed.";
+    };
+  }
+  // optionalAttrs (!isNixOS) {
+    # Only exists on macOS, where nothing else updates Homebrew
+    homebrew = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Also update Homebrew and upgrade its packages, before the rebuild. Set `homebrew.onActivation.autoUpdate` and `upgrade` to false in nix-darwin to have it done only here and not on every activation.";
     };
   };
 
