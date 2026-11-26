@@ -8,18 +8,19 @@ Install and launch Windows programs and games with Proton, without Steam or a la
 - If the installer made more than one shortcut (the game, an editor, a launcher, ...), you tick which ones go in the start menu. The first is the game. With more than one, they are grouped in a start menu folder named after the game, on desktops with a classic menu (KDE, XFCE, Cinnamon, MATE; GNOME shows them flat). They all run in the same prefix and share its settings
 - To put a second program in a prefix that exists, right-click the exe, **Open With**, **Install in an existing ezlaunch prefix**, and pick the game. The installer runs in that prefix with the game's own Proton version, then the shortcuts list opens with the new ones ticked. Programs in one prefix share its settings
 - **Add to an existing ezlaunch prefix** (also under Open With) takes any exe on the disk, with no Windows shortcut needed, asks for a name and adds it as another start menu entry of the game you pick. It runs in that game's prefix
-- Right-click **Choose shortcuts** lists every shortcut in the prefix, the game itself included, with a checkbox for each, for example after you install an addon in the same prefix. Ticked ones have an entry, unticking one removes it. If you untick the game itself, the first ticked shortcut takes its place. At least one has to stay ticked (**Remove** deletes the whole game)
-- The start menu item **ezlaunch** (or `ezlaunch gui`) opens one window with all the games, running ones marked, and buttons for Run, Settings, Choose shortcuts, Stop, Rename, Remove and Add game. The window stays open while you use Run, Settings, Choose shortcuts and Stop; Add game, Rename, Remove and Refresh reload the list. It is the same as the commands, without a terminal
+- Right-click **Choose shortcuts** lists every shortcut in the prefix, the game itself included, with a checkbox for each, for example after you install an addon in the same prefix. Ticked ones have an entry, unticking one removes it. If you untick the game itself, the first ticked shortcut takes its place. At least one has to stay ticked (**Remove** deletes the whole game). Double-click a name to change what the start menu shows
+- The start menu item **ezlaunch** (or `ezlaunch gui`) opens one window with all the games, running ones marked, and buttons for Run, Settings, Choose shortcuts, Stop, Rename prefix, Remove and Add game. The window stays open while you use Run, Settings, Choose shortcuts and Stop; Add game, Rename prefix, Remove and Refresh reload the list. It is the same as the commands, without a terminal
 - To skip that question, right-click the exe, **Open With**, **Add installed game to ezlaunch**
 - One prefix per game, in `~/.local/share/ezlaunch/games/<name>/`
 - Any Proton option works: settings are plain `KEY=value` environment variables
 - Right-click **Settings** opens one window with everything for the game, and a Save button:
+  - the name in the start menu (only the entry; **Rename prefix** changes the folder)
   - checkboxes for common options (HDR, Wayland, NTSync, NVAPI, MangoHud, GameMode, ...)
   - the category, where the entry goes in the start menu
   - the Proton version, chosen from the versions installed in `~/.local/share/Steam/compatibilitytools.d`
   - the game's executable and its icon (an image, an `.ico` or an `.exe`), each with a file chooser
   - a text box for any other variable
-- Right-click **Rename** (also a button in the ezlaunch window, or `ezlaunch rename`): gives the game a new name. Its prefix folder and start menu entries are renamed along with it, and the start menu entry shows the new name instead of the Windows shortcut's. The game has to be stopped first
+- Right-click **Rename prefix** (also a button in the ezlaunch window, or `ezlaunch rename`): gives the prefix folder a new name. The start menu entry keeps its name, which **Settings** changes. The game has to be stopped first
 - Right-click **Remove**: deletes the game, its prefix and its menu entry
 - In a terminal, leave out the game name (`ezlaunch run`, `settings`, `rename`, `remove`, `stop`) to choose it from an arrow-key menu (fzf)
 - `ezlaunch list` shows the games and marks the running ones, `ezlaunch running` lists only those, `ezlaunch stop` closes one (it finds a game's processes by its prefix)
