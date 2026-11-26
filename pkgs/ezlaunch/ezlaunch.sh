@@ -438,11 +438,10 @@ short_path() { # exe
 # Which of the shortcuts get a start menu entry? Prints the chosen lines of name|exe. The first
 # argument is the lines to choose from. A second one, even an empty one, is the exes that start
 # ticked, and also means there is no "Other file" button. Prints nothing to pick a file by hand.
-# A name emptied in the list gets its own name back: the Windows shortcut's name from the
-# caller's own_names (exe => name), or without own_names the name it was listed with, else the
-# exe's file name.
+# A name emptied in the list, or chosen with Original name, gets its own name back (own_name).
 pick_shortcuts() { # lines of name|exe, [exes that start ticked, one per line]
-  local rows=() line rc=0 reply picked='' state buttons=(--button Cancel:1) lname lexe
+  local rows=() line rc=0 reply picked='' state buttons=(--button Cancel:1) lname lshort lexe
+  local sel self chosen
   local -A listed_as=()
   [ -n "$1" ] || return 0
   if [ -z "$GUI" ]; then
@@ -456,41 +455,70 @@ pick_shortcuts() { # lines of name|exe, [exes that start ticked, one per line]
     rows+=("$state" "${line%%|*}" "$(short_path "${line#*|}")" "${line#*|}")
     listed_as[${line#*|}]=${line%%|*}
   done <<<"$1"
-  # The names can be edited: double-click one to change what the start menu shows
-  reply=$(yad --list --checklist --title ezlaunch \
-    --text "Which shortcuts go in the start menu? Double-click a name to change it, or empty it to get the shortcut's own name back." \
-    --editable --editable-cols 2 \
-    --center --width 560 --height 320 --column "" --column Name --column Program --column Path:HD \
-    --separator '|' "${buttons[@]}" --button OK:0 "${rows[@]}") || rc=$?
-  case $rc in
-    0) ;;
-    3) return 0 ;;
-    *) return 1 ;;
-  esac
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    line=${line#TRUE|}
-    line=${line%|}
-    # name|short path|full path: the short one is only for showing
-    line="${line%%|*}|${line#*|*|}"
-    lname=${line%%|*}
-    lexe=${line#*|}
-    # Rows added with the right-click menu have no program
-    if [ -z "$lexe" ] || [ ! -f "$lexe" ]; then continue; fi
-    if [ -z "$lname" ]; then
-      if [ -n "${own_names[$lexe]+x}" ]; then
-        lname=${own_names[$lexe]}
-      elif ! declare -p own_names >/dev/null 2>&1 && [ -n "${listed_as[$lexe]:-}" ]; then
-        # Listed with their own names already, as right after an install
-        lname=${listed_as[$lexe]}
-      else
-        lname=$(basename "$lexe")
-        lname=${lname%.*}
+
+  # The chosen row is written to a file, so Original name knows which one it is. Original name
+  # closes the list and opens it again with that name changed and the rest as it was.
+  sel=$(mktemp)
+  self=$(readlink -f "$0")
+  while true; do
+    : >"$sel"
+    rc=0
+    reply=$(yad --list --checklist --title ezlaunch \
+      --text "Which shortcuts go in the start menu? Double-click a name to change it." \
+      --editable --editable-cols 2 --print-all --select-action "'$self' _select '$sel'" \
+      --center --width 560 --height 320 --column "" --column Name --column Program --column Path:HD \
+      --separator '|' "${buttons[@]}" \
+      --button "Original name!!Give the chosen shortcut back the name of its Windows shortcut:4" \
+      --button OK:0 "${rows[@]}") || rc=$?
+    case $rc in
+      0 | 4) ;;
+      3)
+        rm -f "$sel"
+        return 0
+        ;;
+      *)
+        rm -f "$sel"
+        return 1
+        ;;
+    esac
+    chosen=$(cat "$sel")
+    rows=()
+    picked=
+    while IFS='|' read -r state lname lshort lexe _; do
+      # Rows added with the right-click menu have no program
+      if [ -z "$lexe" ] || [ ! -f "$lexe" ]; then continue; fi
+      if [ -z "$lname" ] || { [ "$rc" = 4 ] && [ "$lexe" = "$chosen" ]; }; then
+        lname=$(own_name "$lexe")
       fi
-    fi
-    picked+="$lname|$lexe"$'\n'
-  done <<<"$reply"
+      rows+=("$state" "$lname" "$lshort" "$lexe")
+      if [ "$state" = TRUE ]; then picked+="$lname|$lexe"$'\n'; fi
+    done <<<"$reply"
+    if [ "$rc" = 0 ]; then break; fi
+    # The list goes to stdout, so the message must not
+    if [ -z "$chosen" ]; then info "Choose a shortcut first." >&2; fi
+  done
+  rm -f "$sel"
   printf '%s' "$picked"
+}
+
+# The name a shortcut has of its own: its Windows shortcut's, from the caller's own_names
+# (exe => name), or without own_names the name it was listed with, else the exe's file name
+own_name() { # exe
+  local name
+  if [ -n "${own_names[$1]+x}" ]; then
+    echo "${own_names[$1]}"
+  elif ! declare -p own_names >/dev/null 2>&1 && [ -n "${listed_as[$1]:-}" ]; then
+    # Listed with their own names already, as right after an install
+    echo "${listed_as[$1]}"
+  else
+    name=$(basename "$1")
+    echo "${name%.*}"
+  fi
+}
+
+# The list's chosen row is written to a file: its last column, the program's full path
+cmd_select() { # file, columns...
+  printf '%s' "${*: -1}" >"$1"
 }
 
 # Save the shortcuts of a game besides the game itself, with an icon for each
@@ -1164,6 +1192,7 @@ case "${1:-}" in
   install-in) shift && cmd_install_in "$@" ;;
   add-to) shift && cmd_add_to "$@" ;;
   add-in) shift && cmd_add_in "$@" ;;
+  _select) shift && cmd_select "$@" ;;
   run) shift && cmd_run "$@" ;;
   settings) shift && cmd_settings "$@" ;;
   shortcuts) shift && cmd_shortcuts "$@" ;;
