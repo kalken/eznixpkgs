@@ -919,7 +919,7 @@ game_pids() { # name
 
 # Choose again which shortcuts of a game are in the start menu
 cmd_shortcuts() { # [name], [exes to tick besides the current ones]
-  local name=${1:-} dir found current picks main keep links line listed= title
+  local name=${1:-} dir found current picks main keep links line listed='' title
   if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
   dir="$GAMES/$name"
