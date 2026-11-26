@@ -146,14 +146,19 @@ game_category() { # game config
 # Installer or a game that is already installed? Prints install or installed, then | the chosen
 # Proton version (empty if there is nothing to choose), | the category and | the name.
 ask_mode() { # question, current Proton version, current category, suggested name
-  local reply rc=0 choices fields=() parts=() version='' category='' name='' sep=$'\x1f' width
+  local reply rc=0 choices fields=() parts=() version='' category='' name='' sep=$'\x1f' width prefixes existing
   if [ -n "$GUI" ]; then
     choices=$(proton_choices "$2")
     # Wide enough for the whole suggested name
     width=$((${#4} * 9 + 220))
     if [ "$width" -lt 520 ]; then width=520; fi
     if [ "$width" -gt 1600 ]; then width=1600; fi
-    fields+=(--field "Installation prefix!The folder the game is installed in, its own Windows drive. Also the name in the start menu" "$4")
+    # A new prefix by default. The list also has the ones that exist, to put the program in one.
+    prefixes="^$4"
+    while IFS= read -r existing; do
+      if [ -n "$existing" ] && [ "$existing" != "$4" ]; then prefixes+="!$existing"; fi
+    done < <(game_names)
+    fields+=(--field "Installation prefix!Type a name for a new prefix, or choose one that exists to put the program in it. Proton version and Category are only for a new prefix:CBE" "$prefixes")
     if [ -n "$choices" ]; then fields+=(--field "Proton version!The Proton the game runs with. Can be changed later in Settings:CB" "$choices"); fi
     fields+=(--field "Category!Where the game goes in the start menu:CB" "$(category_choices "$3")")
     # yad shows the buttons in the order given: Cancel on the left, Install on the right.
@@ -680,9 +685,13 @@ cmd_add() { # [--install | --installed] [exe]
   name=$(printf '%s' "$name" | tr -cd 'A-Za-z0-9 ._-' | sed 's/^[ .]*//; s/ *$//')
   [ -n "$name" ] || die "empty game name"
   dir="$GAMES/$name"
+  # A prefix that exists gets the program as another of its shortcuts
   if grep -qs '^EZLAUNCH_EXE=' "$dir/config"; then
-    [ "$mode" = install ] || die "already added: $name"
-    install_in_prefix "$name" "$installer"
+    if [ "$mode" = install ]; then
+      install_in_prefix "$name" "$installer"
+    else
+      add_to_prefix "$name" "$installer"
+    fi
     return 0
   fi
 
