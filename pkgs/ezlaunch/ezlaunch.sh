@@ -306,7 +306,7 @@ Exec=ezlaunch run "$name"
 Icon=$icon
 Categories=$category;
 Terminal=false
-Actions=settings;shortcuts;remove;
+Actions=settings;shortcuts;rename;remove;
 
 [Desktop Action settings]
 Name=Settings
@@ -315,6 +315,10 @@ Exec=ezlaunch settings "$name"
 [Desktop Action shortcuts]
 Name=Choose shortcuts
 Exec=ezlaunch shortcuts "$name"
+
+[Desktop Action rename]
+Name=Rename
+Exec=ezlaunch rename "$name"
 
 [Desktop Action remove]
 Name=Remove
@@ -830,6 +834,38 @@ cmd_remove() { # name
   refresh_menu
 }
 
+# Give a game a new name: its folder, its prefix and its start menu entries move along
+cmd_rename() { # [name], [new name]
+  local name=${1:-} new=${2:-} old_dir new_dir file line out
+  if [ -z "$name" ]; then name=$(pick_game); fi
+  check_name "$name"
+  old_dir="$GAMES/$name"
+  [ -f "$old_dir/config" ] || die "unknown game: $name"
+  [ -z "$(game_pids "$name")" ] || die "$name is running. Stop it first."
+  if [ -z "$new" ]; then new=$(ask_text "New name for $name" "$name") || exit 0; fi
+  new=$(printf '%s' "$new" | tr -cd 'A-Za-z0-9 ._-' | sed 's/^[ .]*//; s/ *$//')
+  [ -n "$new" ] || die "empty game name"
+  [ "$new" != "$name" ] || exit 0
+  new_dir="$GAMES/$new"
+  [ ! -e "$new_dir" ] || die "already exists: $new"
+
+  mv "$old_dir" "$new_dir"
+  # The game's exe, its other shortcuts and custom variables can point into the old folder
+  for file in "$new_dir/config" "$new_dir/links"; do
+    [ -f "$file" ] || continue
+    out=
+    while IFS= read -r line || [ -n "$line" ]; do
+      out+="${line//"$old_dir/"/"$new_dir/"}"$'\n'
+    done <"$file"
+    printf '%s' "$out" >"$file"
+  done
+
+  rm -f "$(desktop_file "$name")" "$APPS/ezlaunch-${name// /_}.link-"*.desktop \
+    "$MENUS/ezlaunch-${name// /_}.menu" "$DIRECTORIES/ezlaunch-${name// /_}.directory"
+  write_desktop "$new" "$(icon_for "$new_dir")"
+  echo "ezlaunch: renamed $name to $new"
+}
+
 # Process IDs whose environment holds the prefix of a game, which is every process it started
 game_pids() { # name
   local prefix="$GAMES/$1/prefix" file
@@ -954,7 +990,7 @@ cmd_do() { # action, file
 }
 
 # One window with the games and a button for each thing the commands do. Run, Settings, Choose
-# shortcuts and Stop leave the window open. Add game and Remove change the list, so the window
+# shortcuts and Stop leave the window open. Add game, Rename and Remove change the list, so the window
 # closes and opens again with the new list, and so does Refresh.
 cmd_gui() {
   [ -n "$GUI" ] || die "the window needs a graphical session"
@@ -977,6 +1013,7 @@ cmd_gui() {
       --button Close:1 --button "Refresh!!Update the list and what is running:60" \
       --button "Add game!!Install a game or add one that is on the disk:10" \
       --button "Remove!!Delete the game, its prefix and its start menu entry:20" \
+      --button "Rename!!Give the game a new name. Its prefix folder is renamed too:30" \
       --button "Choose shortcuts!!Pick which of the game's Windows shortcuts are in the start menu:$self _do shortcuts $sel" \
       --button "Settings!!Proton version, options, executable and icon of the game:$self _do settings $sel" \
       --button "Stop!!Close the game and everything in its prefix:$self _do stop $sel" \
@@ -987,6 +1024,10 @@ cmd_gui() {
       20)
         name=$(cat "$sel" 2>/dev/null || true)
         if [ -n "$name" ]; then "$0" remove "$name" || true; else info "Choose a game first."; fi
+        ;;
+      30)
+        name=$(cat "$sel" 2>/dev/null || true)
+        if [ -n "$name" ]; then "$0" rename "$name" || true; else info "Choose a game first."; fi
         ;;
       60) ;;
       *) return 0 ;;
@@ -1012,11 +1053,12 @@ Usage: ezlaunch <command>
   settings [game]       all settings of a game in one window
   shortcuts [game]      choose which of the shortcuts in the game's prefix are in the start menu
   remove [game]         delete a game, its prefix and its start menu entry
+  rename [game] [new]   give a game a new name, its prefix folder included
   list                  list the games, marking the ones that are running
   running               list the games that are running
   stop [game]           close a running game
 
-Without a game name, run, settings, remove and stop show a menu to choose from.
+Without a game name, run, settings, rename, remove and stop show a menu to choose from.
 
 Defaults for new games: $SYSTEM_CONF and $USER_CONF (KEY=value lines).
 EOF
@@ -1033,6 +1075,7 @@ case "${1:-}" in
   settings) shift && cmd_settings "$@" ;;
   shortcuts) shift && cmd_shortcuts "$@" ;;
   remove) shift && cmd_remove "$@" ;;
+  rename) shift && cmd_rename "$@" ;;
   list) cmd_list ;;
   running) cmd_running ;;
   stop) shift && cmd_stop "$@" ;;
