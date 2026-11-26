@@ -17,7 +17,6 @@ Install and launch Windows programs and games with Proton, without Steam or a la
   - checkboxes for common options (HDR, Wayland, NTSync, NVAPI, MangoHud, GameMode, ...)
   - the category, where the entry goes in the start menu
   - the Proton version, chosen from the versions installed in `~/.local/share/Steam/compatibilitytools.d`
-  - the game's executable and its icon (an image, an `.ico` or an `.exe`), each with a file chooser
   - a text box for any other variable
   - buttons for **Choose shortcuts**, **Add** (install another program in the prefix, or add one that is on the disk), **Rename**, **Stop** and **Remove**. Choose shortcuts, Add and Stop leave Settings open; Rename and Remove close it without saving
 - Right-click **Rename prefix** (also in Settings, or `ezlaunch rename`): gives the prefix folder a new name. The start menu entries keep their names, which **Choose shortcuts** changes. The game has to be stopped first

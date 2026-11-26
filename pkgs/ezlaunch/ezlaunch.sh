@@ -713,27 +713,6 @@ apply_title() { # name, title
   mv "$cfg.new" "$cfg"
 }
 
-apply_icon() { # name, an image, .ico or .exe
-  local dir="$GAMES/$1" src=$2 new
-  case "${src,,}" in
-    *.png | *.svg | *.xpm)
-      new="$dir/new-icon.${src##*.}"
-      cp "$src" "$new"
-      ;;
-    *.ico)
-      new="$dir/new-icon.png"
-      ico_to_png "$src" "$new"
-      ;;
-    *)
-      new="$dir/new-icon.png"
-      extract_icon "$src" "$new"
-      ;;
-  esac
-  [ -f "$new" ] || die "no icon found in $src"
-  rm -f "$dir"/icon.*
-  mv "$new" "$dir/icon.${new##*.}"
-}
-
 apply_proton() { # name, version
   local cfg="$GAMES/$1/config"
   { grep -v '^PROTONPATH=' "$cfg" || true; } >"$cfg.new"
@@ -858,10 +837,7 @@ cmd_settings() { # [name]
     versions_field+="${versions_field:+!}$version"
   done
 
-  local current_exe current_icon custom_in
-  current_exe=$(getv EZLAUNCH_EXE "$cfg")
-  current_icon=$(icon_for "$dir")
-  if [ ! -f "$current_icon" ]; then current_icon=; fi
+  local custom_in
   # yad takes line breaks in a text field as \n
   custom_in=$({ grep -Ev "^($managed)=" "$cfg" || true; })
   custom_in=${custom_in//$'\n'/\\n}
@@ -872,14 +848,9 @@ cmd_settings() { # [name]
   self=$(readlink -f "$0")
   q="'$name'"
   out=$(yad --form --title ezlaunch --text "Settings for $name" --width 600 \
-    --file-filter "Programs | *.exe *.EXE" \
-    --file-filter "Images and icons | *.png *.svg *.ico *.xpm *.exe *.EXE" \
-    --file-filter "All files | *" \
     "${fields[@]}" \
     --field "Proton version!The Proton the game runs with, from compatibilitytools.d:CB" "$versions_field" \
     --field "Category!Where the game goes in the start menu:CB" "$(category_choices "$(game_category "$cfg")")" \
-    --field "Executable!The exe that starts the game:FL" "$current_exe" \
-    --field "Icon!The start menu icon. An image, an .ico or an .exe to take it from:FL" "$current_icon" \
     --field "Custom variables, KEY=value one per line!Any Proton or Wine environment variable, such as DXVK_HUD=fps:TXT" "$custom_in" \
     --button "Choose shortcuts!!Which shortcuts of the prefix are in the start menu, and their names:'$self' shortcuts $q" \
     --button "Add!!Install another program in this prefix, or add one that is on the disk:'$self' add-in $q" \
@@ -901,7 +872,7 @@ cmd_settings() { # [name]
   esac
 
   # One value per field, in order. The custom variables come last and may hold a |.
-  local parts=() n=${#KNOWN[@]} i selected='' exe icon custom category
+  local parts=() n=${#KNOWN[@]} i selected='' custom category
   IFS='|' read -ra parts <<<"$out"
   for ((i = 0; i < n; i++)); do
     IFS='|' read -r key _ <<<"${KNOWN[i]}"
@@ -909,11 +880,9 @@ cmd_settings() { # [name]
   done
   version=${parts[n]:-}
   category=$(category_value "${parts[n + 1]:-}")
-  exe=${parts[n + 2]:-}
-  icon=${parts[n + 3]:-}
   custom=$(
     IFS='|'
-    echo "${parts[*]:n+4}"
+    echo "${parts[*]:n+2}"
   )
   custom=${custom//\\n/$'\n'}
   # yad ends the text with a line break, which would add a blank line at every save
@@ -922,14 +891,6 @@ cmd_settings() { # [name]
   apply_options "$name" "$selected" "$custom"
   if [ -n "$version" ]; then apply_proton "$name" "$version"; fi
   apply_category "$name" "$category"
-  if [ -n "$exe" ] && [ "$exe" != "$current_exe" ]; then
-    [ -f "$exe" ] || die "not a file: $exe"
-    apply_exe "$name" "$exe"
-  fi
-  if [ -n "$icon" ] && [ "$icon" != "$current_icon" ]; then
-    [ -f "$icon" ] || die "not a file: $icon"
-    apply_icon "$name" "$icon"
-  fi
   write_desktop "$name" "$(icon_for "$dir")"
   info "Saved the settings for $name."
 }
