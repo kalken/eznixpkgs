@@ -17,59 +17,56 @@ let
     "application/vnd.microsoft.portable-executable"
   ];
 
-  # The window with all the games, in the start menu
+  # The window with all the programs, in the start menu
   manager = pkgs.makeDesktopItem {
     name = "ezlaunch-manager";
     desktopName = "ezlaunch";
-    comment = "Run, change and remove the Windows games added with ezlaunch";
+    comment = "Run, change and remove the Windows programs added with ezlaunch";
     exec = "ezlaunch gui";
     icon = "applications-games";
-    categories = [
-      "Game"
-      "Utility"
-    ];
+    categories = [ "Utility" ];
   };
 
   # Not shown in the menu: it only exists so a .exe can be opened with ezlaunch add
   handler = pkgs.makeDesktopItem {
     name = "ezlaunch";
     desktopName = "ezlaunch";
-    comment = "Install a Windows game with Proton";
+    comment = "Install a Windows program with Proton";
     exec = "ezlaunch add %f";
     mimeTypes = exeTypes;
     noDisplay = true;
   };
 
-  # Under Open With in the file manager, for a game that is already on the disk
+  # Under Open With in the file manager, for a program that is already on the disk
   addInstalled = pkgs.makeDesktopItem {
     name = "ezlaunch-add-installed";
-    desktopName = "Add installed game to ezlaunch";
-    comment = "Add a Windows game that is already on the disk, without an installer";
+    desktopName = "Add installed program to ezlaunch";
+    comment = "Add a Windows program that is already on the disk, without an installer";
     exec = "ezlaunch add --installed %f";
     mimeTypes = exeTypes;
   };
 
-  # Under Open With, to install a program in the prefix of a game that exists
+  # Under Open With, to install a program in a prefix that exists
   installIn = pkgs.makeDesktopItem {
     name = "ezlaunch-install-in";
     desktopName = "Install in an existing ezlaunch prefix";
-    comment = "Run a Windows installer in the prefix of a game that is already added";
+    comment = "Run a Windows installer in a prefix that is already added";
     exec = "ezlaunch install-in %f";
     mimeTypes = exeTypes;
   };
 
-  # Under Open With, for a program that is on the disk, as another entry of a game
+  # Under Open With, for a program that is on the disk, as another entry of a prefix
   addTo = pkgs.makeDesktopItem {
     name = "ezlaunch-add-to";
     desktopName = "Add to an existing ezlaunch prefix";
-    comment = "Add a Windows program as another start menu entry of a game that is already added";
+    comment = "Add a Windows program as another start menu entry of a prefix that is already added";
     exec = "ezlaunch add-to %f";
     mimeTypes = exeTypes;
   };
 in
 {
   options.programs.ezlaunch = {
-    enable = lib.mkEnableOption "ezlaunch — install and launch Windows games with Proton";
+    enable = lib.mkEnableOption "ezlaunch — install and launch Windows programs and games with Proton";
 
     package = lib.mkOption {
       type = lib.types.package;

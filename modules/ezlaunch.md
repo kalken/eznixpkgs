@@ -1,6 +1,6 @@
 # ezlaunch
 
-Install and launch Windows games with Proton, without Steam or a launcher app. Double-click a `setup.exe`, and the game ends up in the start menu with right-click **Settings** and **Remove**.
+Install and launch Windows programs and games with Proton, without Steam or a launcher app. Double-click a `setup.exe`, and the program ends up in the start menu with right-click **Settings** and **Remove**.
 
 ## ✨ Features
 

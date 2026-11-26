@@ -33,7 +33,7 @@ writeShellApplication {
   text = builtins.readFile ./ezlaunch.sh;
 
   meta = with lib; {
-    description = "Install and launch Windows games with Proton, with start menu entries and per-game settings";
+    description = "Install and launch Windows programs and games with Proton, with start menu entries and per-program settings";
     license = licenses.mit;
     platforms = platforms.linux;
     mainProgram = "ezlaunch";
