@@ -632,6 +632,7 @@ cmd_add() { # [--install | --installed] [exe]
 
   printf 'EZLAUNCH_EXE=%s\n' "$exe" >>"$dir/config"
   apply_title "$name" "$title"
+  touch "$dir/.titled"
   set_links "$dir" "$links"
   write_desktop "$name" "$icon"
   info "Added $name to the start menu."
@@ -724,6 +725,25 @@ apply_options() { # name, checked keys one per line, custom variables
   mv "$cfg.new" "$cfg"
 }
 
+# Bring a game added by an older ezlaunch up to date, once: its entry gets the name of the Windows
+# shortcut its exe came from, and the right-click actions added since. .titled marks it done.
+upgrade_game() { # name
+  local dir="$GAMES/$1" main line title=
+  if [ -f "$dir/.titled" ] || [ ! -f "$dir/config" ]; then return 0; fi
+  main=$(getv EZLAUNCH_EXE "$dir/config")
+  if [ -n "$main" ] && [ -z "$(getv EZLAUNCH_TITLE "$dir/config")" ]; then
+    while IFS= read -r line; do
+      if [ "${line#*|}" = "$main" ]; then
+        title=${line%%|*}
+        break
+      fi
+    done < <(shortcut_games "$dir/prefix")
+    apply_title "$1" "$title"
+  fi
+  touch "$dir/.titled"
+  write_desktop "$1" "$(icon_for "$dir")"
+}
+
 cmd_run() { # name, args...
   local name=${1:-} dir
   shift || true
@@ -731,6 +751,7 @@ cmd_run() { # name, args...
   check_name "$name"
   dir="$GAMES/$name"
   [ -f "$dir/config" ] || die "unknown game: $name"
+  upgrade_game "$name"
   load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
   # --exe starts another program of the same prefix, from its start menu entry
   if [ "${1:-}" = --exe ]; then
@@ -880,6 +901,7 @@ cmd_rename() { # [name], [new name]
     "$MENUS/ezlaunch-${name// /_}.menu" "$DIRECTORIES/ezlaunch-${name// /_}.directory"
   # A name given by hand wins over the name of the Windows shortcut
   apply_title "$new" ""
+  touch "$new_dir/.titled"
   write_desktop "$new" "$(icon_for "$new_dir")"
   echo "ezlaunch: renamed $name to $new"
 }
@@ -1026,6 +1048,7 @@ cmd_gui() {
   sel=$(mktemp)
   self=$(readlink -f "$0")
   trap 'rm -f "$sel"' EXIT
+  while IFS= read -r name; do upgrade_game "$name"; done < <(game_names)
   while true; do
     rows=()
     while IFS= read -r name; do
