@@ -420,6 +420,21 @@ shortcut_games() { # prefix
 }
 
 
+# A program's path as it is easiest to read: C:\Game\game.exe inside a prefix, ~/... in the home
+short_path() { # exe
+  local exe=$1 rest
+  if [[ "$exe" == "$GAMES"/*/prefix/drive_c/* ]]; then
+    rest=${exe#"$GAMES"/*/prefix/drive_c/}
+    echo "C:\\${rest//\//\\}"
+  elif [[ "$exe" == "$HOME"/* ]]; then
+    # A ~ to show, not to expand
+    # shellcheck disable=SC2088
+    echo "~/${exe#"$HOME"/}"
+  else
+    echo "$exe"
+  fi
+}
+
 # Which of the shortcuts get a start menu entry? Prints the chosen lines of name|exe. The first
 # argument is the lines to choose from. A second one, even an empty one, is the exes that start
 # ticked, and also means there is no "Other file" button. Prints nothing to pick a file by hand.
@@ -434,13 +449,13 @@ pick_shortcuts() { # lines of name|exe, [exes that start ticked, one per line]
   while IFS= read -r line; do
     state=TRUE
     if [ -n "${2+x}" ] && ! grep -qxF -- "${line#*|}" <<<"$2"; then state=FALSE; fi
-    rows+=("$state" "${line%%|*}" "${line#*|}")
+    rows+=("$state" "${line%%|*}" "$(short_path "${line#*|}")" "${line#*|}")
   done <<<"$1"
   # The names can be edited: double-click one to change what the start menu shows
   reply=$(yad --list --checklist --title ezlaunch \
     --text "Which shortcuts go in the start menu? Double-click a name to change it." \
     --editable --editable-cols 2 \
-    --center --width 560 --height 320 --column "" --column Name --column Executable \
+    --center --width 560 --height 320 --column "" --column Name --column Program --column Path:HD \
     --separator '|' "${buttons[@]}" --button OK:0 "${rows[@]}") || rc=$?
   case $rc in
     0) ;;
@@ -451,6 +466,8 @@ pick_shortcuts() { # lines of name|exe, [exes that start ticked, one per line]
     [ -n "$line" ] || continue
     line=${line#TRUE|}
     line=${line%|}
+    # name|short path|full path: the short one is only for showing
+    line="${line%%|*}|${line#*|*|}"
     # Rows added with the right-click menu have no program
     if [ -z "${line#*|}" ] || [ -z "${line%%|*}" ] || [ ! -f "${line#*|}" ]; then continue; fi
     picked+="$line"$'\n'
@@ -520,16 +537,48 @@ cmd_install_in() { # [exe]
   install_in_prefix "$name" "$installer"
 }
 
+# Settings: put another program in this prefix, by running its installer or adding it as it is
+cmd_add_in() { # name, [exe]
+  local name=${1:-} file=${2:-} rc=0
+  if [ -z "$name" ]; then name=$(pick_game); fi
+  check_name "$name"
+  [ -f "$GAMES/$name/config" ] || die "unknown game: $name"
+  if [ -z "$file" ]; then
+    file=$(ask_file "Choose an installer, or a program that is already on the disk" "$HOME/" "$EXE_FILTER")
+  fi
+  [ -f "$file" ] || die "not a file: $file"
+  file=$(readlink -f "$file")
+  if [ -n "$GUI" ]; then
+    yad --title ezlaunch --text "Is $(basename "$file") an installer or a program to add?" --no-markup \
+      --center --width 420 --buttons-layout edge --button Cancel:1 \
+      --button "Add!!The program is already installed. Run it from where it is:2" \
+      --button "Install!!Run this installer in the prefix, then choose its shortcuts:0" || rc=$?
+  else
+    read -r -p "[i]nstaller or [a]lready installed? " rc
+    case $rc in i*) rc=0 ;; a*) rc=2 ;; *) rc=1 ;; esac
+  fi
+  case $rc in
+    0) install_in_prefix "$name" "$file" ;;
+    2) add_to_prefix "$name" "$file" ;;
+    *) exit 0 ;;
+  esac
+}
+
 # Open With: a program that is already on the disk becomes another start menu entry of a game
 cmd_add_to() { # [exe]
-  local exe=${1:-} name dir label lines
+  local exe=${1:-} name
   if [ -z "$exe" ]; then
     exe=$(ask_file "Choose the program" "$HOME/" "$EXE_FILTER")
   fi
   [ -f "$exe" ] || die "not a file: $exe"
   exe=$(readlink -f "$exe")
   name=$(ask_prefix "Add $(basename "$exe") to which prefix?") || exit 1
-  dir="$GAMES/$name"
+  add_to_prefix "$name" "$exe"
+}
+
+# A program that is on the disk becomes another start menu entry of a prefix
+add_to_prefix() { # name, exe
+  local name=$1 exe=$2 dir="$GAMES/$1" label lines
   if [ "$exe" = "$(getv EZLAUNCH_EXE "$dir/config")" ] || grep -qxF -- "|$exe" <(sed 's/^[^|]*//' "$dir/links" 2>/dev/null); then
     die "already in the start menu: $(basename "$exe")"
   fi
@@ -809,46 +858,62 @@ cmd_settings() { # [name]
     versions_field+="${versions_field:+!}$version"
   done
 
-  local current_exe current_icon custom_in current_title
+  local current_exe current_icon custom_in
   current_exe=$(getv EZLAUNCH_EXE "$cfg")
-  current_title=$(getv EZLAUNCH_TITLE "$cfg")
-  current_title=${current_title:-$name}
   current_icon=$(icon_for "$dir")
   if [ ! -f "$current_icon" ]; then current_icon=; fi
   # yad takes line breaks in a text field as \n
   custom_in=$({ grep -Ev "^($managed)=" "$cfg" || true; })
   custom_in=${custom_in//$'\n'/\\n}
 
-  local out
+  # Choose shortcuts, Add and Stop open their own window and leave this one open. Rename and
+  # Remove close it without saving.
+  local out rc=0 self q
+  self=$(readlink -f "$0")
+  q="'$name'"
   out=$(yad --form --title ezlaunch --text "Settings for $name" --width 600 \
     --file-filter "Programs | *.exe *.EXE" \
     --file-filter "Images and icons | *.png *.svg *.ico *.xpm *.exe *.EXE" \
     --file-filter "All files | *" \
-    --field "Name in the start menu!Only the start menu entry. Rename prefix changes the folder" "$current_title" \
     "${fields[@]}" \
     --field "Proton version!The Proton the game runs with, from compatibilitytools.d:CB" "$versions_field" \
     --field "Category!Where the game goes in the start menu:CB" "$(category_choices "$(game_category "$cfg")")" \
     --field "Executable!The exe that starts the game:FL" "$current_exe" \
     --field "Icon!The start menu icon. An image, an .ico or an .exe to take it from:FL" "$current_icon" \
     --field "Custom variables, KEY=value one per line!Any Proton or Wine environment variable, such as DXVK_HUD=fps:TXT" "$custom_in" \
-    --button Cancel:1 --button Save:0 --separator '|') || exit 0
+    --button "Choose shortcuts!!Which shortcuts of the prefix are in the start menu, and their names:'$self' shortcuts $q" \
+    --button "Add!!Install another program in this prefix, or add one that is on the disk:'$self' add-in $q" \
+    --button "Rename!!Give the prefix folder a new name. The start menu names stay:20" \
+    --button "Stop!!Close everything that runs in this prefix:'$self' stop $q" \
+    --button "Remove!!Delete the prefix, with saved games inside it, and its start menu entries:30" \
+    --button Cancel:1 --button Save:0 --separator '|') || rc=$?
+  case $rc in
+    0) ;;
+    20)
+      cmd_rename "$name"
+      return 0
+      ;;
+    30)
+      cmd_remove "$name"
+      return 0
+      ;;
+    *) return 0 ;;
+  esac
 
-  # One value per field, in order: the name, the options, then the rest. The custom variables
-  # come last and may hold a |.
-  local parts=() n=${#KNOWN[@]} i selected='' exe icon custom category title
+  # One value per field, in order. The custom variables come last and may hold a |.
+  local parts=() n=${#KNOWN[@]} i selected='' exe icon custom category
   IFS='|' read -ra parts <<<"$out"
-  title=${parts[0]:-}
   for ((i = 0; i < n; i++)); do
     IFS='|' read -r key _ <<<"${KNOWN[i]}"
-    if [ "${parts[i + 1]:-}" = TRUE ]; then selected+="$key"$'\n'; fi
+    if [ "${parts[i]:-}" = TRUE ]; then selected+="$key"$'\n'; fi
   done
-  version=${parts[n + 1]:-}
-  category=$(category_value "${parts[n + 2]:-}")
-  exe=${parts[n + 3]:-}
-  icon=${parts[n + 4]:-}
+  version=${parts[n]:-}
+  category=$(category_value "${parts[n + 1]:-}")
+  exe=${parts[n + 2]:-}
+  icon=${parts[n + 3]:-}
   custom=$(
     IFS='|'
-    echo "${parts[*]:n+5}"
+    echo "${parts[*]:n+4}"
   )
   custom=${custom//\\n/$'\n'}
   # yad ends the text with a line break, which would add a blank line at every save
@@ -860,11 +925,7 @@ cmd_settings() { # [name]
   if [ -n "$exe" ] && [ "$exe" != "$current_exe" ]; then
     [ -f "$exe" ] || die "not a file: $exe"
     apply_exe "$name" "$exe"
-    # A new exe drops the old shortcut's name, unless a name was typed as well
-    if [ "$title" = "$current_title" ]; then title=; fi
   fi
-  # Empty, or the same as the game's name: the entry has the game's name
-  apply_title "$name" "$title"
   if [ -n "$icon" ] && [ "$icon" != "$current_icon" ]; then
     [ -f "$icon" ] || die "not a file: $icon"
     apply_icon "$name" "$icon"
@@ -1052,69 +1113,33 @@ cmd_list() {
   done < <(game_names)
 }
 
-# The game chosen in the window is written to a file, so the buttons know which one it is
-cmd_select() { # file, game, ...
-  printf '%s' "$2" >"$1"
-}
-
-# What a button of the window does with the chosen game
-cmd_do() { # action, file
-  local name
-  name=$(cat "$2" 2>/dev/null || true)
-  if [ -z "$name" ]; then
-    info "Choose a game first."
-    return 0
-  fi
-  case $1 in
-    run) cmd_run "$name" ;;
-    settings) cmd_settings "$name" ;;
-    shortcuts) cmd_shortcuts "$name" ;;
-    stop) cmd_stop "$name" ;;
-    *) ;;
-  esac
-}
-
-# One window with the games and a button for each thing the commands do. Run, Settings, Choose
-# shortcuts and Stop leave the window open. Add game, Rename and Remove change the list, so the window
-# closes and opens again with the new list, and so does Refresh.
+# One window with the prefixes. Add makes a new one. Settings, or a double-click, opens the
+# settings of the chosen one, where everything else is. The list is read again afterwards.
 cmd_gui() {
   [ -n "$GUI" ] || die "the window needs a graphical session"
-  local name rc rows status sel self
-  sel=$(mktemp)
-  self=$(readlink -f "$0")
-  trap 'rm -f "$sel"' EXIT
+  local name rc rows status out
   while IFS= read -r name; do upgrade_game "$name"; done < <(game_names)
   while true; do
     rows=()
     while IFS= read -r name; do
       status=
       if [ -n "$(game_pids "$name")" ]; then status=running; fi
-      rows+=("$name" "$status" "$(getv EZLAUNCH_EXE "$GAMES/$name/config")")
+      rows+=("$name" "$status")
     done < <(game_names)
-    : >"$sel"
     rc=0
-    yad --list --title ezlaunch --text "Choose a game, then a button. Refresh shows what is running." \
-      --center --width 800 --height 460 --column Prefix --column Status --column Executable \
-      --select-action "$self _select $sel" --dclick-action "$self _do run $sel" \
+    out=$(yad --list --title ezlaunch --no-markup \
+      --text "Choose a prefix and press Settings, or double-click it." \
+      --center --width 640 --height 460 --column Prefix --column Status --separator '|' \
       --button Close:1 --button "Refresh!!Update the list and what is running:60" \
-      --button "Add game!!Install a game or add one that is on the disk:10" \
-      --button "Remove!!Delete the game, its prefix and its start menu entry:20" \
-      --button "Rename prefix!!Give the prefix folder a new name. The start menu name stays, Settings changes it:30" \
-      --button "Choose shortcuts!!Pick which of the game's Windows shortcuts are in the start menu:$self _do shortcuts $sel" \
-      --button "Settings!!Proton version, options, executable and icon of the game:$self _do settings $sel" \
-      --button "Stop!!Close the game and everything in its prefix:$self _do stop $sel" \
-      --button "Run!!Start the game:$self _do run $sel" \
-      "${rows[@]}" >/dev/null || rc=$?
+      --button "Add!!New prefix. Install a program or add one that is on the disk:10" \
+      --button "Settings!!Options, shortcuts, rename, stop and remove for the chosen prefix:0" \
+      "${rows[@]}") || rc=$?
     case $rc in
+      0)
+        name=${out%%|*}
+        if [ -n "$name" ]; then "$0" settings "$name" || true; else info "Choose a prefix first."; fi
+        ;;
       10) "$0" add || true ;;
-      20)
-        name=$(cat "$sel" 2>/dev/null || true)
-        if [ -n "$name" ]; then "$0" remove "$name" || true; else info "Choose a game first."; fi
-        ;;
-      30)
-        name=$(cat "$sel" 2>/dev/null || true)
-        if [ -n "$name" ]; then "$0" rename "$name" || true; else info "Choose a game first."; fi
-        ;;
       60) ;;
       *) return 0 ;;
     esac
@@ -1135,6 +1160,7 @@ Usage: ezlaunch <command>
                         which of the new shortcuts go in the start menu
   add-to [file.exe]     add a program that is on the disk as another start menu entry of
                         a game that exists, in the same prefix
+  add-in <game> [file]  put another program in this prefix: run its installer or add it as it is
   run [game] [args]     start a game
   settings [game]       all settings of a game in one window
   shortcuts [game]      choose which of the shortcuts in the game's prefix are in the start menu
@@ -1152,11 +1178,10 @@ EOF
 
 case "${1:-}" in
   gui) cmd_gui ;;
-  _select) shift && cmd_select "$@" ;;
-  _do) shift && cmd_do "$@" ;;
   add) shift && cmd_add "$@" ;;
   install-in) shift && cmd_install_in "$@" ;;
   add-to) shift && cmd_add_to "$@" ;;
+  add-in) shift && cmd_add_in "$@" ;;
   run) shift && cmd_run "$@" ;;
   settings) shift && cmd_settings "$@" ;;
   shortcuts) shift && cmd_shortcuts "$@" ;;
