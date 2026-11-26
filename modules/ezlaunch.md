@@ -18,7 +18,7 @@ Install and launch Windows programs and games with Proton, without Steam or a la
   - the category, where the entry goes in the start menu
   - the Proton version, chosen from the versions installed in `~/.local/share/Steam/compatibilitytools.d`
   - a text box for any other variable
-  - buttons for **Choose shortcuts**, **Add** (install another program in the prefix, or add one that is on the disk), and **Stop**. They open their own window and leave Settings open
+  - buttons for **Choose shortcuts**, **Add** (install another program in the prefix, or add one that is on the disk). Both open their own window and leave Settings open
 - Right-click **Rename prefix** (also in the ezlaunch window, or `ezlaunch rename`): gives the prefix folder a new name. The start menu entries keep their names, which **Choose shortcuts** changes. The game has to be stopped first
 - Right-click **Remove** (also in the ezlaunch window): deletes the game, its prefix and its menu entry
 - In a terminal, leave out the game name (`ezlaunch run`, `settings`, `rename`, `remove`, `stop`) to choose it from an arrow-key menu (fzf)

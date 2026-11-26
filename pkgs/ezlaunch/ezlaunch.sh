@@ -842,7 +842,7 @@ cmd_settings() { # [name]
   custom_in=$({ grep -Ev "^($managed)=" "$cfg" || true; })
   custom_in=${custom_in//$'\n'/\\n}
 
-  # Choose shortcuts, Add and Stop open their own window and leave this one open
+  # Choose shortcuts and Add open their own window and leave this one open
   local out rc=0 self q
   self=$(readlink -f "$0")
   q="'$name'"
@@ -854,7 +854,6 @@ cmd_settings() { # [name]
     --button Cancel:1 \
     --button "Choose shortcuts!!Which shortcuts of the prefix are in the start menu, and their names:'$self' shortcuts $q" \
     --button "Add!!Install another program in this prefix, or add one that is on the disk:'$self' add-in $q" \
-    --button "Stop!!Close everything that runs in this prefix:'$self' stop $q" \
     --button Save:0 --separator '|') || rc=$?
   [ "$rc" = 0 ] || return 0
 
@@ -1080,11 +1079,11 @@ cmd_gui() {
       --text "Choose a prefix and press Settings, or double-click it." \
       --center --width 640 --height 460 --column Prefix --column Status --separator '|' \
       --button Close:1 --button "Refresh!!Update the list and what is running:60" \
-      --button "Add!!New prefix. Install a program or add one that is on the disk:10" \
       --button "Rename!!Give the chosen prefix folder a new name. The start menu names stay:20" \
       --button "Remove!!Delete the chosen prefix, with saved games inside it, and its start menu entries:30" \
       --button "Stop!!Close everything that runs in the chosen prefix:40" \
-      --button "Settings!!Options, shortcuts, adding programs and stop for the chosen prefix:0" \
+      --button "Add!!New prefix. Install a program or add one that is on the disk:10" \
+      --button "Settings!!Options, shortcuts and adding programs for the chosen prefix:0" \
       "${rows[@]}") || rc=$?
     case $rc in
       0)
