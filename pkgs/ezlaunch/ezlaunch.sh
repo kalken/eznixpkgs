@@ -25,7 +25,6 @@ KNOWN=(
   "PROTON_USE_WINED3D|1|0|WineD3D instead of DXVK|Older, slower way to run DirectX. Try it if a game shows graphics errors"
   "PROTON_NO_ESYNC|1|0|Disable esync|Try it if a game hangs or crashes"
   "PROTON_NO_FSYNC|1|0|Disable fsync|Try it if a game hangs or crashes"
-  "PROTON_LOG|1|0|Proton log|Write a log to the home folder (steam-ID.log), to find out why a game fails"
   "MANGOHUD|1|0|MangoHud overlay|Shows frame rate, CPU and GPU use over the game"
   "EZLAUNCH_WRAPPER|gamemoderun||GameMode|Tunes the system for games while this one runs, needs GameMode installed"
 )
@@ -237,6 +236,8 @@ load_files() {
 # Run a program in the prefix of $WINEPREFIX with the loaded settings.
 launch() { # program, args...
   export WINEPREFIX GAMEID="${GAMEID:-0}"
+  # A Proton log (PROTON_LOG=1) goes in the game's folder, where ezlaunch log finds it
+  export PROTON_LOG_DIR="${PROTON_LOG_DIR:-$(dirname "$WINEPREFIX")}"
   # A name from ezproton (GE-Proton-Latest) becomes its full path. Anything else, such as a
   # path or a version umu downloads itself, is left to umu.
   if [ -n "${PROTONPATH:-}" ] && [[ "$PROTONPATH" != */* ]] && [ -d "$TOOLS/$PROTONPATH" ]; then
@@ -313,7 +314,11 @@ Exec=ezlaunch run "$name"
 Icon=$icon
 Categories=$category;
 Terminal=false
-Actions=settings;shortcuts;rename;remove;
+Actions=log;settings;shortcuts;rename;remove;
+
+[Desktop Action log]
+Name=Run with log
+Exec=ezlaunch run "$name" --log
 
 [Desktop Action settings]
 Name=Settings
@@ -346,7 +351,11 @@ Exec=ezlaunch run "$name" --exe "${lexe//%/%%}"
 Icon=$licon
 Categories=$category;
 Terminal=false
-Actions=settings;
+Actions=log;settings;
+
+[Desktop Action log]
+Name=Run with log
+Exec=ezlaunch run "$name" --log --exe "${lexe//%/%%}"
 
 [Desktop Action settings]
 Name=Settings
@@ -816,7 +825,14 @@ apply_options() { # name, checked keys one per line, custom variables
 # shortcut its exe came from, and the right-click actions added since. .titled marks it done.
 upgrade_game() { # name
   local dir="$GAMES/$1" main line title=
-  if [ -f "$dir/.titled" ] || [ ! -f "$dir/config" ]; then return 0; fi
+  [ -f "$dir/config" ] || return 0
+  # Entries written before Run with log existed get it
+  if [ -f "$dir/.titled" ]; then
+    if ! grep -q '^Name=Run with log$' "$(desktop_file "$1")" 2>/dev/null; then
+      write_desktop "$1" "$(icon_for "$dir")"
+    fi
+    return 0
+  fi
   main=$(getv EZLAUNCH_EXE "$dir/config")
   if [ -n "$main" ] && [ -z "$(getv EZLAUNCH_TITLE "$dir/config")" ]; then
     while IFS= read -r line; do
@@ -840,6 +856,14 @@ cmd_run() { # name, args...
   [ -f "$dir/config" ] || die "unknown game: $name"
   upgrade_game "$name"
   load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
+  # --log writes a Proton log of this start and shows it when the game ends
+  local with_log=''
+  if [ "${1:-}" = --log ]; then
+    with_log=1
+    shift
+    export PROTON_LOG=1
+    rm -f "$dir"/steam-*.log "$dir/umu.log"
+  fi
   # --exe starts another program of the same prefix, from its start menu entry
   if [ "${1:-}" = --exe ]; then
     EZLAUNCH_EXE=${2:-}
@@ -854,6 +878,13 @@ cmd_run() { # name, args...
   fi
   cd "$(dirname "$EZLAUNCH_EXE")" || exit 1
   # EZLAUNCH_ARGS is a list of arguments for the game
+  if [ -n "$with_log" ]; then
+    # shellcheck disable=SC2086
+    # umu's own output too, which has the error when Proton does not start at all
+    (launch "$EZLAUNCH_EXE" ${EZLAUNCH_ARGS:-} "$@") >"$dir/umu.log" 2>&1 || true
+    cmd_log "$name"
+    return
+  fi
   # shellcheck disable=SC2086
   launch "$EZLAUNCH_EXE" ${EZLAUNCH_ARGS:-} "$@"
 }
@@ -1102,6 +1133,32 @@ cmd_stop() { # [name]
   echo "ezlaunch: stopped $name"
 }
 
+# Show the logs of the last run with --log: umu's output and the Proton log
+cmd_log() { # [name]
+  local name=${1:-} dir proton text=''
+  if [ -z "$name" ]; then name=$(pick_game); fi
+  check_name "$name"
+  dir="$GAMES/$name"
+  [ -f "$dir/config" ] || die "unknown game: $name"
+  proton=$(find "$dir" -maxdepth 1 -name 'steam-*.log' -printf '%T@ %p\n' | sort -rn | sed -n 1p | cut -d' ' -f2-)
+  if [ -s "$dir/umu.log" ]; then text+="===== umu =====
+$(cat "$dir/umu.log")
+
+"; fi
+  if [ -n "$proton" ]; then text+="===== Proton =====
+$(cat "$proton")
+"; fi
+  [ -n "$text" ] || die "$name has no log yet. Right-click the game, Run with log."
+  if [ -n "$GUI" ]; then
+    printf '%s' "$text" | yad --text-info --title "ezlaunch: log of $name" --tail \
+      --width 1000 --height 650 --center --button Close:0 || true
+  elif [ -t 1 ] && command -v less >/dev/null; then
+    printf '%s' "$text" | less +G
+  else
+    printf '%s' "$text"
+  fi
+}
+
 game_names() {
   local dir
   for dir in "$GAMES"/*/; do
@@ -1181,6 +1238,7 @@ Usage: ezlaunch <command>
                         a game that exists, in the same prefix
   add-in <game> [file]  put another program in this prefix: run its installer or add it as it is
   run [game] [args]     start a game
+  run <game> --log      start a game with logs (umu and Proton), shown when it ends
   settings [game]       all settings of a game in one window
   shortcuts [game]      choose which of the shortcuts in the game's prefix are in the start menu
   remove [game]         delete a game, its prefix and its start menu entry
@@ -1188,8 +1246,9 @@ Usage: ezlaunch <command>
   list                  list the games, marking the ones that are running
   running               list the games that are running
   stop [game]           close a running game
+  log [game]            show the logs of the last run with --log
 
-Without a game name, run, settings, rename, remove and stop show a menu to choose from.
+Without a game name, run, settings, rename, remove, stop and log show a menu to choose from.
 
 Defaults for new games: $SYSTEM_CONF and $USER_CONF (KEY=value lines).
 EOF
@@ -1210,6 +1269,7 @@ case "${1:-}" in
   list) cmd_list ;;
   running) cmd_running ;;
   stop) shift && cmd_stop "$@" ;;
+  log) shift && cmd_log "$@" ;;
   *)
     usage
     exit 1
