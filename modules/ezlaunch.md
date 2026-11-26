@@ -62,7 +62,7 @@ Settings are layered, later wins: `/etc/ezlaunch/config`, `~/.config/ezlaunch/co
 | `programs.ezlaunch.enable` | bool | `false` | Enable ezlaunch |
 | `programs.ezlaunch.package` | package | `pkgs.ezlaunch` | The ezlaunch package |
 | `programs.ezlaunch.defaults` | attrs of str, int or bool | `{ PROTONPATH = "GE-Proton-Latest"; }` | Variables every game starts with. Booleans become 1 and 0 |
-| `programs.ezlaunch.exeHandler` | bool | `true` | Open `.exe` files with `ezlaunch add` when double-clicked |
+| `programs.ezlaunch.exeHandler` | bool | `true` | Open `.exe` files with `ezlaunch add` when double-clicked. On KDE it also turns off the "Open or Execute?" question for executable files |
 
 ## 📝 Notes
 

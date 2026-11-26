@@ -107,7 +107,11 @@ in
     exeHandler = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Open .exe files with `ezlaunch add` when they are double-clicked.";
+      description = ''
+        Open .exe files with `ezlaunch add` when they are double-clicked.
+        On KDE this also turns off the "Open or Execute?" question for executable files
+        (`/etc/xdg/kiorc`), so they open with their default app.
+      '';
     };
   };
 
@@ -126,6 +130,14 @@ in
     environment.etc."ezlaunch/config".text = lib.concatStrings (
       lib.mapAttrsToList (k: v: "${k}=${toValue v}\n") cfg.defaults
     );
+
+    # KDE asks "Open or Execute?" before opening an executable file; open it with its app instead
+    environment.etc."xdg/kiorc" = lib.mkIf cfg.exeHandler {
+      text = ''
+        [Executable scripts]
+        behaviourOnLaunch=open
+      '';
+    };
 
     xdg.mime.defaultApplications = lib.mkIf cfg.exeHandler (
       lib.genAttrs exeTypes (_: "ezlaunch.desktop")
