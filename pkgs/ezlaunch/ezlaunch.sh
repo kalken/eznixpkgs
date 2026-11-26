@@ -438,8 +438,12 @@ short_path() { # exe
 # Which of the shortcuts get a start menu entry? Prints the chosen lines of name|exe. The first
 # argument is the lines to choose from. A second one, even an empty one, is the exes that start
 # ticked, and also means there is no "Other file" button. Prints nothing to pick a file by hand.
+# A name emptied in the list gets its own name back: the Windows shortcut's name from the
+# caller's own_names (exe => name), or without own_names the name it was listed with, else the
+# exe's file name.
 pick_shortcuts() { # lines of name|exe, [exes that start ticked, one per line]
-  local rows=() line rc=0 reply picked='' state buttons=(--button Cancel:1)
+  local rows=() line rc=0 reply picked='' state buttons=(--button Cancel:1) lname lexe
+  local -A listed_as=()
   [ -n "$1" ] || return 0
   if [ -z "$GUI" ]; then
     printf '%s\n' "$1"
@@ -450,10 +454,11 @@ pick_shortcuts() { # lines of name|exe, [exes that start ticked, one per line]
     state=TRUE
     if [ -n "${2+x}" ] && ! grep -qxF -- "${line#*|}" <<<"$2"; then state=FALSE; fi
     rows+=("$state" "${line%%|*}" "$(short_path "${line#*|}")" "${line#*|}")
+    listed_as[${line#*|}]=${line%%|*}
   done <<<"$1"
   # The names can be edited: double-click one to change what the start menu shows
   reply=$(yad --list --checklist --title ezlaunch \
-    --text "Which shortcuts go in the start menu? Double-click a name to change it." \
+    --text "Which shortcuts go in the start menu? Double-click a name to change it, or empty it to get the shortcut's own name back." \
     --editable --editable-cols 2 \
     --center --width 560 --height 320 --column "" --column Name --column Program --column Path:HD \
     --separator '|' "${buttons[@]}" --button OK:0 "${rows[@]}") || rc=$?
@@ -468,9 +473,22 @@ pick_shortcuts() { # lines of name|exe, [exes that start ticked, one per line]
     line=${line%|}
     # name|short path|full path: the short one is only for showing
     line="${line%%|*}|${line#*|*|}"
+    lname=${line%%|*}
+    lexe=${line#*|}
     # Rows added with the right-click menu have no program
-    if [ -z "${line#*|}" ] || [ -z "${line%%|*}" ] || [ ! -f "${line#*|}" ]; then continue; fi
-    picked+="$line"$'\n'
+    if [ -z "$lexe" ] || [ ! -f "$lexe" ]; then continue; fi
+    if [ -z "$lname" ]; then
+      if [ -n "${own_names[$lexe]+x}" ]; then
+        lname=${own_names[$lexe]}
+      elif ! declare -p own_names >/dev/null 2>&1 && [ -n "${listed_as[$lexe]:-}" ]; then
+        # Listed with their own names already, as right after an install
+        lname=${listed_as[$lexe]}
+      else
+        lname=$(basename "$lexe")
+        lname=${lname%.*}
+      fi
+    fi
+    picked+="$lname|$lexe"$'\n'
   done <<<"$reply"
   printf '%s' "$picked"
 }
@@ -955,7 +973,7 @@ cmd_shortcuts() { # [name], [exes to tick besides the current ones]
 
   # Every shortcut in the prefix, and the entries the game has even if no shortcut is found.
   # An entry that is in the start menu is listed with the name it has there.
-  local -A named=() seen=()
+  local -A named=() seen=() own_names=()
   local exe
   title=$(getv EZLAUNCH_TITLE "$dir/config")
   named[$main]=${title:-$name}
@@ -969,6 +987,7 @@ cmd_shortcuts() { # [name], [exes to tick besides the current ones]
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     exe=${line#*|}
+    own_names[$exe]=${line%%|*}
     if [ -n "${named[$exe]+x}" ]; then line="${named[$exe]}|$exe"; fi
     found+="$line"$'\n'
     seen[$exe]=1
