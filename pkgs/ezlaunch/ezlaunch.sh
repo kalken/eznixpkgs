@@ -43,6 +43,8 @@ CATEGORIES=(
 
 # Dialogs are yad. Without a display the questions are asked in the terminal.
 GUI=
+# Set to 1 to run installers and new programs with logs, chosen in the add dialog
+WITH_LOG=
 if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v yad >/dev/null; then GUI=yad; fi
 
 msg() {
@@ -143,9 +145,10 @@ game_category() { # game config
 }
 
 # Installer or a game that is already installed? Prints install or installed, then | the chosen
-# Proton version (empty if there is nothing to choose), | the category and | the name.
+# Proton version (empty if there is nothing to choose), | the category, | 1 to run with logs
+# (empty without) and | the name.
 ask_mode() { # question, current Proton version, current category, suggested name
-  local reply rc=0 choices fields=() parts=() version='' category='' name='' sep=$'\x1f' width prefixes existing
+  local reply rc=0 choices fields=() parts=() version='' category='' name='' log='' sep=$'\x1f' width prefixes existing
   if [ -n "$GUI" ]; then
     choices=$(proton_choices "$2")
     # Wide enough for the whole suggested name
@@ -160,6 +163,7 @@ ask_mode() { # question, current Proton version, current category, suggested nam
     fields+=(--field "Installation prefix!Type a name for a new prefix, or choose one that exists to put the program in it. Proton version and Category are only for a new prefix:CBE" "$prefixes")
     if [ -n "$choices" ]; then fields+=(--field "Proton version!The Proton the game runs with. Can be changed later in Settings:CB" "$choices"); fi
     fields+=(--field "Category!Where the game goes in the start menu:CB" "$(category_choices "$3")")
+    fields+=(--field "Run with log!Install: log the installer. Add: start the program once with logs. The logs open in a window when it ends, to find out why something fails:CHK" FALSE)
     # yad shows the buttons in the order given: Cancel on the left, Install on the right.
     # The fields are told apart by a character nobody types, so a name may hold anything.
     reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width "$width" \
@@ -172,19 +176,21 @@ ask_mode() { # question, current Proton version, current category, suggested nam
     if [ -n "$choices" ]; then
       version=${parts[1]:-}
       category=$(category_value "${parts[2]:-}")
+      if [ "${parts[3]:-}" = TRUE ]; then log=1; fi
     else
       category=$(category_value "${parts[1]:-}")
+      if [ "${parts[2]:-}" = TRUE ]; then log=1; fi
     fi
     case $rc in
-      0) echo "install|$version|$category|$name" ;;
-      2) echo "installed|$version|$category|$name" ;;
+      0) echo "install|$version|$category|$log|$name" ;;
+      2) echo "installed|$version|$category|$log|$name" ;;
       *) return 1 ;;
     esac
   else
     read -r -p "$1 [i]nstaller or [a]lready installed? " reply
     case $reply in
-      i*) echo "install|||" ;;
-      a*) echo "installed|||" ;;
+      i*) echo "install||||" ;;
+      a*) echo "installed||||" ;;
       *) return 1 ;;
     esac
   fi
@@ -547,16 +553,32 @@ set_links() { # game dir, lines of name|exe
   done <"$dir/links"
 }
 
+# Run a program, such as an installer, in a game's prefix and wait for it. With WITH_LOG set,
+# with umu's output and a Proton log, shown when it ends.
+run_in_prefix() { # name, exe
+  local name=$1 dir="$GAMES/$1"
+  if [ -n "${WITH_LOG:-}" ]; then rm -f "$dir"/steam-*.log "$dir/umu.log"; fi
+  (
+    load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
+    WINEPREFIX="$dir/prefix"
+    cd "$(dirname "$2")" || exit 1
+    if [ -n "${WITH_LOG:-}" ]; then
+      # Only for this run, the subshell is on purpose
+      # shellcheck disable=SC2030
+      export PROTON_LOG=1
+      launch "$2" >"$dir/umu.log" 2>&1
+    else
+      launch "$2"
+    fi
+  ) || true
+  if [ -n "${WITH_LOG:-}" ]; then (cmd_log "$name") || true; fi
+}
+
 # Run an installer in the prefix of a game that exists, then offer the new shortcuts
 install_in_prefix() { # name, installer
   local name=$1 installer=$2 dir="$GAMES/$1" before after new='' line
   before=$(shortcut_games "$dir/prefix" | cut -d'|' -f2-)
-  (
-    load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
-    WINEPREFIX="$dir/prefix"
-    cd "$(dirname "$installer")" || exit 1
-    launch "$installer"
-  ) || true
+  run_in_prefix "$name" "$installer"
   after=$(shortcut_games "$dir/prefix" | cut -d'|' -f2-)
   while IFS= read -r line; do
     if [ -n "$line" ] && ! grep -qxF -- "$line" <<<"$before"; then new+="$line"$'\n'; fi
@@ -683,6 +705,8 @@ cmd_add() { # [--install | --installed] [exe]
     version=${reply%%|*}
     reply=${reply#*|}
     category=${reply%%|*}
+    reply=${reply#*|}
+    WITH_LOG=${reply%%|*}
     name=${reply#*|}
     picked=1
   fi
@@ -700,6 +724,7 @@ cmd_add() { # [--install | --installed] [exe]
       install_in_prefix "$name" "$installer"
     else
       add_to_prefix "$name" "$installer"
+      if [ -n "$WITH_LOG" ]; then cmd_run "$name" --log --exe "$installer"; fi
     fi
     return 0
   fi
@@ -720,12 +745,7 @@ cmd_add() { # [--install | --installed] [exe]
   else
     # A game that was installed but never got its executable picked skips the installer
     if [ ! -f "$dir/.installed" ]; then
-      (
-        load_files "$SYSTEM_CONF" "$USER_CONF" "$dir/config"
-        WINEPREFIX="$dir/prefix"
-        cd "$(dirname "$installer")" || exit 1
-        launch "$installer"
-      ) || true
+      run_in_prefix "$name" "$installer"
       touch "$dir/.installed"
     fi
 
@@ -753,6 +773,7 @@ cmd_add() { # [--install | --installed] [exe]
   set_links "$dir" "$links"
   write_desktop "$name" "$icon"
   info "Added $name to the start menu."
+  if [ "$mode" = installed ] && [ -n "$WITH_LOG" ]; then cmd_run "$name" --log; fi
 }
 
 # The apply_ functions change one part of a game's config. They do not ask anything.
@@ -861,6 +882,7 @@ cmd_run() { # name, args...
   if [ "${1:-}" = --log ]; then
     with_log=1
     shift
+    # shellcheck disable=SC2031
     export PROTON_LOG=1
     rm -f "$dir"/steam-*.log "$dir/umu.log"
   fi
