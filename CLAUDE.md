@@ -45,6 +45,10 @@ Minimal entry point — imports `modules/` and `pkgs/`, exports `nixosModules.de
 
 **Documentation**: Each module has a companion `.md` file (e.g., `ezrouter.md`, `ezconf-cli.md`) with full option tables and usage examples. Keep these in sync when changing module options.
 
+## ezlaunch dialogs
+
+In every ezlaunch dialog, Cancel (or Close, No: the button that dismisses it) is always the leftmost button. yad shows buttons in the order given, so pass it first.
+
 ## Branch Strategy
 
 Always make changes on the `develop` branch, never directly on `master`.

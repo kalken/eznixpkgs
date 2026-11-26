@@ -21,7 +21,7 @@ Install and launch Windows programs and games with Proton, without Steam or a la
   - buttons for **Choose shortcuts**, **Add** (install another program in the prefix, or add one that is on the disk). Both open their own window and leave Settings open
 - Right-click **Rename prefix** (also in the ezlaunch window, or `ezlaunch rename`): gives the prefix folder a new name. The start menu entries keep their names, which **Choose shortcuts** changes. The game has to be stopped first
 - Right-click **Remove** (also in the ezlaunch window): deletes the game, its prefix and its menu entry
-- Right-click **Run with log** (or `ezlaunch run <game> --log`) starts the game with logs, to find out why it fails: umu's output (which has the error when Proton does not start at all) and the Proton log. They open in a window when the game ends; `ezlaunch log` shows them again
+- Right-click **Run with log** (or `ezlaunch run <game> --log`) starts the game with logs, to find out why it fails: umu's output (which has the error when Proton does not start at all) and the Proton log. They open in a window when the game ends, with a **Save log** button to save them to a file; `ezlaunch log` shows them again
 - In a terminal, leave out the game name (`ezlaunch run`, `settings`, `rename`, `remove`, `stop`) to choose it from an arrow-key menu (fzf)
 - `ezlaunch list` shows the games and marks the running ones, `ezlaunch running` lists only those, `ezlaunch stop` closes one (it finds a game's processes by its prefix)
 - A tray icon shows the running game (its icon and name) with **Stop** and **Settings** in its menu (without a tray, `ezlaunch stop` in a terminal closes a game), and disappears when the game ends. Nothing runs in the background otherwise.

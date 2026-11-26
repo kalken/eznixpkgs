@@ -1133,30 +1133,46 @@ cmd_stop() { # [name]
   echo "ezlaunch: stopped $name"
 }
 
-# Show the logs of the last run with --log: umu's output and the Proton log
+# The logs of the last run with --log: umu's output and the Proton log
+log_text() { # name
+  local dir="$GAMES/$1" proton
+  proton=$(find "$dir" -maxdepth 1 -name 'steam-*.log' -printf '%T@ %p\n' | sort -rn | sed -n 1p | cut -d' ' -f2-)
+  if [ -s "$dir/umu.log" ]; then
+    printf '===== umu =====\n%s\n\n' "$(cat "$dir/umu.log")"
+  fi
+  if [ -n "$proton" ]; then
+    printf '===== Proton =====\n%s\n' "$(cat "$proton")"
+  fi
+}
+
+# Show the logs of the last run with --log
 cmd_log() { # [name]
-  local name=${1:-} dir proton text=''
+  local name=${1:-} text self
   if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
-  dir="$GAMES/$name"
-  [ -f "$dir/config" ] || die "unknown game: $name"
-  proton=$(find "$dir" -maxdepth 1 -name 'steam-*.log' -printf '%T@ %p\n' | sort -rn | sed -n 1p | cut -d' ' -f2-)
-  if [ -s "$dir/umu.log" ]; then text+="===== umu =====
-$(cat "$dir/umu.log")
-
-"; fi
-  if [ -n "$proton" ]; then text+="===== Proton =====
-$(cat "$proton")
-"; fi
+  [ -f "$GAMES/$name/config" ] || die "unknown game: $name"
+  text=$(log_text "$name")
   [ -n "$text" ] || die "$name has no log yet. Right-click the game, Run with log."
   if [ -n "$GUI" ]; then
-    printf '%s' "$text" | yad --text-info --title "ezlaunch: log of $name" --tail \
-      --width 1000 --height 650 --center --button Close:0 || true
+    self=$(readlink -f "$0")
+    printf '%s\n' "$text" | yad --text-info --title "ezlaunch: log of $name" --tail \
+      --width 1000 --height 650 --center \
+      --button Close:0 \
+      --button "Save log!document-save!Save the whole log to a file, to share it or look at it later:'$self' _save '$name'" || true
   elif [ -t 1 ] && command -v less >/dev/null; then
-    printf '%s' "$text" | less +G
+    printf '%s\n' "$text" | less +G
   else
-    printf '%s' "$text"
+    printf '%s\n' "$text"
   fi
+}
+
+# Save the logs to a file chosen in a dialog, for the Save log button
+cmd_save() { # name
+  local file
+  file=$(yad --file --save --confirm-overwrite --title "ezlaunch: save the log of $1" \
+    --filename "$HOME/ezlaunch-$1.log" --width 800 --height 550 --center) || return 0
+  [ -n "$file" ] || return 0
+  log_text "$1" >"$file"
 }
 
 game_names() {
@@ -1270,6 +1286,7 @@ case "${1:-}" in
   running) cmd_running ;;
   stop) shift && cmd_stop "$@" ;;
   log) shift && cmd_log "$@" ;;
+  _save) shift && cmd_save "$@" ;;
   *)
     usage
     exit 1
