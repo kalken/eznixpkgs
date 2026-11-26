@@ -292,8 +292,10 @@ icon_for() { # game dir
 }
 
 write_desktop() { # name, icon
-  local name=$1 icon=$2 dir="$GAMES/$1" id category lname lexe licon n=0
+  local name=$1 icon=$2 dir="$GAMES/$1" id category title lname lexe licon n=0
   id=${name// /_}
+  # The entry is named after the Windows shortcut it came from, if there was one
+  title=$(getv EZLAUNCH_TITLE "$dir/config")
   mkdir -p "$APPS"
   # A game with more than one shortcut gets a menu folder of its own. Otherwise it goes under
   # its category.
@@ -301,7 +303,7 @@ write_desktop() { # name, icon
   cat >"$(desktop_file "$name")" <<EOF
 [Desktop Entry]
 Type=Application
-Name=$name
+Name=${title:-$name}
 Exec=ezlaunch run "$name"
 Icon=$icon
 Categories=$category;
@@ -539,7 +541,7 @@ cmd_add_to() { # [exe]
 }
 
 cmd_add() { # [--install | --installed] [exe]
-  local mode='' installer name='' dir exe icon version='' category='' reply picked='' picks links=''
+  local mode='' installer name='' dir exe icon version='' category='' reply picked='' picks links='' title=''
   case "${1:-}" in
     --install)
       mode=install
@@ -614,6 +616,7 @@ cmd_add() { # [--install | --installed] [exe]
     exe=
     picks=$(pick_shortcuts "$(shortcut_games "$dir/prefix")") || exit 1
     if [ -n "$picks" ]; then
+      title=$(sed -n 1p <<<"$picks" | cut -d'|' -f1)
       exe=$(sed -n 1p <<<"$picks" | cut -d'|' -f2-)
       links=$(sed -n '2,$p' <<<"$picks")
     fi
@@ -628,6 +631,7 @@ cmd_add() { # [--install | --installed] [exe]
   if [ -f "$dir/icon.png" ]; then icon="$dir/icon.png"; fi
 
   printf 'EZLAUNCH_EXE=%s\n' "$exe" >>"$dir/config"
+  apply_title "$name" "$title"
   set_links "$dir" "$links"
   write_desktop "$name" "$icon"
   info "Added $name to the start menu."
@@ -640,9 +644,19 @@ apply_exe() { # name, exe
   local dir="$GAMES/$1"
   rm -f "$dir"/icon.*
   extract_icon "$2" "$dir/icon.png"
-  { grep -v '^EZLAUNCH_EXE=' "$dir/config" || true; } >"$dir/config.new"
+  # The shortcut name belonged to the old exe
+  { grep -Ev '^(EZLAUNCH_EXE|EZLAUNCH_TITLE)=' "$dir/config" || true; } >"$dir/config.new"
   printf 'EZLAUNCH_EXE=%s\n' "$2" >>"$dir/config.new"
   mv "$dir/config.new" "$dir/config"
+}
+
+# The name of the main start menu entry, taken from its Windows shortcut. Empty: the game's name.
+apply_title() { # name, title
+  local cfg="$GAMES/$1/config" title
+  title=$(printf '%s' "$2" | tr -d '\n')
+  { grep -v '^EZLAUNCH_TITLE=' "$cfg" || true; } >"$cfg.new"
+  if [ -n "$title" ] && [ "$title" != "$1" ]; then echo "EZLAUNCH_TITLE=$title" >>"$cfg.new"; fi
+  mv "$cfg.new" "$cfg"
 }
 
 apply_icon() { # name, an image, .ico or .exe
@@ -691,6 +705,8 @@ apply_options() { # name, checked keys one per line, custom variables
   local inherited=("$SYSTEM_CONF" "$USER_CONF") entry key on off label
   {
     echo "EZLAUNCH_EXE=$(getv EZLAUNCH_EXE "$cfg")"
+    # The entry's name comes from the shortcut, keep it
+    if grep -q '^EZLAUNCH_TITLE=' "$cfg"; then echo "EZLAUNCH_TITLE=$(getv EZLAUNCH_TITLE "$cfg")"; fi
     # The category has its own field, keep it
     if grep -q '^EZLAUNCH_CATEGORY=' "$cfg"; then echo "EZLAUNCH_CATEGORY=$(getv EZLAUNCH_CATEGORY "$cfg")"; fi
     # The Proton version has its own field, keep it
@@ -746,7 +762,7 @@ cmd_settings() { # [name]
   [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || die "settings needs a graphical session. Edit $cfg instead."
 
   local all=("$SYSTEM_CONF" "$USER_CONF" "$cfg")
-  local fields=() entry key on off label tip state managed='EZLAUNCH_EXE|PROTONPATH|EZLAUNCH_CATEGORY'
+  local fields=() entry key on off label tip state managed='EZLAUNCH_EXE|EZLAUNCH_TITLE|PROTONPATH|EZLAUNCH_CATEGORY'
   for entry in "${KNOWN[@]}"; do
     IFS='|' read -r key on off label tip <<<"$entry"
     state=FALSE
@@ -862,6 +878,8 @@ cmd_rename() { # [name], [new name]
 
   rm -f "$(desktop_file "$name")" "$APPS/ezlaunch-${name// /_}.link-"*.desktop \
     "$MENUS/ezlaunch-${name// /_}.menu" "$DIRECTORIES/ezlaunch-${name// /_}.directory"
+  # A name given by hand wins over the name of the Windows shortcut
+  apply_title "$new" ""
   write_desktop "$new" "$(icon_for "$new_dir")"
   echo "ezlaunch: renamed $name to $new"
 }
@@ -879,7 +897,7 @@ game_pids() { # name
 
 # Choose again which shortcuts of a game are in the start menu
 cmd_shortcuts() { # [name], [exes to tick besides the current ones]
-  local name=${1:-} dir found current picks main keep links line listed=
+  local name=${1:-} dir found current picks main keep links line listed= title
   if [ -z "$name" ]; then name=$(pick_game); fi
   check_name "$name"
   dir="$GAMES/$name"
@@ -894,7 +912,8 @@ cmd_shortcuts() { # [name], [exes to tick besides the current ones]
     found+="$line"$'\n'
     if [ "${line#*|}" = "$main" ]; then listed=1; fi
   done < <(shortcut_games "$dir/prefix")
-  if [ -z "$listed" ]; then found="$name|$main"$'\n'"$found"; fi
+  title=$(getv EZLAUNCH_TITLE "$dir/config")
+  if [ -z "$listed" ]; then found="${title:-$name}|$main"$'\n'"$found"; fi
   if [ -s "$dir/links" ]; then
     while IFS= read -r line; do
       if ! grep -qxF -- "$line" <<<"$found"; then found+="$line"$'\n'; fi
@@ -915,6 +934,15 @@ cmd_shortcuts() { # [name], [exes to tick besides the current ones]
   done <<<"$picks"
   links=${links%$'\n'}
   if [ "$keep" != "$main" ]; then apply_exe "$name" "$keep"; fi
+  # The entry is named after the shortcut that was ticked for it
+  title=
+  while IFS= read -r line; do
+    if [ "${line#*|}" = "$keep" ]; then
+      title=${line%%|*}
+      break
+    fi
+  done <<<"$picks"
+  apply_title "$name" "$title"
   set_links "$dir" "$links"
   write_desktop "$name" "$(icon_for "$dir")"
 }
