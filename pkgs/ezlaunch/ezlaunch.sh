@@ -152,7 +152,7 @@ ask_mode() { # question, current Proton version, current category, suggested nam
     width=$((${#4} * 9 + 220))
     if [ "$width" -lt 520 ]; then width=520; fi
     if [ "$width" -gt 1600 ]; then width=1600; fi
-    fields+=(--field "Prefix" "$4")
+    fields+=(--field "Installation prefix!The folder the game is installed in, its own Windows drive. Also the name in the start menu" "$4")
     if [ -n "$choices" ]; then fields+=(--field "Proton version:CB" "$choices"); fi
     fields+=(--field "Category:CB" "$(category_choices "$3")")
     # yad shows the buttons in the order given: Cancel on the left, Install on the right.
