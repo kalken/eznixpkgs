@@ -9,7 +9,7 @@ Install and launch Windows programs and games with Proton, without Steam or a la
 - To put a second program in a prefix that exists, right-click the exe, **Open With**, **Install in an existing ezlaunch prefix**, and pick the game. The installer runs in that prefix with the game's own Proton version, then the shortcuts list opens with the new ones ticked. Programs in one prefix share its settings
 - **Add to an existing ezlaunch prefix** (also under Open With) takes any exe on the disk, with no Windows shortcut needed, asks for a name and adds it as another start menu entry of the game you pick. It runs in that game's prefix
 - Right-click **Choose shortcuts** lists every shortcut in the prefix, the game itself included, with a checkbox for each, for example after you install an addon in the same prefix. Ticked ones have an entry, unticking one removes it. If you untick the game itself, the first ticked shortcut takes its place. At least one has to stay ticked (**Remove** deletes the whole game). Double-click a name to change what the start menu shows
-- The start menu item **ezlaunch** (or `ezlaunch gui`) opens one window with all the prefixes, running ones marked. **Add** makes a new prefix. **Settings**, or a double-click, opens the settings of the chosen prefix, where everything else is. The list is read again when Settings closes, and **Refresh** updates it by hand
+- The start menu item **ezlaunch** (or `ezlaunch gui`) opens one window with all the prefixes, running ones marked. **Add** makes a new prefix, **Rename**, **Remove** and **Stop** act on the chosen one. **Settings**, or a double-click, opens the settings of the chosen prefix, where everything else is. The list is read again when Settings closes, and **Refresh** updates it by hand
 - To skip that question, right-click the exe, **Open With**, **Add installed game to ezlaunch**
 - One prefix per game, in `~/.local/share/ezlaunch/games/<name>/`
 - Any Proton option works: settings are plain `KEY=value` environment variables
@@ -18,9 +18,9 @@ Install and launch Windows programs and games with Proton, without Steam or a la
   - the category, where the entry goes in the start menu
   - the Proton version, chosen from the versions installed in `~/.local/share/Steam/compatibilitytools.d`
   - a text box for any other variable
-  - buttons for **Choose shortcuts**, **Add** (install another program in the prefix, or add one that is on the disk), **Rename**, **Stop** and **Remove**. Choose shortcuts, Add and Stop leave Settings open; Rename and Remove close it without saving
-- Right-click **Rename prefix** (also in Settings, or `ezlaunch rename`): gives the prefix folder a new name. The start menu entries keep their names, which **Choose shortcuts** changes. The game has to be stopped first
-- Right-click **Remove**: deletes the game, its prefix and its menu entry
+  - buttons for **Choose shortcuts**, **Add** (install another program in the prefix, or add one that is on the disk), and **Stop**. They open their own window and leave Settings open
+- Right-click **Rename prefix** (also in the ezlaunch window, or `ezlaunch rename`): gives the prefix folder a new name. The start menu entries keep their names, which **Choose shortcuts** changes. The game has to be stopped first
+- Right-click **Remove** (also in the ezlaunch window): deletes the game, its prefix and its menu entry
 - In a terminal, leave out the game name (`ezlaunch run`, `settings`, `rename`, `remove`, `stop`) to choose it from an arrow-key menu (fzf)
 - `ezlaunch list` shows the games and marks the running ones, `ezlaunch running` lists only those, `ezlaunch stop` closes one (it finds a game's processes by its prefix)
 - A tray icon shows the running game (its icon and name) with **Stop** and **Settings** in its menu (without a tray, `ezlaunch stop` in a terminal closes a game), and disappears when the game ends. Nothing runs in the background otherwise.

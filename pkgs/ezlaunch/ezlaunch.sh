@@ -842,8 +842,7 @@ cmd_settings() { # [name]
   custom_in=$({ grep -Ev "^($managed)=" "$cfg" || true; })
   custom_in=${custom_in//$'\n'/\\n}
 
-  # Choose shortcuts, Add and Stop open their own window and leave this one open. Rename and
-  # Remove close it without saving.
+  # Choose shortcuts, Add and Stop open their own window and leave this one open
   local out rc=0 self q
   self=$(readlink -f "$0")
   q="'$name'"
@@ -852,24 +851,12 @@ cmd_settings() { # [name]
     --field "Proton version!The Proton the game runs with, from compatibilitytools.d:CB" "$versions_field" \
     --field "Category!Where the game goes in the start menu:CB" "$(category_choices "$(game_category "$cfg")")" \
     --field "Custom variables, KEY=value one per line!Any Proton or Wine environment variable, such as DXVK_HUD=fps:TXT" "$custom_in" \
+    --button Cancel:1 \
     --button "Choose shortcuts!!Which shortcuts of the prefix are in the start menu, and their names:'$self' shortcuts $q" \
     --button "Add!!Install another program in this prefix, or add one that is on the disk:'$self' add-in $q" \
-    --button "Rename!!Give the prefix folder a new name. The start menu names stay:20" \
     --button "Stop!!Close everything that runs in this prefix:'$self' stop $q" \
-    --button "Remove!!Delete the prefix, with saved games inside it, and its start menu entries:30" \
-    --button Cancel:1 --button Save:0 --separator '|') || rc=$?
-  case $rc in
-    0) ;;
-    20)
-      cmd_rename "$name"
-      return 0
-      ;;
-    30)
-      cmd_remove "$name"
-      return 0
-      ;;
-    *) return 0 ;;
-  esac
+    --button Save:0 --separator '|') || rc=$?
+  [ "$rc" = 0 ] || return 0
 
   # One value per field, in order. The custom variables come last and may hold a |.
   local parts=() n=${#KNOWN[@]} i selected='' custom category
@@ -1074,7 +1061,8 @@ cmd_list() {
   done < <(game_names)
 }
 
-# One window with the prefixes. Add makes a new one. Settings, or a double-click, opens the
+# One window with the prefixes. Add makes a new one, Rename, Remove and Stop act on the chosen one.
+# Settings, or a double-click, opens the
 # settings of the chosen one, where everything else is. The list is read again afterwards.
 cmd_gui() {
   [ -n "$GUI" ] || die "the window needs a graphical session"
@@ -1093,7 +1081,10 @@ cmd_gui() {
       --center --width 640 --height 460 --column Prefix --column Status --separator '|' \
       --button Close:1 --button "Refresh!!Update the list and what is running:60" \
       --button "Add!!New prefix. Install a program or add one that is on the disk:10" \
-      --button "Settings!!Options, shortcuts, rename, stop and remove for the chosen prefix:0" \
+      --button "Rename!!Give the chosen prefix folder a new name. The start menu names stay:20" \
+      --button "Remove!!Delete the chosen prefix, with saved games inside it, and its start menu entries:30" \
+      --button "Stop!!Close everything that runs in the chosen prefix:40" \
+      --button "Settings!!Options, shortcuts, adding programs and stop for the chosen prefix:0" \
       "${rows[@]}") || rc=$?
     case $rc in
       0)
@@ -1101,6 +1092,18 @@ cmd_gui() {
         if [ -n "$name" ]; then "$0" settings "$name" || true; else info "Choose a prefix first."; fi
         ;;
       10) "$0" add || true ;;
+      20)
+        name=${out%%|*}
+        if [ -n "$name" ]; then "$0" rename "$name" || true; else info "Choose a prefix first."; fi
+        ;;
+      30)
+        name=${out%%|*}
+        if [ -n "$name" ]; then "$0" remove "$name" || true; else info "Choose a prefix first."; fi
+        ;;
+      40)
+        name=${out%%|*}
+        if [ -n "$name" ]; then "$0" stop "$name" || true; else info "Choose a prefix first."; fi
+        ;;
       60) ;;
       *) return 0 ;;
     esac
