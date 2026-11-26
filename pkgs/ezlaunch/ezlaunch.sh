@@ -15,18 +15,19 @@ TOOLS="$HOME/.local/share/Steam/compatibilitytools.d"
 # Shown first when choosing a game's executable. The file dialog also offers all files.
 EXE_FILTER='*.exe *.EXE'
 
-# KEY|value when on|value when off|label, the options in the settings dialog
+# KEY|value when on|value when off|label|tooltip, the options in the settings dialog.
+# A tooltip must not hold a | : or !
 KNOWN=(
-  "PROTON_ENABLE_HDR|1|0|HDR"
-  "PROTON_ENABLE_WAYLAND|1|0|Native Wayland"
-  "PROTON_USE_NTSYNC|1|0|NTSync"
-  "PROTON_ENABLE_NVAPI|1|0|NVIDIA NVAPI (DLSS)"
-  "PROTON_USE_WINED3D|1|0|WineD3D instead of DXVK"
-  "PROTON_NO_ESYNC|1|0|Disable esync"
-  "PROTON_NO_FSYNC|1|0|Disable fsync"
-  "PROTON_LOG|1|0|Proton log"
-  "MANGOHUD|1|0|MangoHud overlay"
-  "EZLAUNCH_WRAPPER|gamemoderun||GameMode"
+  "PROTON_ENABLE_HDR|1|0|HDR|High dynamic range. Needs Native Wayland and an HDR screen"
+  "PROTON_ENABLE_WAYLAND|1|0|Native Wayland|Draw the game with Wayland directly instead of through XWayland"
+  "PROTON_USE_NTSYNC|1|0|NTSync|Faster syncing between threads, needs the ntsync kernel module"
+  "PROTON_ENABLE_NVAPI|1|0|NVIDIA NVAPI (DLSS)|Lets the game use NVIDIA features such as DLSS. Only for NVIDIA cards"
+  "PROTON_USE_WINED3D|1|0|WineD3D instead of DXVK|Older, slower way to run DirectX. Try it if a game shows graphics errors"
+  "PROTON_NO_ESYNC|1|0|Disable esync|Try it if a game hangs or crashes"
+  "PROTON_NO_FSYNC|1|0|Disable fsync|Try it if a game hangs or crashes"
+  "PROTON_LOG|1|0|Proton log|Write a log to the home folder (steam-ID.log), to find out why a game fails"
+  "MANGOHUD|1|0|MangoHud overlay|Shows frame rate, CPU and GPU use over the game"
+  "EZLAUNCH_WRAPPER|gamemoderun||GameMode|Tunes the system for games while this one runs, needs GameMode installed"
 )
 
 # label|category, where an entry goes in the start menu
@@ -153,13 +154,15 @@ ask_mode() { # question, current Proton version, current category, suggested nam
     if [ "$width" -lt 520 ]; then width=520; fi
     if [ "$width" -gt 1600 ]; then width=1600; fi
     fields+=(--field "Installation prefix!The folder the game is installed in, its own Windows drive. Also the name in the start menu" "$4")
-    if [ -n "$choices" ]; then fields+=(--field "Proton version:CB" "$choices"); fi
-    fields+=(--field "Category:CB" "$(category_choices "$3")")
+    if [ -n "$choices" ]; then fields+=(--field "Proton version!The Proton the game runs with. Can be changed later in Settings:CB" "$choices"); fi
+    fields+=(--field "Category!Where the game goes in the start menu:CB" "$(category_choices "$3")")
     # yad shows the buttons in the order given: Cancel on the left, Install on the right.
     # The fields are told apart by a character nobody types, so a name may hold anything.
     reply=$(yad --form --title ezlaunch --text "$1" --no-markup --center --width "$width" \
       --separator "$sep" "${fields[@]}" \
-      --buttons-layout edge --button Cancel:1 --button Add:2 --button Install:0) || rc=$?
+      --buttons-layout edge --button Cancel:1 \
+      --button "Add!!The game is already installed. Run it from where it is:2" \
+      --button "Install!!Run this installer in a new prefix, then choose the game exe:0") || rc=$?
     IFS="$sep" read -ra parts <<<"$reply"
     name=${parts[0]:-}
     if [ -n "$choices" ]; then
@@ -739,12 +742,12 @@ cmd_settings() { # [name]
   [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || die "settings needs a graphical session. Edit $cfg instead."
 
   local all=("$SYSTEM_CONF" "$USER_CONF" "$cfg")
-  local fields=() entry key on off label state managed='EZLAUNCH_EXE|PROTONPATH|EZLAUNCH_CATEGORY'
+  local fields=() entry key on off label tip state managed='EZLAUNCH_EXE|PROTONPATH|EZLAUNCH_CATEGORY'
   for entry in "${KNOWN[@]}"; do
-    IFS='|' read -r key on off label <<<"$entry"
+    IFS='|' read -r key on off label tip <<<"$entry"
     state=FALSE
     if [ "$(getv "$key" "${all[@]}")" = "$on" ]; then state=TRUE; fi
-    fields+=(--field "$label:CHK" "$state")
+    fields+=(--field "$label!$tip:CHK" "$state")
     managed+="|$key"
   done
 
@@ -774,11 +777,11 @@ cmd_settings() { # [name]
     --file-filter "Images and icons | *.png *.svg *.ico *.xpm *.exe *.EXE" \
     --file-filter "All files | *" \
     "${fields[@]}" \
-    --field "Proton version:CB" "$versions_field" \
-    --field "Category:CB" "$(category_choices "$(game_category "$cfg")")" \
-    --field "Executable:FL" "$current_exe" \
-    --field "Icon:FL" "$current_icon" \
-    --field "Custom variables, KEY=value one per line:TXT" "$custom_in" \
+    --field "Proton version!The Proton the game runs with, from compatibilitytools.d:CB" "$versions_field" \
+    --field "Category!Where the game goes in the start menu:CB" "$(category_choices "$(game_category "$cfg")")" \
+    --field "Executable!The exe that starts the game:FL" "$current_exe" \
+    --field "Icon!The start menu icon. An image, an .ico or an .exe to take it from:FL" "$current_icon" \
+    --field "Custom variables, KEY=value one per line!Any Proton or Wine environment variable, such as DXVK_HUD=fps:TXT" "$custom_in" \
     --button Cancel:1 --button Save:0 --separator '|') || exit 0
 
   # One value per field, in order. The custom variables come last and may hold a |.
@@ -971,11 +974,13 @@ cmd_gui() {
     yad --list --title ezlaunch --text "Choose a game, then a button. Refresh shows what is running." \
       --center --width 800 --height 460 --column Game --column Status --column Executable \
       --select-action "$self _select $sel" --dclick-action "$self _do run $sel" \
-      --button Close:1 --button Refresh:60 --button "Add game:10" --button Remove:20 \
-      --button "Choose shortcuts:$self _do shortcuts $sel" \
-      --button "Settings:$self _do settings $sel" \
-      --button "Stop:$self _do stop $sel" \
-      --button "Run:$self _do run $sel" \
+      --button Close:1 --button "Refresh!!Update the list and what is running:60" \
+      --button "Add game!!Install a game or add one that is on the disk:10" \
+      --button "Remove!!Delete the game, its prefix and its start menu entry:20" \
+      --button "Choose shortcuts!!Pick which of the game's Windows shortcuts are in the start menu:$self _do shortcuts $sel" \
+      --button "Settings!!Proton version, options, executable and icon of the game:$self _do settings $sel" \
+      --button "Stop!!Close the game and everything in its prefix:$self _do stop $sel" \
+      --button "Run!!Start the game:$self _do run $sel" \
       "${rows[@]}" >/dev/null || rc=$?
     case $rc in
       10) "$0" add || true ;;
