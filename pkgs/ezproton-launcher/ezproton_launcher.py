@@ -1369,8 +1369,8 @@ class QtUI(TermUI):
 
     def manager(self):
         """One window with the prefixes. Add makes a new one. A double-click (or Enter) opens a
-        prefix's settings, where everything else is; its right-click menu has Settings, Rename and
-        Stop."""
+        prefix's settings, where everything else is; its right-click menu has Settings, Rename,
+        Stop and Remove."""
         QtCore, QtGui, QtWidgets = qt()
         dlg, layout = self.dialog(APP, 680)
         dlg.resize(680, 480)
@@ -1476,6 +1476,7 @@ class QtUI(TermUI):
         table.itemChanged.connect(renamed)
         table.itemDelegate().closeEditor.connect(lambda *_: QtCore.QTimer.singleShot(0, lambda: editing.update(old=None)))
         stop_it = act(stop)
+        remove_it = act(lambda n: cmd_remove(self, n))
         table.itemDoubleClicked.connect(lambda _: settings())
 
         add = act(lambda: cmd_add(self), needs_name=False)
@@ -1494,6 +1495,8 @@ class QtUI(TermUI):
             menu.addAction("Settings", settings)
             menu.addAction("Rename", rename)
             menu.addAction("Stop", stop_it)
+            menu.addSeparator()
+            menu.addAction("Remove", remove_it)
             menu.exec(table.viewport().mapToGlobal(pos))
 
         table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
