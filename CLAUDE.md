@@ -45,9 +45,9 @@ Minimal entry point — imports `modules/` and `pkgs/`, exports `nixosModules.de
 
 **Documentation**: Each module has a companion `.md` file (e.g., `ezrouter.md`, `ezconf-cli.md`) with full option tables and usage examples. Keep these in sync when changing module options.
 
-## ezlaunch and ezproton-launcher dialogs
+## ezproton-launcher dialogs
 
-In every ezlaunch and ezproton-launcher dialog, Cancel (or Close, No: the button that dismisses it) is always the leftmost button. yad shows buttons in the order given, so pass it first; ezproton-launcher's `QtUI.buttons` puts the first spec on the left.
+In every ezproton-launcher dialog, Cancel (or Close, No: the button that dismisses it) is always the leftmost button. `QtUI.buttons` puts the first spec on the left.
 
 ## Branch Strategy
 

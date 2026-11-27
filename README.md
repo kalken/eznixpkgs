@@ -38,8 +38,7 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [ezsocks](modules/ezsocks.md) | SOCKS5 proxy on `127.0.0.1:1080`, with optional per-namespace instances |
 | [ezsocks-rs](modules/ezsocks-rs.md) | Smaller, faster SOCKS5 proxy in Rust, with optional per-namespace instances |
 | [ezproton](modules/ezproton.md) | Automatically installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d |
-| [ezlaunch](modules/ezlaunch.md) | Install and launch Windows programs and games with Proton: double-click a setup.exe, start menu entries, per-program settings |
-| [ezproton-launcher](modules/ezproton-launcher.md) | The successor of ezlaunch in Python with a Qt window: install and launch Windows programs and games with Proton |
+| [ezproton-launcher](modules/ezproton-launcher.md) | Install and launch Windows programs and games with Proton |
 | [ezboot](modules/ezboot.md) | One-time LUKS boot-key unlock for unattended reboots of encrypted systems |
 | [ezcache](modules/ezcache.md) | Binary cache for eznixpkgs packages built on GitHub, on by default |
 | [ezcert](modules/ezcert.md) | Certificates for a machine's services, signed by an authority of your own or an existing one |
@@ -78,7 +77,6 @@ Then enable whichever modules you need in your `configuration.nix`:
 | [eznetns](https://github.com/kalken/eznetns) | A command line helper to configure separated network environments (namespaces), and control which processes make use of them. |
 | [ezsensors](pkgs/ezsensors/ezsensors.sh) | Simple script to get temperature readings from `/sys`. |
 | [ezproton](pkgs/ezproton/ezproton.py) | Automatically installs the latest Proton-GE and/or CachyOS Proton into Steam's compatibilitytools.d. |
-| [ezlaunch](pkgs/ezlaunch/ezlaunch.sh) | Install and launch Windows programs and games with Proton (umu-launcher), with start menu entries and per-program settings. |
 | [ezproton-launcher](pkgs/ezproton-launcher/ezproton_launcher.py) | Install and launch Windows programs and games with Proton (umu-launcher), with a Qt window, start menu entries and per-program settings. |
 | [ezsocks](https://github.com/kalken/ezsocks) | A proxy server that makes your eyeballs happy, based on [prettysocks](https://github.com/twisteroidambassador/prettysocks). |
 | [ezsocks-rs](https://github.com/kalken/ezsocks-rs) | Small SOCKS5 proxy in Rust with Happy Eyeballs, for network namespaces on low-powered routers. |

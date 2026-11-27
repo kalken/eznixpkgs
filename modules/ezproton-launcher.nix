@@ -130,21 +130,16 @@ in
       lib.mapAttrsToList (k: v: "${k}=${toValue v}\n") cfg.defaults
     );
 
-    # KDE asks "Open or Execute?" before opening an executable file; open it with its app instead.
-    # ezlaunch writes the same file, so the text is only set when it is not.
-    environment.etc."xdg/kiorc" =
-      lib.mkIf
-        (cfg.exeHandler && !(config.programs.ezlaunch.enable && config.programs.ezlaunch.exeHandler))
-        {
-          text = ''
-            [Executable scripts]
-            behaviourOnLaunch=open
-          '';
-        };
+    # KDE asks "Open or Execute?" before opening an executable file; open it with its app instead
+    environment.etc."xdg/kiorc" = lib.mkIf cfg.exeHandler {
+      text = ''
+        [Executable scripts]
+        behaviourOnLaunch=open
+      '';
+    };
 
-    # Wins over ezlaunch when both are enabled
     xdg.mime.defaultApplications = lib.mkIf cfg.exeHandler (
-      lib.genAttrs exeTypes (_: lib.mkOverride 90 "ezproton-launcher.desktop")
+      lib.genAttrs exeTypes (_: "ezproton-launcher.desktop")
     );
   };
 }
