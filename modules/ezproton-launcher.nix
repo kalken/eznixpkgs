@@ -88,7 +88,8 @@ in
       };
       description = ''
         Environment variables every prefix starts with, written to /etc/ezproton-launcher/config.
-        Any Proton option works. A prefix's own settings (right-click Settings) override these.
+        Any Proton option works. They are copied into a new prefix's config; changing them later
+        leaves existing prefixes as they are (Settings has Reset to defaults).
         `PROTONPATH` can be a name from `~/.local/share/Steam/compatibilitytools.d`
         (see services.ezproton), a full path, or a version umu downloads itself.
         Booleans become 1 and 0.

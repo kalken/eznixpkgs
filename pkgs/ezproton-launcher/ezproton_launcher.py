@@ -160,8 +160,9 @@ class Prefix:
     def get(self, key):
         return getv(key, self.config)
 
+    # A prefix has all its settings in its own config: the defaults are only what a new one starts with
     def setting(self, key):
-        return getv(key, SYSTEM_CONF, USER_CONF, self.config)
+        return self.get(key)
 
     @property
     def exe(self):
@@ -173,7 +174,7 @@ class Prefix:
 
     @property
     def category(self):
-        return self.setting("LAUNCHER_CATEGORY") or "Game"
+        return self.get("LAUNCHER_CATEGORY") or "Game"
 
     def set_keys(self, changes):
         """Set (value) or remove (None) keys of the config, keeping the other lines as they are."""
@@ -554,25 +555,19 @@ def apply_title(prefix, title):
 
 
 def apply_proton(prefix, version):
-    # Only a version other than the default is saved for the prefix
-    prefix.set_keys({"PROTONPATH": version if version != default("PROTONPATH") else None})
+    prefix.set_keys({"PROTONPATH": version})
 
 
 def apply_category(prefix, category):
-    prefix.set_keys({"LAUNCHER_CATEGORY": category if category != default_category() else None})
+    prefix.set_keys({"LAUNCHER_CATEGORY": category})
 
 
 def apply_options(prefix, selected, custom):
     """The settings window's checkboxes (keys ticked) and custom variables (text)."""
     keep = {k: v for k, v in read_conf(prefix.config) if k in MANAGED - {k[0] for k in KNOWN}}
     lines = [f"{k}={v}" for k, v in keep.items()]
-    for key, on, off, _, _ in KNOWN:
-        inherited = default(key)
-        if key in selected:
-            if inherited != on:
-                lines.append(f"{key}={on}")
-        elif inherited == on:
-            lines.append(f"{key}={off}")
+    # A ticked option is saved, an unticked one left out, since nothing else is read
+    lines += [f"{key}={on}" for key, on, _, _, _ in KNOWN if key in selected]
     lines += [line for line in custom.splitlines() if line.strip()]
     write_lines(prefix.config, lines)
 
@@ -583,15 +578,15 @@ def apply_options(prefix, selected, custom):
 
 # Each prefix has a small shell script, launch, that starts a program in it with Proton. The start
 # menu entries run it directly, so starting a program involves neither Python nor this one. It
-# reads the config files every time, so changed settings and defaults apply at once. It finds its
-# own folder, so it keeps working when the prefix is renamed.
+# reads the prefix's config every time, so changed settings apply at once. It finds its own folder,
+# so it keeps working when the prefix is renamed.
 LAUNCH_SCRIPT = r"""#!/bin/sh
 # Starts a program in this prefix with Proton. Written by ezproton-launcher, which overwrites changes.
 # Usage: launch [program.exe [arguments]]. Without a program: the prefix's main one (LAUNCHER_EXE),
 # with LAUNCHER_ARGS.
 dir=$(cd "$(dirname "$0")" && pwd)
 
-# KEY=value lines, later files winning
+# KEY=value lines
 load() {
   [ -f "$1" ] || return 0
   while IFS= read -r line || [ -n "$line" ]; do
@@ -600,8 +595,6 @@ load() {
     esac
   done <"$1"
 }
-load @SYSTEM_CONF@
-load "${XDG_CONFIG_HOME:-$HOME/.config}/@APP@/config"
 load "$dir/config"
 
 if [ $# -gt 0 ]; then
@@ -654,16 +647,34 @@ def launch_script(prefix):
     return prefix.dir / "launch"
 
 
+def seed_defaults(prefix):
+    """Add the defaults the prefix's config does not set yet to it."""
+    try:
+        lines = prefix.config.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        lines = []
+    have = {k for k, _ in read_conf(prefix.config)}
+    add = [f"{k}={v}" for k, v in load_conf(SYSTEM_CONF, USER_CONF).items()
+           if k not in have and k not in ("LAUNCHER_EXE", "LAUNCHER_TITLE")]
+    if add:
+        write_lines(prefix.config, lines + add)
+
+
 def write_launch_script(prefix):
-    """Write the prefix's launch script, or bring it up to date."""
-    text = LAUNCH_SCRIPT.replace("@SYSTEM_CONF@", str(SYSTEM_CONF)).replace("@APP@", APP)
+    """Write the prefix's launch script, or bring it up to date. A new prefix gets the defaults in its
+    config here, and so does one whose script still read them itself (from before every setting was in
+    the prefix's config), so it runs as it did."""
+    text = LAUNCH_SCRIPT.replace("@APP@", APP)
     path = launch_script(prefix)
     try:
-        if path.read_text(encoding="utf-8") == text:
-            return path
+        old = path.read_text(encoding="utf-8")
     except OSError:
-        pass
+        old = None
+    if old == text:
+        return path
     prefix.dir.mkdir(parents=True, exist_ok=True)
+    if old is None or f"load {SYSTEM_CONF}" in old:
+        seed_defaults(prefix)
     tmp = path.with_name("launch.new")
     tmp.write_text(text, encoding="utf-8")
     tmp.chmod(0o755)
@@ -1343,11 +1354,25 @@ class QtUI(TermUI):
         button.clicked.connect(guarded(lambda: cmd_shortcuts(self, prefix.name)))
         row.addWidget(button)
         layout.addLayout(row)
+        # A gap above the window's own buttons, so Cancel and Save read as being for the whole window
+        layout.addSpacing(16)
 
         def stop():
             with self.busy():
                 guarded(lambda: cmd_stop(self, prefix.name))()
             made["Stop"].setEnabled(prefix.running())
+
+        def reset():
+            # Shown here only, saved with Save
+            defaults = load_conf(SYSTEM_CONF, USER_CONF)
+            for key, on, _, _, _ in KNOWN:
+                boxes[key].setChecked(defaults.get(key) == on)
+            version = defaults.get("PROTONPATH")
+            if version:
+                if proton.findText(version) < 0:
+                    proton.addItem(version)
+                proton.setCurrentText(version)
+            custom.setPlainText("\n".join(f"{k}={v}" for k, v in defaults.items() if k not in MANAGED))
 
         def save():
             # A new name is checked before the window closes, so a problem leaves everything open
@@ -1363,9 +1388,11 @@ class QtUI(TermUI):
 
         made = self.buttons(dlg, layout, [
             ("Cancel", None, 0),
+            ("Reset to defaults", "Set the options, Proton version and custom variables to the defaults. "
+             "Nothing changes until Save", reset),
             ("Stop", "Close everything that runs in this prefix", stop),
             ("Save", None, save),
-        ], left=2)
+        ], left=3)
         # Only something that runs can be stopped
         made["Stop"].setEnabled(prefix.running())
         made["Save"].setDefault(True)
@@ -2091,7 +2118,8 @@ USAGE = f"""Usage: {APP} <command>
 
 Without a prefix name, the commands that take one ask which.
 
-Defaults for new prefixes: {SYSTEM_CONF} and {USER_CONF} (KEY=value lines).
+Defaults for new prefixes: {SYSTEM_CONF} and {USER_CONF} (KEY=value lines, the latter winning).
+A prefix has all its settings in its own config; changing the defaults leaves existing ones as they are.
 """
 
 
@@ -2126,6 +2154,13 @@ def main(argv):
     if cmd not in commands:
         print(USAGE, end="")
         return 0 if cmd in ("", "help", "-h", "--help") else 1
+    # Prefixes from before every setting was in their own config get the defaults written in, and the
+    # launch script that reads only that
+    for name in prefix_names():
+        try:
+            write_launch_script(Prefix(name))
+        except (OSError, Abort):
+            pass
     try:
         commands[cmd]()
     except Cancelled:
