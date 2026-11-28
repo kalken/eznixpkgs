@@ -39,16 +39,11 @@ KNOWN = [
     ("PROTON_ENABLE_HDR", "1", "0", "HDR", "High dynamic range. Needs Native Wayland and an HDR screen"),
     ("DXVK_ENABLE_NVAPI", "1", "0", "HDR in Unreal Engine 4 games", "DXVK turns HDR off in Unreal Engine 4 games (an exe ending in -Win64-Shipping) in case they run DirectX 11. Tick it for one that runs DirectX 12 and offers no HDR. Needs HDR"),
     ("PROTON_ENABLE_WAYLAND", "1", "0", "Native Wayland", "Draw the program with Wayland directly instead of through XWayland"),
-    ("PROTON_USE_NTSYNC", "1", "0", "NTSync", "Faster syncing between threads, needs the ntsync kernel module"),
     ("PROTON_ENABLE_NVAPI", "1", "0", "NVIDIA NVAPI (DLSS)", "Lets the program use NVIDIA features such as DLSS. Only for NVIDIA cards"),
-    ("PROTON_USE_WINED3D", "1", "0", "WineD3D instead of DXVK", "Older, slower way to run DirectX. Try it if a program shows graphics errors"),
-    ("PROTON_NO_ESYNC", "1", "0", "Disable esync", "Try it if a program hangs or crashes"),
-    ("PROTON_NO_FSYNC", "1", "0", "Disable fsync", "Try it if a program hangs or crashes"),
     ("MANGOHUD", "1", "0", "MangoHud overlay", "Shows frame rate, CPU and GPU use over the program"),
     ("LAUNCHER_WRAPPER", "gamemoderun", "", "GameMode", "Tunes the system for performance while this program runs, needs GameMode installed"),
     ("PROTON_FSR4_UPGRADE", "1", "0", "FSR 4 upgrade", "Swaps a game's FSR 3.1 for FSR 4. Only for AMD RDNA4 cards, needs GE or CachyOS Proton"),
     ("PROTON_DLSS_UPGRADE", "1", "0", "DLSS upgrade", "Swaps a game's DLSS for the newest one. Only for NVIDIA cards, needs GE or CachyOS Proton"),
-    ("PROTON_HIDE_NVIDIA_GPU", "1", "0", "Hide NVIDIA GPU", "Shows the program an AMD card instead. Try it if a program crashes or acts up on an NVIDIA card"),
     ("DXVK_HUD", "fps", "", "FPS counter", "Shows the frame rate in a corner, lighter than MangoHud"),
 ]
 
@@ -1276,13 +1271,6 @@ class QtUI(TermUI):
             box.setChecked(prefix.setting(key) == on)
             grid.addWidget(box, i // 2, i % 2)
             boxes[key] = box
-        # esync and fsync do nothing with NTSync on, so their boxes only show with it off
-        def sync_boxes():
-            for key in ("PROTON_NO_ESYNC", "PROTON_NO_FSYNC"):
-                boxes[key].setVisible(not boxes["PROTON_USE_NTSYNC"].isChecked())
-
-        boxes["PROTON_USE_NTSYNC"].toggled.connect(sync_boxes)
-        sync_boxes()
         line = QtWidgets.QHBoxLayout()
         layout.addLayout(line)
 
