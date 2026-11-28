@@ -1197,7 +1197,8 @@ class QtUI(TermUI):
         and leave this one open."""
         QtCore, QtGui, QtWidgets = qt()
         dlg, layout = self.dialog(f"{APP}: {prefix.name}", 640)
-        # The prefix's name as the title, renamed by double-clicking it, with Remove on the right
+        # The prefix's name as the title, renamed by double-clicking it, with Reset to defaults and
+        # Shortcuts on the right
         class NameEdit(QtWidgets.QLineEdit):
             """Looks like a bold label until double-clicked. Enter keeps the new name, for Save to rename
             the prefix with; Escape or leaving it puts the name back."""
@@ -1256,10 +1257,16 @@ class QtUI(TermUI):
         top = QtWidgets.QHBoxLayout()
         title = NameEdit(prefix.name)
         top.addWidget(title, 1)
-        remove_button = QtWidgets.QPushButton("Remove")
-        remove_button.setAutoDefault(False)
-        remove_button.setToolTip("Delete the prefix, with what is installed and saved in it, and its start menu entries")
-        top.addWidget(remove_button)
+        # Reset to defaults and Shortcuts on the right, connected further down
+        reset_button = QtWidgets.QPushButton("Reset to defaults")
+        reset_button.setToolTip("Set the options, Proton version and custom variables to the defaults. "
+                                "Nothing changes until Save")
+        shortcuts_button = QtWidgets.QPushButton("Shortcuts")
+        shortcuts_button.setToolTip("Which shortcuts of the prefix are in the start menu, their names and programs, "
+                                    "and Add to put another program in")
+        for button in (reset_button, shortcuts_button):
+            button.setAutoDefault(False)
+            top.addWidget(button)
         layout.addLayout(top)
         # Proton version first, then the checkboxes, then the custom variables. Each start menu entry has
         # its own category, in Shortcuts.
@@ -1316,9 +1323,9 @@ class QtUI(TermUI):
             if not prefix.exists():
                 dlg.done(0)
 
-        remove_button.clicked.connect(remove)
+        shortcuts_button.clicked.connect(guarded(lambda: cmd_shortcuts(self, prefix.name)))
 
-        # The saves on the left and Shortcuts on the right, on a row of their own above the usual buttons
+        # The saves, on a row of their own above the usual buttons
         row = QtWidgets.QHBoxLayout()
         row.addWidget(QtWidgets.QLabel("Saves:"))
         for label, tip, fn in [
@@ -1335,12 +1342,6 @@ class QtUI(TermUI):
             button.clicked.connect(guarded(fn))
             row.addWidget(button)
         row.addStretch(1)
-        button = QtWidgets.QPushButton("Shortcuts")
-        button.setAutoDefault(False)
-        button.setToolTip("Which shortcuts of the prefix are in the start menu, their names and programs, and Add to "
-                          "put another program in")
-        button.clicked.connect(guarded(lambda: cmd_shortcuts(self, prefix.name)))
-        row.addWidget(button)
         layout.addLayout(row)
         # A gap above the window's own buttons, so Cancel and Save read as being for the whole window
         layout.addSpacing(16)
@@ -1362,6 +1363,8 @@ class QtUI(TermUI):
                 proton.setCurrentText(version)
             custom.setPlainText("\n".join(f"{k}={v}" for k, v in defaults.items() if k not in MANAGED))
 
+        reset_button.clicked.connect(reset)
+
         def save():
             # A new name is checked before the window closes, so a problem leaves everything open
             new = title.value
@@ -1376,9 +1379,8 @@ class QtUI(TermUI):
 
         made = self.buttons(dlg, layout, [
             ("Cancel", None, 0),
-            ("Reset to defaults", "Set the options, Proton version and custom variables to the defaults. "
-             "Nothing changes until Save", reset),
             ("Stop", "Close everything that runs in this prefix", stop),
+            ("Remove", "Delete the prefix, with what is installed and saved in it, and its start menu entries", remove),
             ("Save", None, save),
         ], left=3)
         # Only something that runs can be stopped
