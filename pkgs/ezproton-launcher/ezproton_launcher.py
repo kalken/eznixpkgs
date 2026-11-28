@@ -37,7 +37,7 @@ GENERIC_ICON = "applications-games"
 # The options in the settings window: key, value when on, value when off, label, tooltip
 KNOWN = [
     ("PROTON_ENABLE_HDR", "1", "0", "HDR", "High dynamic range. Needs Native Wayland and an HDR screen"),
-    ("DXVK_ENABLE_NVAPI", "1", "0", "HDR in Unreal Engine 4 games", "DXVK turns HDR off in Unreal Engine 4 games (an exe ending in -Win64-Shipping) in case they run DirectX 11. Tick it for one that runs DirectX 12 and offers no HDR, such as Stellar Blade. Needs HDR"),
+    ("DXVK_ENABLE_NVAPI", "1", "0", "HDR in Unreal Engine 4 games", "DXVK turns HDR off in Unreal Engine 4 games (an exe ending in -Win64-Shipping) in case they run DirectX 11. Tick it for one that runs DirectX 12 and offers no HDR. Needs HDR"),
     ("PROTON_ENABLE_WAYLAND", "1", "0", "Native Wayland", "Draw the program with Wayland directly instead of through XWayland"),
     ("PROTON_USE_NTSYNC", "1", "0", "NTSync", "Faster syncing between threads, needs the ntsync kernel module"),
     ("PROTON_ENABLE_NVAPI", "1", "0", "NVIDIA NVAPI (DLSS)", "Lets the program use NVIDIA features such as DLSS. Only for NVIDIA cards"),
