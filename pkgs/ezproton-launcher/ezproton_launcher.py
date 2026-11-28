@@ -46,6 +46,10 @@ KNOWN = [
     ("PROTON_NO_FSYNC", "1", "0", "Disable fsync", "Try it if a program hangs or crashes"),
     ("MANGOHUD", "1", "0", "MangoHud overlay", "Shows frame rate, CPU and GPU use over the program"),
     ("LAUNCHER_WRAPPER", "gamemoderun", "", "GameMode", "Tunes the system for performance while this program runs, needs GameMode installed"),
+    ("PROTON_FSR4_UPGRADE", "1", "0", "FSR 4 upgrade", "Swaps a game's FSR 3.1 for FSR 4. Only for AMD RDNA4 cards, needs GE or CachyOS Proton"),
+    ("PROTON_DLSS_UPGRADE", "1", "0", "DLSS upgrade", "Swaps a game's DLSS for the newest one. Only for NVIDIA cards, needs GE or CachyOS Proton"),
+    ("PROTON_HIDE_NVIDIA_GPU", "1", "0", "Hide NVIDIA GPU", "Shows the program an AMD card instead. Try it if a program crashes or acts up on an NVIDIA card"),
+    ("DXVK_HUD", "fps", "", "FPS counter", "Shows the frame rate in a corner, lighter than MangoHud"),
 ]
 
 # Label and menu category, where an entry goes in the start menu
@@ -1261,6 +1265,13 @@ class QtUI(TermUI):
             box.setChecked(prefix.setting(key) == on)
             grid.addWidget(box, i // 2, i % 2)
             boxes[key] = box
+        # esync and fsync do nothing with NTSync on, so their boxes only show with it off
+        def sync_boxes():
+            for key in ("PROTON_NO_ESYNC", "PROTON_NO_FSYNC"):
+                boxes[key].setVisible(not boxes["PROTON_USE_NTSYNC"].isChecked())
+
+        boxes["PROTON_USE_NTSYNC"].toggled.connect(sync_boxes)
+        sync_boxes()
         line = QtWidgets.QHBoxLayout()
         layout.addLayout(line)
 
@@ -1281,7 +1292,7 @@ class QtUI(TermUI):
             proton.setCurrentText(current)
         field("Proton version", proton, "The Proton the programs in this prefix run with, from compatibilitytools.d", 2)
         layout.addLayout(grid)
-        tip = "Any Proton or Wine environment variable, such as DXVK_HUD=fps"
+        tip = "Any Proton or Wine environment variable, such as WINEDLLOVERRIDES=dinput8=n,b"
         lab = QtWidgets.QLabel("Custom variables, KEY=value one per line")
         lab.setToolTip(tip)
         layout.addWidget(lab)
